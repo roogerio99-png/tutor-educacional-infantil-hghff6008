@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-10-19T20:03:04.075Z",
+  "collections": [
+    {
+      "name": "users",
+      "type": "auth",
+      "apiRules": {
+        "list": "id = @request.auth.id",
+        "view": "id = @request.auth.id",
+        "create": "",
+        "update": "id = @request.auth.id",
+        "delete": "id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "avatar",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
+        "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+      ]
+    },
+    {
+      "name": "criancas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner = @request.auth.id",
+        "view": "@request.auth.id != '' && owner = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner = @request.auth.id",
+        "update": "@request.auth.id != '' && owner = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "idade",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "serie",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "escola",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_criancas_owner ON criancas (owner)",
+        "CREATE INDEX idx_criancas_created ON criancas (created)"
+      ]
+    },
+    {
+      "name": "dificuldades",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "create": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "crianca",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "criancas"
+        },
+        {
+          "name": "materia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "impacto",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_dificuldades_crianca ON dificuldades (crianca)",
+        "CREATE INDEX idx_dificuldades_materia ON dificuldades (materia)"
+      ]
+    },
+    {
+      "name": "conhecimento",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "create": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "crianca",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "criancas"
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "conteudo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_conhecimento_crianca ON conhecimento (crianca)",
+        "CREATE INDEX idx_conhecimento_created ON conhecimento (created)"
+      ]
+    }
+  ]
+}

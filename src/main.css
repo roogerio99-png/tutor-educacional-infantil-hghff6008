@@ -1,0 +1,151 @@
+/* Global styles - Theme, font, utilities, animations and global components */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300..900;1,300..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Design System: Tema Quente e Acolhedor
+       Laranja primário #F28C28 (hsl 29 89% 55%)
+       Fundo creme suave #FFF8F0 (hsl 33 100% 97%)
+       Superfície de cartões #FBEFE0 (hsl 34 82% 93%)
+       Texto marrom quente #4A3B32 (hsl 23 20% 25%)
+       Texto secundário #9C8B7D (hsl 28 14% 55%)
+       Borda #EADBCE (hsl 30 25% 86%)
+       Sucesso verde #3DA64C
+       Erro vermelho #D64545
+       Aviso âmbar #F2A93B
+    */
+    --background: 33 100% 97%;
+    --foreground: 23 20% 25%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 23 20% 25%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 23 20% 25%;
+
+    --primary: 29 89% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 34 70% 94%;
+    --secondary-foreground: 23 20% 25%;
+
+    --muted: 33 40% 93%;
+    --muted-foreground: 28 14% 48%;
+
+    --accent: 34 75% 91%;
+    --accent-foreground: 23 20% 20%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 25% 86%;
+    --input: 30 25% 86%;
+    --ring: 29 89% 55%;
+
+    --radius: 1rem; /* 16px */
+
+    --sidebar-background: 34 75% 95%;
+    --sidebar-foreground: 23 20% 25%;
+    --sidebar-primary: 29 89% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 33 60% 90%;
+    --sidebar-accent-foreground: 23 20% 20%;
+    --sidebar-border: 30 25% 86%;
+    --sidebar-ring: 29 89% 55%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family:
+      'Nunito',
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      Roboto,
+      sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NEVER REMOVE THIS */
+  section[aria-label='Notifications alt+T'] {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow: 0 2px 12px rgba(74, 59, 50, 0.08);
+  }
+
+  .shadow-soft-hover {
+    box-shadow: 0 6px 24px rgba(74, 59, 50, 0.12);
+  }
+
+  @keyframes fade-in-up {
+    from {
+      transform: translateY(12px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes dropdown-open {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.3s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out forwards;
+  }
+
+  .animate-dropdown {
+    animation: dropdown-open 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .card-hover-lift {
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .card-hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 24px rgba(74, 59, 50, 0.12);
+  }
+}
