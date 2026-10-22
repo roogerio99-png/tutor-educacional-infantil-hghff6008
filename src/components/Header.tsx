@@ -5,6 +5,9 @@ import { useCrianca } from '@/contexts/CriancaContext'
 import { SimpleModal } from '@/components/SimpleModal'
 import { criarCrianca } from '@/services/criancas'
 import { SERIES } from '@/types'
+import { useModoCrianca } from '@/contexts/ModoCriancaContext'
+import { AtivarModoCriancaModal } from '@/components/modocrianca/AtivarModoCriancaModal'
+import { ConfigurarPinModal } from '@/components/modocrianca/ConfigurarPinModal'
 
 const TABS = [
   {
@@ -72,9 +75,16 @@ const TABS = [
 export const Header: React.FC = () => {
   const { user, logout } = useAuth()
   const { criancas, criancaSelecionada, selecionarCrianca, recarregarCriancas } = useCrianca()
+  const {
+    pinConfigurado,
+    modalConfigurarPinAberto,
+    abrirModalConfigurarPin,
+    fecharModalConfigurarPin,
+  } = useModoCrianca()
   const location = useLocation()
   const navigate = useNavigate()
 
+  const [modalAtivarModoCrianca, setModalAtivarModoCrianca] = useState(false)
   const [modalNovaCrianca, setModalNovaCrianca] = useState(false)
   const [novoNome, setNovoNome] = useState('')
   const [novaIdade, setNovaIdade] = useState('8')
@@ -167,6 +177,17 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
+          {/* Botão de Destaque: Ativar Modo Criança */}
+          <button
+            type="button"
+            onClick={() => setModalAtivarModoCrianca(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-extrabold text-xs sm:text-sm px-3.5 py-1.5 rounded-xl shadow-md shadow-orange-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="Ativar experiência protegida para a criança usar no celular"
+          >
+            <span>🧒</span>
+            <span>Modo Criança</span>
+          </button>
+
           {/* Usuário e Logout */}
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
@@ -216,6 +237,15 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Modal de Ativação do Modo Criança */}
+      <AtivarModoCriancaModal
+        isOpen={modalAtivarModoCrianca}
+        onClose={() => setModalAtivarModoCrianca(false)}
+      />
+
+      {/* Modal de Configuração do PIN */}
+      <ConfigurarPinModal isOpen={modalConfigurarPinAberto} onClose={fecharModalConfigurarPin} />
 
       {/* Modal para cadastrar criança */}
       <SimpleModal

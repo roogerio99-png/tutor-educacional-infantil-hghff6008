@@ -1385,3 +1385,189 @@ routerAdd(
   },
   $apis.requireAuth(),
 )
+
+// ==========================================
+// ROTAS DE PIN DO RESPONSÁVEL (MODO CRIANÇA)
+// ==========================================
+
+// 1. Verificar status do PIN do responsável (se já foi configurado)
+routerAdd(
+  'GET',
+  '/backend/v1/auth/pin/status',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const user = $app.findRecordById('users', userId)
+      const pinDefinido = !!user.getBool('pin_definido') && !!user.getString('pin_hash')
+
+      return e.json(200, {
+        definido: pinDefinido,
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao verificar status do PIN' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// 2. Definir ou alterar PIN
+// Se o PIN já existia e não enviou senha, requer 'pin_atual' OU 'password' para redefinição
+routerAdd(
+  'POST',
+  '/backend/v1/auth/pin/definir',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const body = e.requestInfo().body || {}
+      const novoPin = (body.novo_pin || '').toString().trim()
+      const confirmacao = (body.confirmacao || '').toString().trim()
+      const pinAtual = (body.pin_atual || '').toString().trim()
+      const senhaConta = (body.senha_conta || '').toString().trim()
+
+      if (!/^\d{4}$/.test(novoPin)) {
+        return e.badRequestError('O novo PIN deve conter exatamente 4 dígitos numéricos.')
+      }
+
+      if (novoPin !== confirmacao) {
+        return e.badRequestError('A confirmação do PIN não confere com o novo PIN.')
+      }
+
+      const user = $app.findRecordById('users', userId)
+      const pinExistente = user.getString('pin_hash')
+
+      // Se já possui PIN cadastrado, exige autenticação do responsável:
+      // ou o PIN atual correto, ou a senha da conta PocketBase
+      if (pinExistente) {
+        let autorizado = false
+
+        if (pinAtual) {
+          const hashAtual = $security.sha256('lumi_pin_salt_' + pinAtual)
+          if (hashAtual === pinExistente) {
+            autorizado = true
+          }
+        }
+
+        if (!autorizado && senhaConta) {
+          try {
+            // Valida a senha da conta do responsável autenticando contra o users auth
+            const authCheck = $app.findAuthRecordByEmail('_pb_users_auth_', user.getString('email'))
+            if (authCheck.validatePassword(senhaConta)) {
+              autorizado = true
+            }
+          } catch (_) {}
+        }
+
+        if (!autorizado) {
+          return e.badRequestError(
+            'Para alterar o PIN, informe o PIN atual correto ou a senha da sua conta.',
+          )
+        }
+      }
+
+      // Salva o novo hash seguro
+      const novoHash = $security.sha256('lumi_pin_salt_' + novoPin)
+      user.set('pin_hash', novoHash)
+      user.set('pin_definido', true)
+      $app.save(user)
+
+      return e.json(200, {
+        success: true,
+        message: 'PIN do responsável configurado com sucesso!',
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao configurar PIN' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// 3. Validar PIN para sair do Modo Criança
+routerAdd(
+  'POST',
+  '/backend/v1/auth/pin/verificar',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const body = e.requestInfo().body || {}
+      const pin = (body.pin || '').toString().trim()
+
+      if (!/^\d{4}$/.test(pin)) {
+        return e.badRequestError('Informe um PIN de 4 dígitos.')
+      }
+
+      const user = $app.findRecordById('users', userId)
+      const pinHash = user.getString('pin_hash')
+
+      if (!pinHash) {
+        // Se ainda não havia PIN configurado, permite sair e avisa
+        return e.json(200, {
+          valido: true,
+          aviso: 'PIN ainda não configurado',
+        })
+      }
+
+      const inputHash = $security.sha256('lumi_pin_salt_' + pin)
+      const valido = inputHash === pinHash
+
+      return e.json(200, {
+        valido: valido,
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao validar PIN' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// 4. Redefinir PIN esquecido exigindo a senha da conta
+routerAdd(
+  'POST',
+  '/backend/v1/auth/pin/redefinir-com-senha',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const body = e.requestInfo().body || {}
+      const senhaConta = (body.senha_conta || '').toString().trim()
+      const novoPin = (body.novo_pin || '').toString().trim()
+      const confirmacao = (body.confirmacao || '').toString().trim()
+
+      if (!senhaConta) {
+        return e.badRequestError('Senha da conta é obrigatória para redefinir o PIN.')
+      }
+
+      if (!/^\d{4}$/.test(novoPin)) {
+        return e.badRequestError('O novo PIN deve conter exatamente 4 dígitos numéricos.')
+      }
+
+      if (novoPin !== confirmacao) {
+        return e.badRequestError('A confirmação do PIN não confere com o novo PIN.')
+      }
+
+      const user = $app.findRecordById('users', userId)
+      if (!user.validatePassword(senhaConta)) {
+        return e.badRequestError('Senha da conta incorreta.')
+      }
+
+      const novoHash = $security.sha256('lumi_pin_salt_' + novoPin)
+      user.set('pin_hash', novoHash)
+      user.set('pin_definido', true)
+      $app.save(user)
+
+      return e.json(200, {
+        success: true,
+        message: 'PIN redefinido com sucesso!',
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao redefinir PIN' })
+    }
+  },
+  $apis.requireAuth(),
+)

@@ -9,9 +9,11 @@ import {
 import type { AgendaRecord, TipoEventoAgenda } from '@/types'
 import { SimpleModal } from '@/components/SimpleModal'
 import { MATERIAS } from '@/types'
+import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 
 export const AgendaPage: React.FC = () => {
   const { criancaSelecionada } = useCrianca()
+  const { modoCriancaAtivo } = useModoCrianca()
   const [eventos, setEventos] = useState<AgendaRecord[]>([])
   const [carregando, setCarregando] = useState(true)
   const [modalNovo, setModalNovo] = useState(false)
@@ -154,30 +156,44 @@ export const AgendaPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho da Agenda */}
-      <div className="bg-white rounded-3xl p-6 shadow-soft border border-slate-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* Cabeçalho da Agenda Adaptado (Modo Criança vs Modo Adulto) */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-soft border border-amber-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">📅</span>
-            <h1 className="text-xl font-black text-slate-800">
-              Agenda Escolar & Cronograma Socrático
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl sm:text-3xl">📅</span>
+            <h1 className="text-lg sm:text-xl font-black text-slate-800">
+              {modoCriancaAtivo
+                ? 'Minha Agenda Escolar & Desafios'
+                : 'Agenda Escolar & Cronograma Socrático'}
             </h1>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Planejamento pedagógico de{' '}
-            <span className="font-semibold text-slate-700">
-              {criancaSelecionada?.nome || 'Criança'}
-            </span>
-            . Acompanhe provas, tarefas de fixação e revisões guiadas com a Lumi.
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            {modoCriancaAtivo ? (
+              <>
+                Oi,{' '}
+                <strong className="font-bold text-slate-700">
+                  {criancaSelecionada?.nome || 'Amigo(a)'}
+                </strong>
+                ! Aqui estão suas tarefas, provinhas e compromissos para você estudar com a Lumi.
+              </>
+            ) : (
+              <>
+                Planejamento pedagógico de{' '}
+                <strong className="font-semibold text-slate-700">
+                  {criancaSelecionada?.nome || 'Criança'}
+                </strong>
+                . Acompanhe provas, tarefas de fixação e revisões guiadas com a Lumi.
+              </>
+            )}
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => setModalNovo(true)}
-          className="px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm shadow-md shadow-amber-500/25 transition-all flex items-center gap-2"
+          className="px-4 sm:px-5 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm shadow-md shadow-amber-500/25 transition-all flex items-center gap-2 cursor-pointer"
         >
-          <span>+ Novo Compromisso</span>
+          <span>+ {modoCriancaAtivo ? 'Anotar Tarefinha' : 'Novo Compromisso'}</span>
         </button>
       </div>
 
@@ -202,11 +218,26 @@ export const AgendaPage: React.FC = () => {
         </div>
 
         <div className="text-slate-500 font-medium">
-          Total: <span className="font-bold text-slate-700">{eventos.length}</span> eventos |
-          Pendentes:{' '}
-          <span className="font-bold text-amber-600">
-            {eventos.filter((e) => !e.concluido).length}
-          </span>
+          {modoCriancaAtivo ? (
+            <span>
+              Você tem{' '}
+              <strong className="font-bold text-amber-600">
+                {eventos.filter((e) => !e.concluido).length}
+              </strong>{' '}
+              {eventos.filter((e) => !e.concluido).length === 1
+                ? 'tarefinha pendente'
+                : 'tarefinhas pendentes'}
+              !
+            </span>
+          ) : (
+            <span>
+              Total: <span className="font-bold text-slate-700">{eventos.length}</span> eventos |
+              Pendentes:{' '}
+              <span className="font-bold text-amber-600">
+                {eventos.filter((e) => !e.concluido).length}
+              </span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -216,21 +247,24 @@ export const AgendaPage: React.FC = () => {
           Carregando calendário de atividades...
         </div>
       ) : eventosFiltrados.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-slate-300">
-          <span className="text-4xl block mb-2">🗓️</span>
+        <div className="bg-white rounded-3xl p-10 sm:p-12 text-center border border-dashed border-amber-200">
+          <span className="text-4xl sm:text-5xl block mb-2">🌟</span>
           <h3 className="text-base font-bold text-slate-700 mb-1">
-            Nenhum compromisso encontrado nesta visualização
+            {modoCriancaAtivo
+              ? 'Tudo limpo por aqui!'
+              : 'Nenhum compromisso encontrado nesta visualização'}
           </h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto mb-4">
-            Cadastre as datas de provas, trabalhos e tarefas escolares para que a Lumi possa sugerir
-            revisões graduais nos dias certos.
+            {modoCriancaAtivo
+              ? 'Você não tem nenhuma tarefa pendente aqui. Que tal pedir uma lição divertida para a Lumi?'
+              : 'Cadastre as datas de provas, trabalhos e tarefas escolares para que a Lumi possa sugerir revisões graduais nos dias certos.'}
           </p>
           <button
             type="button"
             onClick={() => setModalNovo(true)}
-            className="px-4 py-2 rounded-xl bg-amber-500 text-white font-bold text-xs"
+            className="px-4 py-2 rounded-xl bg-amber-500 text-white font-bold text-xs shadow-xs"
           >
-            Adicionar Primeiro Evento
+            {modoCriancaAtivo ? 'Anotar Primeira Tarefa' : 'Adicionar Primeiro Evento'}
           </button>
         </div>
       ) : (
@@ -257,14 +291,14 @@ export const AgendaPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleToggle(ev)}
-                    className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-colors ${
+                    className={`min-w-[28px] h-7 px-2 rounded-lg flex items-center justify-center gap-1 border text-xs font-bold transition-all ${
                       ev.concluido
                         ? 'bg-emerald-500 text-white border-emerald-500'
-                        : 'border-slate-300 hover:border-amber-500 text-transparent hover:text-slate-300'
+                        : 'border-slate-300 hover:border-amber-500 text-slate-400 hover:text-amber-600 bg-slate-50'
                     }`}
                     title={ev.concluido ? 'Marcar como pendente' : 'Marcar como concluído'}
                   >
-                    ✓
+                    <span>{ev.concluido ? '✓ Feito!' : 'Concluir'}</span>
                   </button>
                 </div>
 
@@ -290,21 +324,23 @@ export const AgendaPage: React.FC = () => {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleExcluir(ev.id)}
-                  className="text-slate-300 hover:text-rose-500 p-1 rounded-md transition-colors"
-                  title="Excluir evento"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </button>
+                {!modoCriancaAtivo && (
+                  <button
+                    type="button"
+                    onClick={() => handleExcluir(ev.id)}
+                    className="text-slate-300 hover:text-rose-500 p-1 rounded-md transition-colors"
+                    title="Excluir evento"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
           ))}

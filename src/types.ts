@@ -19,6 +19,8 @@ export interface UserRecord extends RecordModel {
   verified: boolean
   consentimento_lgpd?: boolean
   consentimento_data?: string
+  pin_definido?: boolean
+  pin_hash?: string
 }
 
 export type GeneroCrianca = 'Menina' | 'Menino' | 'Prefiro não informar'

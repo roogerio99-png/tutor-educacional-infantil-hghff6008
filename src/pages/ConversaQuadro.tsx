@@ -8,6 +8,7 @@ import { TrilhaEtapasSocraticas } from '@/components/TrilhaEtapasSocraticas'
 import { CartaoAcaoLumi } from '@/components/CartaoAcaoLumi'
 import { CheckinEmocionalCard } from '@/components/CheckinEmocionalCard'
 import { QuadroVisualContainer } from '@/components/QuadroVisualContainer'
+import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 import { MessageCircle, Palette, Sparkles, Send, RefreshCw, Wind } from 'lucide-react'
 
 interface ChatMessage {
@@ -22,6 +23,7 @@ interface ChatMessage {
 
 export const ConversaQuadro: React.FC = () => {
   const { criancaSelecionada } = useCrianca()
+  const { modoCriancaAtivo, abrirModalSairModo } = useModoCrianca()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -397,15 +399,29 @@ export const ConversaQuadro: React.FC = () => {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleNovaConversa}
-              title="Começar de novo"
-              className="text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer min-h-[44px]"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Recomeçar</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {modoCriancaAtivo && (
+                <button
+                  type="button"
+                  onClick={abrirModalSairModo}
+                  title="Sair do Modo Criança (pede PIN)"
+                  className="text-xs text-amber-800 bg-amber-100/70 hover:bg-amber-100 px-2.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1 cursor-pointer min-h-[44px]"
+                >
+                  <span>🔒</span>
+                  <span className="hidden md:inline">Sair do Modo</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleNovaConversa}
+                title="Começar de novo"
+                className="text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer min-h-[44px]"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Recomeçar</span>
+              </button>
+            </div>
           </div>
 
           {/* Área das Mensagens com visual espaçoso e fontes infantis legíveis */}

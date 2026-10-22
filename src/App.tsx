@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { CriancaProvider } from '@/contexts/CriancaContext'
 import { ProtectedRoute, PublicOnlyRoute } from '@/components/AuthGuard'
+import { ModoCriancaProvider } from '@/contexts/ModoCriancaContext'
 import Layout from '@/components/Layout'
 
 // Páginas Públicas
@@ -25,43 +26,45 @@ const App = () => (
   <BrowserRouter>
     <AuthProvider>
       <CriancaProvider>
-        <Toaster />
-        <Routes>
-          {/* Rotas Públicas de Autenticação */}
-          <Route element={<PublicOnlyRoute />}>
-            <Route path="/login" element={<Login />} />
-            <Route path="/cadastro" element={<Cadastro />} />
-            <Route path="/esqueci-senha" element={<EsqueciSenha />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/confirmar-email" element={<ConfirmarEmail />} />
-          </Route>
-
-          {/* Rotas Protegidas - 4 Abas do Protótipo Lumi IA */}
-          <Route element={<ProtectedRoute />}>
-            <Route element={<Layout />}>
-              <Route path="/" element={<Navigate to="/conversa" replace />} />
-              <Route path="/conversa" element={<ConversaQuadro />} />
-              <Route path="/agenda" element={<AgendaPage />} />
-              <Route path="/grafo-painel" element={<GrafoPainel />} />
-              <Route path="/prompts" element={<StudioPrompts />} />
-
-              {/* Redirecionamentos de retrocompatibilidade */}
-              <Route path="/filhos" element={<Navigate to="/grafo-painel" replace />} />
-              <Route path="/filhos/:id" element={<Navigate to="/grafo-painel" replace />} />
-              <Route path="/dificuldades" element={<Navigate to="/grafo-painel" replace />} />
-              <Route
-                path="/base-de-conhecimento"
-                element={<Navigate to="/grafo-painel" replace />}
-              />
-              <Route path="/perfil" element={<Navigate to="/prompts" replace />} />
+        <ModoCriancaProvider>
+          <Toaster />
+          <Routes>
+            {/* Rotas Públicas de Autenticação */}
+            <Route element={<PublicOnlyRoute />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/cadastro" element={<Cadastro />} />
+              <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/confirmar-email" element={<ConfirmarEmail />} />
             </Route>
-          </Route>
 
-          {/* Rota 404 */}
-          <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<Navigate to="/404" replace />} />
-        </Routes>
+            {/* Rotas Protegidas - 4 Abas do Protótipo Lumi IA */}
+            <Route element={<ProtectedRoute />}>
+              <Route element={<Layout />}>
+                <Route path="/" element={<Navigate to="/conversa" replace />} />
+                <Route path="/conversa" element={<ConversaQuadro />} />
+                <Route path="/agenda" element={<AgendaPage />} />
+                <Route path="/grafo-painel" element={<GrafoPainel />} />
+                <Route path="/prompts" element={<StudioPrompts />} />
+
+                {/* Redirecionamentos de retrocompatibilidade */}
+                <Route path="/filhos" element={<Navigate to="/grafo-painel" replace />} />
+                <Route path="/filhos/:id" element={<Navigate to="/grafo-painel" replace />} />
+                <Route path="/dificuldades" element={<Navigate to="/grafo-painel" replace />} />
+                <Route
+                  path="/base-de-conhecimento"
+                  element={<Navigate to="/grafo-painel" replace />}
+                />
+                <Route path="/perfil" element={<Navigate to="/prompts" replace />} />
+              </Route>
+            </Route>
+
+            {/* Rota 404 */}
+            <Route path="/404" element={<NotFound />} />
+            <Route path="*" element={<Navigate to="/404" replace />} />
+          </Routes>
+        </ModoCriancaProvider>
       </CriancaProvider>
     </AuthProvider>
   </BrowserRouter>

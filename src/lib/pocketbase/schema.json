@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T15:20:49.218Z",
+  "generatedAt": "2026-10-22T17:52:56.723Z",
   "collections": [
     {
       "name": "users",
@@ -47,6 +47,12 @@
         {
           "name": "consentimento_data",
           "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pin_definido",
+          "type": "bool",
           "required": false,
           "system": false
         }
