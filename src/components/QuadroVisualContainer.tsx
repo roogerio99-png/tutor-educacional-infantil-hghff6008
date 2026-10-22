@@ -30,9 +30,9 @@ export const QuadroVisualContainer: React.FC<QuadroVisualContainerProps> = ({
 
   const materiaNorm = (materia || '').toLowerCase()
 
-  // Mapeamento determinístico de SVG por matéria
+  // Mapeamento de SVG por matéria
   let componenteSvg = <SvgCiencias acessibilidadeReforcada={acessibilidadeReforcada} />
-  let tituloPadrao = 'Ciências Naturais & Ciclo Vegetal'
+  let tituloPadrao = 'Ciências da Natureza'
   let iconeMateria = '🌱'
   let corBadge = 'bg-emerald-100 text-emerald-800 border-emerald-200'
 
@@ -43,7 +43,7 @@ export const QuadroVisualContainer: React.FC<QuadroVisualContainerProps> = ({
     materiaNorm.includes('divis')
   ) {
     componenteSvg = <SvgMatematica acessibilidadeReforcada={acessibilidadeReforcada} />
-    tituloPadrao = 'Matemática: Frações & Reta Numérica'
+    tituloPadrao = 'Matemática Divertida'
     iconeMateria = '🔢'
     corBadge = 'bg-amber-100 text-amber-800 border-amber-200'
   } else if (
@@ -53,7 +53,7 @@ export const QuadroVisualContainer: React.FC<QuadroVisualContainerProps> = ({
     materiaNorm.includes('silaba')
   ) {
     componenteSvg = <SvgPortugues acessibilidadeReforcada={acessibilidadeReforcada} />
-    tituloPadrao = 'Português: Sílabas & Estrutura de Frases'
+    tituloPadrao = 'Palavras e Frases'
     iconeMateria = '📚'
     corBadge = 'bg-rose-100 text-rose-800 border-rose-200'
   } else if (
@@ -62,7 +62,7 @@ export const QuadroVisualContainer: React.FC<QuadroVisualContainerProps> = ({
     materiaNorm.includes('seculo')
   ) {
     componenteSvg = <SvgHistoria acessibilidadeReforcada={acessibilidadeReforcada} />
-    tituloPadrao = 'História: Linha do Tempo & Povos'
+    tituloPadrao = 'Viagem no Tempo'
     iconeMateria = '📜'
     corBadge = 'bg-orange-100 text-orange-800 border-orange-200'
   } else if (
@@ -71,7 +71,7 @@ export const QuadroVisualContainer: React.FC<QuadroVisualContainerProps> = ({
     materiaNorm.includes('relevo')
   ) {
     componenteSvg = <SvgGeografia acessibilidadeReforcada={acessibilidadeReforcada} />
-    tituloPadrao = 'Geografia: Rosa dos Ventos & Relevo'
+    tituloPadrao = 'Explorando o Mundo'
     iconeMateria = '🧭'
     corBadge = 'bg-teal-100 text-teal-800 border-teal-200'
   } else if (
@@ -80,112 +80,98 @@ export const QuadroVisualContainer: React.FC<QuadroVisualContainerProps> = ({
     materiaNorm.includes('ingles')
   ) {
     componenteSvg = <SvgGeral acessibilidadeReforcada={acessibilidadeReforcada} />
-    tituloPadrao = 'Mapa Mental Socrático de Descobertas'
+    tituloPadrao = 'Quadro de Descobertas'
     iconeMateria = '💡'
     corBadge = 'bg-purple-100 text-purple-800 border-purple-200'
   }
 
-  // Bloco dinâmico conforme a etapa socrática (Barreira 3 do escopo):
-  // na etapa "Praticar" mostra o desafio proposto; na "Consolidar" o resumo visual
-  const getBannerEtapa = () => {
+  // Dica amigável conforme o momento do aprendizado
+  const getDicaAmigavel = () => {
     switch (etapaSocratica) {
       case 'entender':
         return {
-          texto: 'Investigando onde surgiu a dúvida e quais partes você já domina!',
+          texto: 'Olhe com atenção para o desenho: o que você já reconhece aí?',
           icone: '🔍',
-          bg: 'bg-amber-50 border-amber-200 text-amber-800',
+          bg: 'bg-amber-50/80 border-amber-200 text-amber-900',
         }
       case 'contextualizar':
         return {
-          texto: 'Conectando o conteúdo a coisas do seu cotidiano, brinquedos e jogos.',
-          icone: '🌍',
-          bg: 'bg-orange-50 border-orange-200 text-orange-800',
+          texto: 'Isso também acontece no seu dia a dia! Consegue lembrar de onde?',
+          icone: '💭',
+          bg: 'bg-orange-50/80 border-orange-200 text-orange-900',
         }
       case 'guiar':
         return {
-          texto: 'Seguindo pistas graduais no esquema acima. Cada detalhe importa!',
-          icone: '🧭',
-          bg: 'bg-sky-50 border-sky-200 text-sky-800',
+          texto: 'Siga as pistas do desenho com calma, um pedacinho por vez!',
+          icone: '✏️',
+          bg: 'bg-sky-50/80 border-sky-200 text-sky-900',
         }
       case 'praticar':
         return {
-          texto: 'Desafio Prático Ativo: Aplique o raciocínio no esquema para resolver sozinho(a)!',
-          icone: '✏️',
-          bg: 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold ring-2 ring-emerald-300',
+          texto: 'Desafio divertido: tente usar as pistas do desenho para resolver!',
+          icone: '🧩',
+          bg: 'bg-emerald-50 border-emerald-300 text-emerald-950 font-semibold',
         }
       case 'consolidar':
         return {
-          texto:
-            'Resumo de Consolidação: Agora é a sua vez de ensinar o que aprendeu com suas palavras!',
-          icone: '🏆',
-          bg: 'bg-purple-50 border-purple-300 text-purple-900 font-bold ring-2 ring-purple-300',
+          texto: 'Que demais! Agora conte para a Lumi o que esse desenho te ensinou!',
+          icone: '🌟',
+          bg: 'bg-purple-50 border-purple-300 text-purple-950 font-semibold',
         }
     }
   }
 
-  const banner = getBannerEtapa()
+  const dica = getDicaAmigavel()
 
   return (
-    <div className="bg-white rounded-3xl p-5 shadow-soft border border-slate-200/80 flex flex-col gap-3">
+    <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-soft border border-amber-100/90 flex flex-col gap-3">
       {/* Cabeçalho do Quadro */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">{iconeMateria}</span>
+      <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl">
+            {iconeMateria}
+          </div>
           <div>
-            <h3
-              className={`font-bold text-slate-800 leading-tight ${
-                acessibilidadeReforcada ? 'text-base' : 'text-sm'
-              }`}
-            >
-              Quadro Visual Pedagógico
+            <h3 className="font-extrabold text-slate-800 text-sm sm:text-base leading-tight">
+              Quadro de Desenhos & Pistas
             </h3>
-            <p className="text-[11px] text-slate-500">
-              Esquemas SVG determinísticos e seguros por matéria
-            </p>
+            <p className="text-[11px] text-slate-500">Desenhos para ajudar a entender a matéria</p>
           </div>
         </div>
 
         <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-full border truncate max-w-[170px] ${corBadge}`}
-          title={topicoCustomizado || tituloPadrao}
+          className={`text-xs font-bold px-3 py-1 rounded-full border truncate max-w-[170px] ${corBadge}`}
         >
           {topicoCustomizado || tituloPadrao}
         </span>
       </div>
 
-      {/* Banner de apoio à etapa do protocolo */}
-      <div
-        className={`p-2.5 rounded-2xl border text-xs flex items-center justify-between gap-2 ${banner.bg}`}
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-base">{banner.icone}</span>
-          <span className="leading-snug">{banner.texto}</span>
-        </div>
-        <span className="text-[10px] font-black uppercase tracking-wider shrink-0 opacity-80">
-          Etapa: {etapaSocratica}
-        </span>
+      {/* Dica da etapa em linguagem de criança */}
+      <div className={`p-3 rounded-2xl border text-xs flex items-center gap-2.5 ${dica.bg}`}>
+        <span className="text-xl shrink-0">{dica.icone}</span>
+        <span className="leading-snug">{dica.texto}</span>
       </div>
 
-      {/* Renderizador do SVG determinístico da matéria */}
+      {/* Renderizador do SVG da matéria */}
       <div
-        className={`w-full overflow-hidden transition-all ${
-          acessibilidadeReforcada ? 'scale-101 shadow-sm' : ''
+        className={`w-full overflow-hidden rounded-2xl bg-slate-50/40 p-2 sm:p-3 border border-slate-100 transition-all ${
+          acessibilidadeReforcada ? 'scale-101 shadow-xs' : ''
         }`}
       >
         {componenteSvg}
       </div>
 
-      {/* Rodapé com controle determinístico de troca */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
-        <span className="flex items-center gap-1 text-[11px]">
-          <span>🛡️</span> Visual determinístico (sem alucinações de IA)
+      {/* Rodapé simples com botão de trocar matéria */}
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+        <span className="text-[11px] text-slate-500 flex items-center gap-1">
+          <span>🎨</span> Feito para você aprender visualmente
         </span>
         <button
           type="button"
           onClick={onTrocarTopico}
-          className="text-amber-600 hover:text-amber-700 font-bold hover:underline"
+          className="text-xs font-bold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-200 transition-all cursor-pointer active:scale-95"
         >
-          Alternar Matéria
+          Mudar Matéria 🔄
         </button>
       </div>
     </div>
