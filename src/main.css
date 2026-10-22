@@ -64,7 +64,7 @@
   }
 
   body {
-    background-color: hsl(var(--background));
+    background-color: #f4f7fb;
     color: hsl(var(--foreground));
     font-family:
       'Nunito',
@@ -92,6 +92,22 @@
 
   .shadow-soft-hover {
     box-shadow: 0 6px 24px rgba(74, 59, 50, 0.12);
+  }
+
+  @keyframes pulse-gentle {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.9;
+    }
+    50% {
+      transform: scale(1.18);
+      opacity: 1;
+    }
+  }
+
+  .breathe-circle {
+    animation: pulse-gentle 5s infinite ease-in-out;
   }
 
   @keyframes fade-in-up {
@@ -147,5 +163,18 @@
   .card-hover-lift:hover {
     transform: translateY(-3px);
     box-shadow: 0 6px 24px rgba(74, 59, 50, 0.12);
+  }
+
+  .custom-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 8px;
+  }
+  .custom-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 8px;
   }
 }

@@ -29,6 +29,8 @@ export interface CriancaRecord extends RecordModel {
   expand?: {
     owner?: UserRecord
     dificuldades_via_crianca?: DificuldadeRecord[]
+    conhecimento_via_crianca?: ConhecimentoRecord[]
+    agenda_via_crianca?: AgendaRecord[]
   }
 }
 
@@ -51,11 +53,40 @@ export interface ConhecimentoRecord extends RecordModel {
   }
 }
 
+export type TipoEventoAgenda = 'prova' | 'tarefa' | 'revisao' | 'projeto' | 'outro'
+
+export interface AgendaRecord extends RecordModel {
+  crianca: string
+  titulo: string
+  descricao?: string
+  data: string // YYYY-MM-DD
+  horario?: string // HH:mm
+  materia?: string
+  tipo?: TipoEventoAgenda
+  concluido?: boolean
+  expand?: {
+    crianca?: CriancaRecord
+  }
+}
+
+export interface SystemPromptRecord extends RecordModel {
+  owner: string
+  titulo: string
+  identidade: string
+  metodo_socratico: string
+  diretrizes_pedagogicas?: string
+  tom_de_voz?: string
+  instrucoes_quadro?: string
+  ativo?: boolean
+}
+
 // Aliases para retrocompatibilidade
 export type User = UserRecord
 export type Crianca = CriancaRecord
 export type Dificuldade = DificuldadeRecord
 export type Conhecimento = ConhecimentoRecord
+export type Agenda = AgendaRecord
+export type SystemPrompt = SystemPromptRecord
 
 export const MATERIAS: string[] = [
   'Português',

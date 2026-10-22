@@ -1,14 +1,12 @@
-/* Main App Component - Handles routing (using react-router-dom), query client and other providers */
+/* Main App Component - Handles routing (using react-router-dom) with Lumi IA 4 tabs */
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Toaster } from '@/components/ui/toaster'
-import { Toaster as Sonner } from '@/components/ui/sonner'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { CriancaProvider } from '@/contexts/CriancaContext'
 import { ProtectedRoute, PublicOnlyRoute } from '@/components/AuthGuard'
 import Layout from '@/components/Layout'
 
 // Páginas Públicas
-import Index from '@/pages/Index'
 import Login from '@/pages/Login'
 import Cadastro from '@/pages/Cadastro'
 import EsqueciSenha from '@/pages/EsqueciSenha'
@@ -16,25 +14,20 @@ import ResetPassword from '@/pages/ResetPassword'
 import VerifyEmail from '@/pages/VerifyEmail'
 import ConfirmarEmail from '@/pages/ConfirmarEmail'
 
-// Páginas Autenticadas
-import Filhos from '@/pages/Filhos'
-import FilhoDetalhe from '@/pages/FilhoDetalhe'
-import Dificuldades from '@/pages/Dificuldades'
-import BaseDeConhecimento from '@/pages/BaseDeConhecimento'
-import Perfil from '@/pages/Perfil'
+// 4 Abas do Protótipo Lumi IA
+import ConversaQuadro from '@/pages/ConversaQuadro'
+import AgendaPage from '@/pages/AgendaPage'
+import GrafoPainel from '@/pages/GrafoPainel'
+import StudioPrompts from '@/pages/StudioPrompts'
 import NotFound from '@/pages/NotFound'
 
 const App = () => (
   <BrowserRouter>
     <AuthProvider>
-      <TooltipProvider>
+      <CriancaProvider>
         <Toaster />
-        <Sonner />
         <Routes>
-          {/* Landing Page Pública: "/" */}
-          <Route path="/" element={<Index />} />
-
-          {/* Rotas Públicas de Autenticação (redirecionam para /filhos se já logado) */}
+          {/* Rotas Públicas de Autenticação */}
           <Route element={<PublicOnlyRoute />}>
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
@@ -44,14 +37,24 @@ const App = () => (
             <Route path="/confirmar-email" element={<ConfirmarEmail />} />
           </Route>
 
-          {/* Rotas Protegidas - Requerem Autenticação e usam o Layout com Header + Footer */}
+          {/* Rotas Protegidas - 4 Abas do Protótipo Lumi IA */}
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
-              <Route path="/filhos" element={<Filhos />} />
-              <Route path="/filhos/:id" element={<FilhoDetalhe />} />
-              <Route path="/dificuldades" element={<Dificuldades />} />
-              <Route path="/base-de-conhecimento" element={<BaseDeConhecimento />} />
-              <Route path="/perfil" element={<Perfil />} />
+              <Route path="/" element={<Navigate to="/conversa" replace />} />
+              <Route path="/conversa" element={<ConversaQuadro />} />
+              <Route path="/agenda" element={<AgendaPage />} />
+              <Route path="/grafo-painel" element={<GrafoPainel />} />
+              <Route path="/prompts" element={<StudioPrompts />} />
+
+              {/* Redirecionamentos de retrocompatibilidade */}
+              <Route path="/filhos" element={<Navigate to="/grafo-painel" replace />} />
+              <Route path="/filhos/:id" element={<Navigate to="/grafo-painel" replace />} />
+              <Route path="/dificuldades" element={<Navigate to="/grafo-painel" replace />} />
+              <Route
+                path="/base-de-conhecimento"
+                element={<Navigate to="/grafo-painel" replace />}
+              />
+              <Route path="/perfil" element={<Navigate to="/prompts" replace />} />
             </Route>
           </Route>
 
@@ -59,7 +62,7 @@ const App = () => (
           <Route path="/404" element={<NotFound />} />
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
-      </TooltipProvider>
+      </CriancaProvider>
     </AuthProvider>
   </BrowserRouter>
 )
