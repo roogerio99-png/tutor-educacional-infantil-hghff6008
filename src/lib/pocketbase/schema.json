@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T14:19:17.728Z",
+  "generatedAt": "2026-10-22T14:32:36.268Z",
   "collections": [
     {
       "name": "users",
@@ -139,6 +139,19 @@
         },
         {
           "name": "acessibilidade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ultima_etapa_socratica",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["entender", "contextualizar", "guiar", "praticar", "consolidar"]
+        },
+        {
+          "name": "ultima_materia",
           "type": "text",
           "required": false,
           "system": false

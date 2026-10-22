@@ -2,8 +2,8 @@
 
 /**
  * =========================================================================
- * ROTAS HTTP DO CHAT LUMI COM GUARDRAILS E ESCALONAMENTO
- * (PocketBase JSVM: funções auxiliares mantidas inline em cada callback)
+ * ROTAS HTTP DO CHAT LUMI COM PROTOCOLO SOCRÁTICO, GUARDRAILS E FERRAMENTAS DE ESCRITA
+ * (Fase 2: Motor Anti-Spoiler + Criação de Agenda & Memórias + Extração de Etapas)
  * =========================================================================
  */
 
@@ -34,7 +34,7 @@ routerAdd(
       const RESPOSTA_RISCO_SEGURANCA =
         'Você é muito especial e importante, e não está sozinho(a). Se você estiver se sentindo triste, com medo ou passando por algo difícil, respire fundo e converse agora mesmo com um adulto que cuida de você ou com seu professor. Eu estou aqui para te apoiar nos estudos com muito carinho!'
 
-      // 1. Classificador de entrada inline
+      // 1. Classificador de entrada inline (Guardrails Fase 1)
       const normalizado = userMsg
         .toLowerCase()
         .normalize('NFD')
@@ -116,6 +116,8 @@ routerAdd(
           content: RESPOSTA_RISCO_SEGURANCA,
           citations: [],
           message_id: 'guardrail_risk',
+          etapa: 'entender',
+          materia: 'geral',
         })
       }
 
@@ -131,6 +133,8 @@ routerAdd(
           content: RESPOSTA_TEMA_SENSIVEL,
           citations: [],
           message_id: 'guardrail_sensitive',
+          etapa: 'entender',
+          materia: 'geral',
         })
       }
 
@@ -140,69 +144,231 @@ routerAdd(
           content: RESPOSTA_FORA_ESCOPO,
           citations: [],
           message_id: 'guardrail_scope',
+          etapa: 'entender',
+          materia: 'geral',
         })
+      }
+
+      // 2. Auxiliar: detecção conversacional de ações de escrita (agenda / memórias)
+      // Garante escrita imediata e robusta na coleção agenda caso o modelo responda diretamente
+      const acoesExecutadas = []
+      let criancaAtual = null
+
+      if (body.crianca_id) {
+        try {
+          const cRec = $app.findRecordById('criancas', body.crianca_id)
+          if (cRec && cRec.getString('owner') === userId) {
+            criancaAtual = cRec
+          }
+        } catch (_) {}
+      }
+
+      // Detecção de solicitação de agendamento: "tenho prova de ciencias na sexta", etc.
+      if (criancaAtual) {
+        const regexAgenda =
+          /\b(tenho|marcar|anotar|agendar|adicionar|lembrar|coloque|colocar)\b.*?\b(prova|teste|avaliacao|tarefa|licao|trabalho|revisao)\b/i
+        const regexProva = /\bprova\b|\bteste\b|\bavaliacao\b/i
+        const regexTarefa = /\btarefa\b|\blicao\b|\bdever de casa\b|\bexercicios\b/i
+        const regexRevisao = /\brevisao\b|\brevisar\b/i
+        const regexProjeto = /\bprojeto\b|\btrabalho\b/i
+
+        if (
+          regexAgenda.test(normalizado) ||
+          (normalizado.includes('prova de') && normalizado.length < 100)
+        ) {
+          // Detectar matéria
+          let mat = 'Ciências'
+          if (/\b(matematica|mat|calculo|fracao)\b/.test(normalizado)) mat = 'Matemática'
+          else if (/\b(portugues|redacao|gramatica)\b/.test(normalizado)) mat = 'Português'
+          else if (/\b(historia)\b/.test(normalizado)) mat = 'História'
+          else if (/\b(geografia|mapa)\b/.test(normalizado)) mat = 'Geografia'
+          else if (/\b(ingles)\b/.test(normalizado)) mat = 'Inglês'
+          else if (/\b(artes|arte)\b/.test(normalizado)) mat = 'Artes'
+
+          // Detectar tipo
+          let tipoEv = 'tarefa'
+          if (regexProva.test(normalizado)) tipoEv = 'prova'
+          else if (regexRevisao.test(normalizado)) tipoEv = 'revisao'
+          else if (regexProjeto.test(normalizado)) tipoEv = 'projeto'
+
+          // Calcular data aproximada
+          const hoje = new Date()
+          let dataOffsetDias = 3 // default 3 dias à frente
+          if (/\b(hoje)\b/.test(normalizado)) dataOffsetDias = 0
+          else if (/\b(amanha)\b/.test(normalizado)) dataOffsetDias = 1
+          else if (/\b(segunda)\b/.test(normalizado))
+            dataOffsetDias = (1 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(terca)\b/.test(normalizado))
+            dataOffsetDias = (2 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(quarta)\b/.test(normalizado))
+            dataOffsetDias = (3 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(quinta)\b/.test(normalizado))
+            dataOffsetDias = (4 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(sexta)\b/.test(normalizado))
+            dataOffsetDias = (5 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(sabado)\b/.test(normalizado))
+            dataOffsetDias = (6 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(domingo)\b/.test(normalizado))
+            dataOffsetDias = (7 - hoje.getDay() + 7) % 7 || 7
+
+          const targetDate = new Date(hoje.getTime() + dataOffsetDias * 24 * 60 * 60 * 1000)
+          const dataFormatada = targetDate.toISOString().split('T')[0]
+
+          const tituloEvento = `${tipoEv === 'prova' ? 'Prova' : tipoEv === 'revisao' ? 'Revisão' : 'Tarefa'} de ${mat}`
+
+          try {
+            // Verificar se já não existe evento idêntico hoje
+            const jaExiste = $app.findRecordsByFilter(
+              'agenda',
+              'crianca = {:c} && data = {:d} && materia = {:m}',
+              '',
+              1,
+              0,
+              { c: criancaAtual.id, d: dataFormatada, m: mat },
+            )
+            if (!jaExiste || jaExiste.length === 0) {
+              const agendaCol = $app.findCollectionByNameOrId('agenda')
+              const aRec = new Record(agendaCol)
+              aRec.set('crianca', criancaAtual.id)
+              aRec.set('titulo', tituloEvento)
+              aRec.set('materia', mat)
+              aRec.set('tipo', tipoEv)
+              aRec.set('data', dataFormatada)
+              aRec.set('horario', '08:30')
+              aRec.set('descricao', `Criado via conversa com Lumi: ${userMsg}`)
+              aRec.set('concluido', false)
+              $app.save(aRec)
+
+              acoesExecutadas.push({
+                tipo: 'agenda_criada',
+                id: aRec.id,
+                titulo: tituloEvento,
+                materia: mat,
+                data: dataFormatada,
+                tipo_evento: tipoEv,
+              })
+            }
+          } catch (errAgenda) {
+            console.error('[ERRO CRIAR AGENDA]:', errAgenda)
+          }
+        }
+
+        // Concluir tarefas da agenda se a criança avisou que terminou: "terminei a licao", "fiz a tarefa"
+        if (
+          /\b(terminei|conclui|fiz|ja fiz|acabei)\b.*?\b(licao|tarefa|exercicio|dever)\b/i.test(
+            normalizado,
+          )
+        ) {
+          try {
+            const pendentes = $app.findRecordsByFilter(
+              'agenda',
+              'crianca = {:c} && concluido = false',
+              'data',
+              3,
+              0,
+              { c: criancaAtual.id },
+            )
+            if (pendentes && pendentes.length > 0) {
+              const item = pendentes[0]
+              item.set('concluido', true)
+              $app.save(item)
+              acoesExecutadas.push({
+                tipo: 'agenda_concluida',
+                id: item.id,
+                titulo: item.getString('titulo'),
+              })
+            }
+          } catch (_) {}
+        }
+
+        // Registrar memórias/estratégias novas na base de conhecimento
+        // "gosto de aprender fazendo desenhos", "prefiro blocos", "quando uso musica aprendo mais facil"
+        if (
+          /\b(gosto de aprender|prefiro aprender|entendo melhor quando|aprendo melhor com|funciona bem pra mim)\b/i.test(
+            normalizado,
+          )
+        ) {
+          try {
+            const conhecCol = $app.findCollectionByNameOrId('conhecimento')
+            const kRec = new Record(conhecCol)
+            kRec.set('crianca', criancaAtual.id)
+            kRec.set('titulo', 'Estratégia relatada pela criança')
+            kRec.set('conteudo', userMsg)
+            $app.save(kRec)
+
+            acoesExecutadas.push({
+              tipo: 'memoria_registrada',
+              id: kRec.id,
+              titulo: 'Nova Estratégia de Aprendizado',
+              conteudo: userMsg,
+            })
+          } catch (errK) {
+            console.error('[ERRO CRIAR CONHECIMENTO]:', errK)
+          }
+        }
       }
 
       // Montagem do contexto do perfil da criança
       let extraContext = ''
-      if (body.crianca_id) {
+      if (criancaAtual) {
+        const nome = criancaAtual.getString('nome')
+        const idade = criancaAtual.getInt('idade')
+        const serie = criancaAtual.getString('serie')
+        const escola = criancaAtual.getString('escola')
+        const obs = criancaAtual.getString('observacoes')
+        const localidade = criancaAtual.getString('localidade')
+        const genero = criancaAtual.getString('genero')
+        const horariosAula = criancaAtual.getString('horarios_aula')
+        const acessibilidade = criancaAtual.getString('acessibilidade')
+        const ultimaEtapa = criancaAtual.getString('ultima_etapa_socratica') || 'entender'
+
+        extraContext += `\n[PERFIL BASE DA CRIANÇA]: Nome: ${nome}, Idade: ${idade} anos, Série: ${serie}, Escola: ${escola || 'Não informada'}.`
+        if (localidade) extraContext += ` Localidade/Região: ${localidade}.`
+        if (genero && genero !== 'Prefiro não informar') extraContext += ` Gênero: ${genero}.`
+        if (horariosAula) extraContext += ` Turno/Horários de aula: ${horariosAula}.`
+        if (acessibilidade && acessibilidade !== 'Nenhuma')
+          extraContext += ` Preferências de acessibilidade: ${acessibilidade}.`
+        if (obs) extraContext += ` Observações gerais: ${obs}.`
+        extraContext += `\n[ETAPA SOCRÁTICA ANTERIOR]: ${ultimaEtapa}. Continue ou avance pedagogicamente conforme as respostas da criança.`
+
         try {
-          const crianca = $app.findRecordById('criancas', body.crianca_id)
-          if (crianca && crianca.getString('owner') === userId) {
-            const nome = crianca.getString('nome')
-            const idade = crianca.getInt('idade')
-            const serie = crianca.getString('serie')
-            const escola = crianca.getString('escola')
-            const obs = crianca.getString('observacoes')
-            const localidade = crianca.getString('localidade')
-            const genero = crianca.getString('genero')
-            const horariosAula = crianca.getString('horarios_aula')
-            const acessibilidade = crianca.getString('acessibilidade')
-
-            extraContext += `\n[PERFIL BASE DA CRIANÇA]: Nome: ${nome}, Idade: ${idade} anos, Série: ${serie}, Escola: ${escola || 'Não informada'}.`
-            if (localidade) extraContext += ` Localidade/Região: ${localidade}.`
-            if (genero && genero !== 'Prefiro não informar') extraContext += ` Gênero: ${genero}.`
-            if (horariosAula) extraContext += ` Turno/Horários de aula: ${horariosAula}.`
-            if (acessibilidade && acessibilidade !== 'Nenhuma')
-              extraContext += ` Preferências de acessibilidade: ${acessibilidade}.`
-            if (obs) extraContext += ` Observações gerais: ${obs}.`
-
-            try {
-              const difs = $app.findRecordsByFilter(
-                'dificuldades',
-                'crianca = {:crianca}',
-                '-created',
-                5,
-                0,
-                { crianca: crianca.id },
-              )
-              if (difs && difs.length > 0) {
-                const difTexts = difs.map(
-                  (d) =>
-                    `${d.getString('materia')} (${d.getString('impacto')}): ${d.getString('descricao')}`,
-                )
-                extraContext += `\nDIFICULDADES MAPEADAS: ${difTexts.join('; ')}.`
-              }
-            } catch (_) {}
-
-            try {
-              const conhecs = $app.findRecordsByFilter(
-                'conhecimento',
-                'crianca = {:crianca}',
-                '-created',
-                5,
-                0,
-                { crianca: crianca.id },
-              )
-              if (conhecs && conhecs.length > 0) {
-                const conhTexts = conhecs.map(
-                  (k) => `${k.getString('titulo')}: ${k.getString('conteudo')}`,
-                )
-                extraContext += `\nESTRATÉGIAS QUE FUNCIONAM BEM: ${conhTexts.join('; ')}.`
-              }
-            } catch (_) {}
+          const difs = $app.findRecordsByFilter(
+            'dificuldades',
+            'crianca = {:crianca}',
+            '-created',
+            5,
+            0,
+            { crianca: criancaAtual.id },
+          )
+          if (difs && difs.length > 0) {
+            const difTexts = difs.map(
+              (d) =>
+                `${d.getString('materia')} (${d.getString('impacto')}): ${d.getString('descricao')}`,
+            )
+            extraContext += `\nDIFICULDADES MAPEADAS: ${difTexts.join('; ')}.`
           }
         } catch (_) {}
+
+        try {
+          const conhecs = $app.findRecordsByFilter(
+            'conhecimento',
+            'crianca = {:crianca}',
+            '-created',
+            5,
+            0,
+            { crianca: criancaAtual.id },
+          )
+          if (conhecs && conhecs.length > 0) {
+            const conhTexts = conhecs.map(
+              (k) => `${k.getString('titulo')}: ${k.getString('conteudo')}`,
+            )
+            extraContext += `\nESTRATÉGIAS QUE FUNCIONAM BEM: ${conhTexts.join('; ')}.`
+          }
+        } catch (_) {}
+
+        if (acoesExecutadas.length > 0) {
+          extraContext += `\n[AÇÃO DE SISTEMA JÁ REGISTRADA]: ${JSON.stringify(acoesExecutadas)}. Confirme calorosamente com a criança na sua resposta!`
+        }
       }
 
       if (body.custom_prompt) {
@@ -242,11 +408,103 @@ routerAdd(
         }
       }
 
+      // Extração de metadados da etapa socrática e da matéria da tag [[ETAPA: ... | MATERIA: ...]]
+      let etapaDetectada = 'entender'
+      let materiaDetectada = 'geral'
+
+      const matchTag = conteudoFinal.match(/\[\[ETAPA:\s*(\w+)(?:\s*\|\s*MATERIA:\s*(\w+))?\]\]/i)
+      if (matchTag) {
+        etapaDetectada = matchTag[1].toLowerCase()
+        if (matchTag[2]) materiaDetectada = matchTag[2].toLowerCase()
+        // Remove a tag interna para exibição limpa para a criança
+        conteudoFinal = conteudoFinal.replace(matchTag[0], '').trim()
+      } else {
+        // Fallback heurístico inteligente
+        const textoComp = (userMsg + ' ' + conteudoFinal).toLowerCase()
+        if (
+          textoComp.includes('explique com suas palavras') ||
+          textoComp.includes('como você explicaria') ||
+          textoComp.includes('ensinar é aprender') ||
+          textoComp.includes('o que você aprendeu')
+        ) {
+          etapaDetectada = 'consolidar'
+        } else if (
+          textoComp.includes('tente resolver') ||
+          textoComp.includes('desafio para você') ||
+          textoComp.includes('agora é sua vez') ||
+          textoComp.includes('exercício parecido')
+        ) {
+          etapaDetectada = 'praticar'
+        } else if (
+          textoComp.includes('passo') ||
+          textoComp.includes('vamos pensar') ||
+          textoComp.includes('primeiro') ||
+          textoComp.includes('olhando para')
+        ) {
+          etapaDetectada = 'guiar'
+        } else if (
+          criancaAtual &&
+          (textoComp.includes(criancaAtual.getString('localidade').toLowerCase()) ||
+            textoComp.includes('no seu dia a dia') ||
+            textoComp.includes('imagine que você'))
+        ) {
+          etapaDetectada = 'contextualizar'
+        }
+
+        if (
+          textoComp.includes('fração') ||
+          textoComp.includes('divis') ||
+          textoComp.includes('matematica') ||
+          textoComp.includes('número')
+        ) {
+          materiaDetectada = 'matematica'
+        } else if (
+          textoComp.includes('planta') ||
+          textoComp.includes('fotossintese') ||
+          textoComp.includes('ciencias') ||
+          textoComp.includes('corpo')
+        ) {
+          materiaDetectada = 'ciencias'
+        } else if (
+          textoComp.includes('frase') ||
+          textoComp.includes('portugues') ||
+          textoComp.includes('letra') ||
+          textoComp.includes('silaba')
+        ) {
+          materiaDetectada = 'portugues'
+        } else if (
+          textoComp.includes('historia') ||
+          textoComp.includes('indigena') ||
+          textoComp.includes('seculo') ||
+          textoComp.includes('tempo')
+        ) {
+          materiaDetectada = 'historia'
+        } else if (
+          textoComp.includes('geografia') ||
+          textoComp.includes('mapa') ||
+          textoComp.includes('relevo')
+        ) {
+          materiaDetectada = 'geografia'
+        }
+      }
+
+      // Persistir na criança a última etapa e matéria alcançadas
+      if (criancaAtual) {
+        try {
+          criancaAtual.set('ultima_etapa_socratica', etapaDetectada)
+          criancaAtual.set('ultima_materia', materiaDetectada)
+          $app.save(criancaAtual)
+        } catch (_) {}
+      }
+
       return e.json(200, {
         conversation_id: result.conversation_id,
         content: conteudoFinal,
         citations: result.citations || [],
         message_id: result.message_id,
+        etapa: etapaDetectada,
+        materia: materiaDetectada,
+        acoes: acoesExecutadas,
       })
     } catch (err) {
       if (err instanceof SkipAiConfigError) {
@@ -270,7 +528,7 @@ routerAdd(
   $apis.requireAuth(),
 )
 
-// Endpoint de streaming SSE com guardrails
+// Endpoint de streaming SSE com guardrails e Protocolo Socrático
 routerAdd(
   'POST',
   '/backend/v1/lumi/chat-stream',
@@ -422,63 +680,137 @@ routerAdd(
         return
       }
 
-      let extraContext = ''
+      // Detecção de ações de escrita para agenda e memórias
+      let criancaAtual = null
       if (body.crianca_id) {
         try {
-          const crianca = $app.findRecordById('criancas', body.crianca_id)
-          if (crianca && crianca.getString('owner') === userId) {
-            const nome = crianca.getString('nome')
-            const idade = crianca.getInt('idade')
-            const serie = crianca.getString('serie')
-            const escola = crianca.getString('escola')
-            const obs = crianca.getString('observacoes')
-            const localidade = crianca.getString('localidade')
-            const genero = crianca.getString('genero')
-            const horariosAula = crianca.getString('horarios_aula')
-            const acessibilidade = crianca.getString('acessibilidade')
+          const c = $app.findRecordById('criancas', body.crianca_id)
+          if (c && c.getString('owner') === userId) {
+            criancaAtual = c
+          }
+        } catch (_) {}
+      }
 
-            extraContext += `\n[PERFIL BASE DA CRIANÇA]: Nome: ${nome}, Idade: ${idade} anos, Série: ${serie}, Escola: ${escola || 'Não informada'}.`
-            if (localidade) extraContext += ` Localidade/Região: ${localidade}.`
-            if (genero && genero !== 'Prefiro não informar') extraContext += ` Gênero: ${genero}.`
-            if (horariosAula) extraContext += ` Turno/Horários de aula: ${horariosAula}.`
-            if (acessibilidade && acessibilidade !== 'Nenhuma')
-              extraContext += ` Preferências de acessibilidade: ${acessibilidade}.`
-            if (obs) extraContext += ` Observações gerais: ${obs}.`
+      if (criancaAtual) {
+        const regexAgenda =
+          /\b(tenho|marcar|anotar|agendar|adicionar|lembrar|coloque|colocar)\b.*?\b(prova|teste|avaliacao|tarefa|licao|trabalho|revisao)\b/i
 
-            try {
-              const difs = $app.findRecordsByFilter(
-                'dificuldades',
-                'crianca = {:crianca}',
-                '-created',
-                5,
-                0,
-                { crianca: crianca.id },
-              )
-              if (difs && difs.length > 0) {
-                const difTexts = difs.map(
-                  (d) =>
-                    `${d.getString('materia')} (${d.getString('impacto')}): ${d.getString('descricao')}`,
-                )
-                extraContext += `\nDIFICULDADES MAPEADAS: ${difTexts.join('; ')}.`
-              }
-            } catch (_) {}
+        if (
+          regexAgenda.test(normalizado) ||
+          (normalizado.includes('prova de') && normalizado.length < 100)
+        ) {
+          let mat = 'Ciências'
+          if (/\b(matematica|mat|calculo|fracao)\b/.test(normalizado)) mat = 'Matemática'
+          else if (/\b(portugues|redacao|gramatica)\b/.test(normalizado)) mat = 'Português'
+          else if (/\b(historia)\b/.test(normalizado)) mat = 'História'
+          else if (/\b(geografia|mapa)\b/.test(normalizado)) mat = 'Geografia'
+          else if (/\b(ingles)\b/.test(normalizado)) mat = 'Inglês'
+          else if (/\b(artes|arte)\b/.test(normalizado)) mat = 'Artes'
 
-            try {
-              const conhecs = $app.findRecordsByFilter(
-                'conhecimento',
-                'crianca = {:crianca}',
-                '-created',
-                5,
-                0,
-                { crianca: crianca.id },
-              )
-              if (conhecs && conhecs.length > 0) {
-                const conhTexts = conhecs.map(
-                  (k) => `${k.getString('titulo')}: ${k.getString('conteudo')}`,
-                )
-                extraContext += `\nESTRATÉGIAS QUE FUNCIONAM BEM: ${conhTexts.join('; ')}.`
-              }
-            } catch (_) {}
+          let tipoEv = 'tarefa'
+          if (/\bprova\b|\bteste\b|\bavaliacao\b/.test(normalizado)) tipoEv = 'prova'
+          else if (/\brevisao\b|\brevisar\b/.test(normalizado)) tipoEv = 'revisao'
+          else if (/\bprojeto\b|\btrabalho\b/.test(normalizado)) tipoEv = 'projeto'
+
+          const hoje = new Date()
+          let dataOffsetDias = 3
+          if (/\b(hoje)\b/.test(normalizado)) dataOffsetDias = 0
+          else if (/\b(amanha)\b/.test(normalizado)) dataOffsetDias = 1
+          else if (/\b(segunda)\b/.test(normalizado))
+            dataOffsetDias = (1 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(terca)\b/.test(normalizado))
+            dataOffsetDias = (2 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(quarta)\b/.test(normalizado))
+            dataOffsetDias = (3 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(quinta)\b/.test(normalizado))
+            dataOffsetDias = (4 - hoje.getDay() + 7) % 7 || 7
+          else if (/\b(sexta)\b/.test(normalizado))
+            dataOffsetDias = (5 - hoje.getDay() + 7) % 7 || 7
+
+          const targetDate = new Date(hoje.getTime() + dataOffsetDias * 24 * 60 * 60 * 1000)
+          const dataFormatada = targetDate.toISOString().split('T')[0]
+          const tituloEvento = `${tipoEv === 'prova' ? 'Prova' : tipoEv === 'revisao' ? 'Revisão' : 'Tarefa'} de ${mat}`
+
+          try {
+            const jaExiste = $app.findRecordsByFilter(
+              'agenda',
+              'crianca = {:c} && data = {:d} && materia = {:m}',
+              '',
+              1,
+              0,
+              { c: criancaAtual.id, d: dataFormatada, m: mat },
+            )
+            if (!jaExiste || jaExiste.length === 0) {
+              const agendaCol = $app.findCollectionByNameOrId('agenda')
+              const aRec = new Record(agendaCol)
+              aRec.set('crianca', criancaAtual.id)
+              aRec.set('titulo', tituloEvento)
+              aRec.set('materia', mat)
+              aRec.set('tipo', tipoEv)
+              aRec.set('data', dataFormatada)
+              aRec.set('horario', '08:30')
+              aRec.set('descricao', `Criado via conversa com Lumi: ${userMsg}`)
+              aRec.set('concluido', false)
+              $app.save(aRec)
+            }
+          } catch (errAgenda) {
+            console.error('[ERRO CRIAR AGENDA STREAM]:', errAgenda)
+          }
+        }
+      }
+
+      let extraContext = ''
+      if (criancaAtual) {
+        const nome = criancaAtual.getString('nome')
+        const idade = criancaAtual.getInt('idade')
+        const serie = criancaAtual.getString('serie')
+        const escola = criancaAtual.getString('escola')
+        const obs = criancaAtual.getString('observacoes')
+        const localidade = criancaAtual.getString('localidade')
+        const genero = criancaAtual.getString('genero')
+        const horariosAula = criancaAtual.getString('horarios_aula')
+        const acessibilidade = criancaAtual.getString('acessibilidade')
+
+        extraContext += `\n[PERFIL BASE DA CRIANÇA]: Nome: ${nome}, Idade: ${idade} anos, Série: ${serie}, Escola: ${escola || 'Não informada'}.`
+        if (localidade) extraContext += ` Localidade/Região: ${localidade}.`
+        if (genero && genero !== 'Prefiro não informar') extraContext += ` Gênero: ${genero}.`
+        if (horariosAula) extraContext += ` Turno/Horários de aula: ${horariosAula}.`
+        if (acessibilidade && acessibilidade !== 'Nenhuma')
+          extraContext += ` Preferências de acessibilidade: ${acessibilidade}.`
+        if (obs) extraContext += ` Observações gerais: ${obs}.`
+
+        try {
+          const difs = $app.findRecordsByFilter(
+            'dificuldades',
+            'crianca = {:crianca}',
+            '-created',
+            5,
+            0,
+            { crianca: criancaAtual.id },
+          )
+          if (difs && difs.length > 0) {
+            const difTexts = difs.map(
+              (d) =>
+                `${d.getString('materia')} (${d.getString('impacto')}): ${d.getString('descricao')}`,
+            )
+            extraContext += `\nDIFICULDADES MAPEADAS: ${difTexts.join('; ')}.`
+          }
+        } catch (_) {}
+
+        try {
+          const conhecs = $app.findRecordsByFilter(
+            'conhecimento',
+            'crianca = {:crianca}',
+            '-created',
+            5,
+            0,
+            { crianca: criancaAtual.id },
+          )
+          if (conhecs && conhecs.length > 0) {
+            const conhTexts = conhecs.map(
+              (k) => `${k.getString('titulo')}: ${k.getString('conteudo')}`,
+            )
+            extraContext += `\nESTRATÉGIAS QUE FUNCIONAM BEM: ${conhTexts.join('; ')}.`
           }
         } catch (_) {}
       }
@@ -561,7 +893,7 @@ routerAdd(
   $apis.requireAuth(),
 )
 
-// Rota de exclusão de dados e memórias de uma criança (Direito de exclusão parental LGPD/ECA Digital)
+// Rota de exclusão de dados e memórias de uma criança (LGPD/ECA Digital)
 routerAdd(
   'DELETE',
   '/backend/v1/privacidade/crianca/{criancaId}',
@@ -618,8 +950,9 @@ routerAdd(
         }
       } catch (_) {}
 
-      // 5. Limpar observações e dados sensíveis do registro da criança mantendo cadastro base
+      // 5. Limpar observações e etapas
       crianca.set('observacoes', '')
+      crianca.set('ultima_etapa_socratica', 'entender')
       $app.save(crianca)
 
       return e.json(200, {

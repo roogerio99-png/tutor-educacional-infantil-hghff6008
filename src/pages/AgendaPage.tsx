@@ -50,6 +50,17 @@ export const AgendaPage: React.FC = () => {
     carregarEventos()
   }, [criancaSelecionada])
 
+  // Recarregar agenda também quando a janela ganha foco ou visibilidade volta (ex: voltou da aba Conversa após evento criado pela Lumi)
+  useEffect(() => {
+    const onFocus = () => carregarEventos()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [criancaSelecionada])
+
   const handleCriar = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!criancaSelecionada || !titulo.trim() || !data) return

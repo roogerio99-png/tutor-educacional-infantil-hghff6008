@@ -23,6 +23,18 @@ export interface UserRecord extends RecordModel {
 
 export type GeneroCrianca = 'Menina' | 'Menino' | 'Prefiro não informar'
 
+export type EtapaSocratica = 'entender' | 'contextualizar' | 'guiar' | 'praticar' | 'consolidar'
+
+export interface AcaoLumiExecutada {
+  tipo: 'agenda_criada' | 'agenda_concluida' | 'memoria_registrada'
+  id?: string
+  titulo?: string
+  materia?: string
+  data?: string
+  tipo_evento?: string
+  conteudo?: string
+}
+
 export interface CriancaRecord extends RecordModel {
   owner: string
   nome: string
@@ -34,6 +46,8 @@ export interface CriancaRecord extends RecordModel {
   genero?: GeneroCrianca
   horarios_aula?: string
   acessibilidade?: string
+  ultima_etapa_socratica?: EtapaSocratica
+  ultima_materia?: string
   expand?: {
     owner?: UserRecord
     dificuldades_via_crianca?: DificuldadeRecord[]
