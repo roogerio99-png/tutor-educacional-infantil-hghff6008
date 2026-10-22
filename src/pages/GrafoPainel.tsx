@@ -3,9 +3,17 @@ import { useCrianca } from '@/contexts/CriancaContext'
 import { listarDificuldades, criarDificuldade, excluirDificuldade } from '@/services/dificuldades'
 import { listarConhecimento, criarConhecimento, excluirConhecimento } from '@/services/conhecimento'
 import { listarEventosAgenda } from '@/services/agenda'
-import type { DificuldadeRecord, ConhecimentoRecord, AgendaRecord, Impacto } from '@/types'
+import { listarAlertas, marcarAlertaComoLido, excluirAlerta } from '@/services/alertas'
+import type {
+  DificuldadeRecord,
+  ConhecimentoRecord,
+  AgendaRecord,
+  AlertaRecord,
+  Impacto,
+} from '@/types'
 import { SimpleModal } from '@/components/SimpleModal'
 import { MATERIAS, IMPACTOS } from '@/types'
+import { AlertCircle, ShieldAlert, CheckCircle, Clock, MapPin, Eye, School } from 'lucide-react'
 
 export const GrafoPainel: React.FC = () => {
   const { criancaSelecionada, recarregarCriancas } = useCrianca()
@@ -13,6 +21,7 @@ export const GrafoPainel: React.FC = () => {
   const [dificuldades, setDificuldades] = useState<DificuldadeRecord[]>([])
   const [conhecimentos, setConhecimentos] = useState<ConhecimentoRecord[]>([])
   const [eventos, setEventos] = useState<AgendaRecord[]>([])
+  const [alertas, setAlertas] = useState<AlertaRecord[]>([])
   const [carregando, setCarregando] = useState(true)
 
   // Modais
@@ -44,16 +53,18 @@ export const GrafoPainel: React.FC = () => {
 
     try {
       setCarregando(true)
-      const [dList, cList, aList] = await Promise.all([
+      const [dList, cList, aList, alList] = await Promise.all([
         listarDificuldades(criancaSelecionada.id),
         listarConhecimento(criancaSelecionada.id),
         listarEventosAgenda(criancaSelecionada.id),
+        listarAlertas(criancaSelecionada.id),
       ])
       setDificuldades(dList)
       setConhecimentos(cList)
       setEventos(aList)
+      setAlertas(alList)
     } catch (err) {
-      console.error('Erro ao carregar grafo do aluno:', err)
+      console.error('Erro ao carregar dados do painel parental:', err)
     } finally {
       setCarregando(false)
     }
@@ -62,6 +73,26 @@ export const GrafoPainel: React.FC = () => {
   useEffect(() => {
     carregarDados()
   }, [criancaSelecionada])
+
+  const handleMarcarAlertaLido = async (id: string) => {
+    try {
+      await marcarAlertaComoLido(id)
+      setAlertas((prev) => prev.map((a) => (a.id === id ? { ...a, lido: true } : a)))
+    } catch (err) {
+      console.error('Erro ao marcar alerta como lido:', err)
+    }
+  }
+
+  const handleExcluirAlerta = async (id: string) => {
+    try {
+      await excluirAlerta(id)
+      setAlertas((prev) => prev.filter((a) => a.id !== id))
+    } catch (err) {
+      console.error('Erro ao excluir alerta:', err)
+    }
+  }
+
+  const alertasNaoLidos = alertas.filter((a) => !a.lido)
 
   const handleSalvarDificuldade = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,39 +165,196 @@ export const GrafoPainel: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho do Painel Parental */}
-      <div className="bg-white rounded-3xl p-6 shadow-soft border border-slate-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🧠</span>
-            <h1 className="text-xl font-black text-slate-800">Grafo Cognitivo & Painel Parental</h1>
+      {/* Cabeçalho do Painel Parental com Resumo do Perfil Base */}
+      <div className="bg-white rounded-3xl p-6 shadow-soft border border-slate-200/80 space-y-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🧠</span>
+              <h1 className="text-xl font-black text-slate-800">
+                Grafo Cognitivo & Painel Parental
+              </h1>
+              {alertasNaoLidos.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 text-xs font-black border border-rose-200 animate-pulse">
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                  {alertasNaoLidos.length} alerta{alertasNaoLidos.length > 1 ? 's' : ''} prioritário
+                  {alertasNaoLidos.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-slate-500 mt-1">
+              Mapeamento vivo das capacidades, travas atencionais e perfil calibrado de{' '}
+              <span className="font-semibold text-slate-700">
+                {criancaSelecionada?.nome || 'Aluno'}
+              </span>
+              .
+            </p>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Mapeamento vivo das capacidades, travas atencionais e estratégias de sucesso de{' '}
-            <span className="font-semibold text-slate-700">
-              {criancaSelecionada?.nome || 'Aluno'}
-            </span>
-            .
-          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setModalDif(true)}
+              className="px-4 py-2 rounded-2xl bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs border border-rose-200 transition-colors"
+            >
+              + Ponto de Atenção
+            </button>
+            <button
+              type="button"
+              onClick={() => setModalConhec(true)}
+              className="px-4 py-2 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all"
+            >
+              + Estratégia de Sucesso
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setModalDif(true)}
-            className="px-4 py-2 rounded-2xl bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs border border-rose-200 transition-colors"
-          >
-            + Ponto de Atenção
-          </button>
-          <button
-            type="button"
-            onClick={() => setModalConhec(true)}
-            className="px-4 py-2 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all"
-          >
-            + Estratégia de Sucesso
-          </button>
-        </div>
+        {/* Metadados da Camada 1: Perfil Base */}
+        {criancaSelecionada && (
+          <div className="pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-2">
+              <School className="w-4 h-4 text-amber-600 shrink-0" />
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                  Série & Escola
+                </span>
+                <span className="font-semibold text-slate-700 truncate block">
+                  {criancaSelecionada.serie}{' '}
+                  {criancaSelecionada.escola ? `• ${criancaSelecionada.escola}` : ''}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                  Localidade / Região
+                </span>
+                <span className="font-semibold text-slate-700 truncate block">
+                  {criancaSelecionada.localidade || 'Não informada'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-sky-600 shrink-0" />
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                  Turno de Aulas
+                </span>
+                <span className="font-semibold text-slate-700 truncate block">
+                  {criancaSelecionada.horarios_aula || 'Manhã'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-2">
+              <Eye className="w-4 h-4 text-indigo-600 shrink-0" />
+              <div>
+                <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                  Acessibilidade
+                </span>
+                <span className="font-semibold text-slate-700 truncate block">
+                  {criancaSelecionada.acessibilidade || 'Padrão'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* BLOCO DE ALERTAS PRIORITÁRIOS (Protocolo de Proteção à Vida e Barreiras de Segurança) */}
+      {alertas.length > 0 && (
+        <div className="bg-white rounded-3xl p-6 shadow-soft border border-rose-200 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-rose-100">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-rose-600" />
+              <h3 className="text-sm font-bold text-slate-800">
+                Alertas Prioritários & Guardrails (Proteção à Vida)
+              </h3>
+            </div>
+            <span className="text-xs text-rose-600 font-semibold">
+              {alertasNaoLidos.length} não lido{alertasNaoLidos.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            {alertas.map((al) => (
+              <div
+                key={al.id}
+                className={`p-3.5 rounded-2xl border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  al.tipo === 'risco_seguranca'
+                    ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                    : al.tipo === 'tema_sensivel'
+                      ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                } ${al.lido ? 'opacity-70' : ''}`}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
+                        al.tipo === 'risco_seguranca'
+                          ? 'bg-rose-200 text-rose-800'
+                          : al.tipo === 'tema_sensivel'
+                            ? 'bg-amber-200 text-amber-800'
+                            : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {al.tipo === 'risco_seguranca'
+                        ? '🚨 Risco à Integridade'
+                        : al.tipo === 'tema_sensivel'
+                          ? '⚠️ Tema Sensível'
+                          : 'ℹ️ Fora de Escopo'}
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      {new Date(al.created).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                    {al.lido && (
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded">
+                        Visto
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-semibold">{al.mensagem}</p>
+                  {al.conteudo_detectado && (
+                    <p className="text-[11px] italic bg-white/60 p-2 rounded-xl border border-slate-200/50">
+                      &quot;{al.conteudo_detectado}&quot;
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {!al.lido && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarcarAlertaLido(al.id)}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 transition-colors inline-flex items-center gap-1"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Marcar como lido</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleExcluirAlerta(al.id)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    title="Excluir alerta"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* VISUALIZAÇÃO INTERATIVA DO GRAFO COGNITIVO */}
       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg border border-slate-800 relative overflow-hidden">

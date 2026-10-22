@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { AuthLayout } from '@/components/AuthLayout'
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { useToast } from '@/hooks/use-toast'
-import { Eye, EyeOff, UserPlus } from 'lucide-react'
+import { Eye, EyeOff, UserPlus, ShieldCheck } from 'lucide-react'
 
 export default function Cadastro() {
   const { register, login } = useAuth()
@@ -15,6 +15,7 @@ export default function Cadastro() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [consentimentoLgpd, setConsentimentoLgpd] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -36,6 +37,10 @@ export default function Cadastro() {
     if (password !== passwordConfirm) {
       errors.passwordConfirm = 'As senhas não coincidem'
     }
+    if (!consentimentoLgpd) {
+      errors.consentimento =
+        'É obrigatório autorizar o tratamento parental de dados para criar a conta.'
+    }
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors)
@@ -44,7 +49,7 @@ export default function Cadastro() {
 
     setLoading(true)
     try {
-      await register(nome, email, password, passwordConfirm)
+      await register(nome, email, password, passwordConfirm, consentimentoLgpd)
 
       // Loga automaticamente
       try {
@@ -187,10 +192,51 @@ export default function Cadastro() {
           )}
         </div>
 
+        {/* Bloco de Consentimento Parental LGPD / ECA Digital */}
+        <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2.5">
+          <div className="flex items-start gap-2.5">
+            <ShieldCheck className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <h4 className="text-xs font-bold text-[#4A3B32]">
+                Consentimento Parental (LGPD & ECA Digital)
+              </h4>
+              <p className="text-[11px] text-[#7A6A5E] leading-relaxed mt-1">
+                Como responsável legal, declaro que os dados fornecidos sobre a criança serão
+                utilizados
+                <strong> exclusivamente para personalizar o apoio pedagógico socrático</strong>. Os
+                dados
+                <strong> nunca serão vendidos</strong>, compartilhados para publicidade ou usados
+                para fins comerciais. Você tem o direito assegurado de visualizar, exportar e{' '}
+                <strong>excluir todas as memórias e dados a qualquer momento</strong> no painel de
+                privacidade.
+              </p>
+              <p className="text-[10px] text-amber-700/80 font-medium mt-1">
+                Conforme Lei 13.709/2018 (LGPD, Art. 14) e Lei 15.211/2025 (ECA Digital).
+              </p>
+            </div>
+          </div>
+
+          <label className="flex items-start gap-3 pt-2 border-t border-amber-200/50 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={consentimentoLgpd}
+              onChange={(e) => setConsentimentoLgpd(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-amber-300 text-[#F28C28] focus:ring-[#F28C28] cursor-pointer"
+            />
+            <span className="text-xs font-semibold text-[#4A3B32]">
+              Li e autorizo expressamente o tratamento dos dados educacionais da criança pelo tutor
+              inteligente nos termos da LGPD e ECA Digital. *
+            </span>
+          </label>
+          {fieldErrors.consentimento && (
+            <p className="text-xs text-[#D64545] font-medium pl-7">{fieldErrors.consentimento}</p>
+          )}
+        </div>
+
         <button
           type="submit"
-          disabled={loading}
-          className="w-full mt-2 inline-flex items-center justify-center gap-2 bg-[#F28C28] hover:bg-[#D97A1A] disabled:opacity-60 text-white font-bold py-3.5 px-4 rounded-2xl shadow-soft hover:shadow-soft-hover transition-all duration-150 transform active:scale-[0.99]"
+          disabled={loading || !consentimentoLgpd}
+          className="w-full mt-2 inline-flex items-center justify-center gap-2 bg-[#F28C28] hover:bg-[#D97A1A] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-2xl shadow-soft hover:shadow-soft-hover transition-all duration-150 transform active:scale-[0.99]"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

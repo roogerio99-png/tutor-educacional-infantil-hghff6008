@@ -17,7 +17,11 @@ export interface UserRecord extends RecordModel {
   email: string
   avatar?: string
   verified: boolean
+  consentimento_lgpd?: boolean
+  consentimento_data?: string
 }
+
+export type GeneroCrianca = 'Menina' | 'Menino' | 'Prefiro não informar'
 
 export interface CriancaRecord extends RecordModel {
   owner: string
@@ -26,11 +30,28 @@ export interface CriancaRecord extends RecordModel {
   serie: string
   escola?: string
   observacoes?: string
+  localidade?: string
+  genero?: GeneroCrianca
+  horarios_aula?: string
+  acessibilidade?: string
   expand?: {
     owner?: UserRecord
     dificuldades_via_crianca?: DificuldadeRecord[]
     conhecimento_via_crianca?: ConhecimentoRecord[]
     agenda_via_crianca?: AgendaRecord[]
+  }
+}
+
+export type TipoAlerta = 'risco_seguranca' | 'tema_sensivel' | 'fora_escopo' | 'aviso_geral'
+
+export interface AlertaRecord extends RecordModel {
+  crianca: string
+  tipo: TipoAlerta
+  mensagem: string
+  conteudo_detectado?: string
+  lido?: boolean
+  expand?: {
+    crianca?: CriancaRecord
   }
 }
 
@@ -87,6 +108,7 @@ export type Dificuldade = DificuldadeRecord
 export type Conhecimento = ConhecimentoRecord
 export type Agenda = AgendaRecord
 export type SystemPrompt = SystemPromptRecord
+export type Alerta = AlertaRecord
 
 export const MATERIAS: string[] = [
   'Português',

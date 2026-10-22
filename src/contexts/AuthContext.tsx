@@ -13,6 +13,7 @@ interface AuthContextType {
     email: string,
     password: string,
     passwordConfirm: string,
+    consentimentoLgpd?: boolean,
   ) => Promise<void>
   logout: () => void
   requestPasswordReset: (email: string) => Promise<void>
@@ -66,12 +67,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     passwordConfirm: string,
+    consentimentoLgpd?: boolean,
   ): Promise<void> => {
     await pb.collection('users').create({
       name: name.trim(),
       email: email.trim().toLowerCase(),
       password,
       passwordConfirm,
+      consentimento_lgpd: !!consentimentoLgpd,
+      consentimento_data: consentimentoLgpd ? new Date().toISOString() : undefined,
     })
     // Envia e-mail de verificação (se SMTP configurado ou em background)
     try {

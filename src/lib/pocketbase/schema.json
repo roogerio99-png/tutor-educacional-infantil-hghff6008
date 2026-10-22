@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T13:54:41.327Z",
+  "generatedAt": "2026-10-22T14:19:17.728Z",
   "collections": [
     {
       "name": "users",
@@ -37,6 +37,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "consentimento_lgpd",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "consentimento_data",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -105,6 +117,31 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "localidade",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "genero",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["Menina", "Menino", "Prefiro não informar"]
+        },
+        {
+          "name": "horarios_aula",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "acessibilidade",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -375,6 +412,69 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_prompts_owner ON system_prompts (owner)"]
+    },
+    {
+      "name": "alertas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "crianca",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "criancas"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["risco_seguranca", "tema_sensivel", "fora_escopo", "aviso_geral"]
+        },
+        {
+          "name": "mensagem",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "conteudo_detectado",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "lido",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_alertas_crianca ON alertas (crianca)",
+        "CREATE INDEX idx_alertas_lido ON alertas (lido)"
+      ]
     }
   ]
 }

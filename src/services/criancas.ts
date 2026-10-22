@@ -7,6 +7,10 @@ export interface CriancaInput {
   serie: string
   escola?: string
   observacoes?: string
+  localidade?: string
+  genero?: 'Menina' | 'Menino' | 'Prefiro não informar'
+  horarios_aula?: string
+  acessibilidade?: string
 }
 
 export async function listarCriancas(): Promise<CriancaRecord[]> {
