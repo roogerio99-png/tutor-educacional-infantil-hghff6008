@@ -4,16 +4,34 @@ import { listarDificuldades, criarDificuldade, excluirDificuldade } from '@/serv
 import { listarConhecimento, criarConhecimento, excluirConhecimento } from '@/services/conhecimento'
 import { listarEventosAgenda } from '@/services/agenda'
 import { listarAlertas, marcarAlertaComoLido, excluirAlerta } from '@/services/alertas'
+import { listarMemorias, excluirMemoria } from '@/services/memorias'
+import { obterHistoricoEmocional } from '@/services/checkinEmocional'
 import type {
   DificuldadeRecord,
   ConhecimentoRecord,
   AgendaRecord,
   AlertaRecord,
+  MemoriaRecord,
+  CheckinEmocionalRecord,
   Impacto,
 } from '@/types'
 import { SimpleModal } from '@/components/SimpleModal'
 import { MATERIAS, IMPACTOS } from '@/types'
-import { AlertCircle, ShieldAlert, CheckCircle, Clock, MapPin, Eye, School } from 'lucide-react'
+import {
+  AlertCircle,
+  ShieldAlert,
+  CheckCircle,
+  Clock,
+  MapPin,
+  Eye,
+  School,
+  Heart,
+  Sparkles,
+  Calendar,
+  Flame,
+  PhoneCall,
+  Trash2,
+} from 'lucide-react'
 
 export const GrafoPainel: React.FC = () => {
   const { criancaSelecionada, recarregarCriancas } = useCrianca()
@@ -22,6 +40,9 @@ export const GrafoPainel: React.FC = () => {
   const [conhecimentos, setConhecimentos] = useState<ConhecimentoRecord[]>([])
   const [eventos, setEventos] = useState<AgendaRecord[]>([])
   const [alertas, setAlertas] = useState<AlertaRecord[]>([])
+  const [memorias, setMemorias] = useState<MemoriaRecord[]>([])
+  const [historicoEmocional, setHistoricoEmocional] = useState<CheckinEmocionalRecord[]>([])
+  const [alertaEmocionalPadrao, setAlertaEmocionalPadrao] = useState(false)
   const [carregando, setCarregando] = useState(true)
 
   // Modais
@@ -47,22 +68,30 @@ export const GrafoPainel: React.FC = () => {
       setDificuldades([])
       setConhecimentos([])
       setEventos([])
+      setAlertas([])
+      setMemorias([])
+      setHistoricoEmocional([])
       setCarregando(false)
       return
     }
 
     try {
       setCarregando(true)
-      const [dList, cList, aList, alList] = await Promise.all([
+      const [dList, cList, aList, alList, mList, emoRes] = await Promise.all([
         listarDificuldades(criancaSelecionada.id),
         listarConhecimento(criancaSelecionada.id),
         listarEventosAgenda(criancaSelecionada.id),
         listarAlertas(criancaSelecionada.id),
+        listarMemorias(criancaSelecionada.id),
+        obterHistoricoEmocional(criancaSelecionada.id),
       ])
       setDificuldades(dList)
       setConhecimentos(cList)
       setEventos(aList)
       setAlertas(alList)
+      setMemorias(mList)
+      setHistoricoEmocional(emoRes.historico)
+      setAlertaEmocionalPadrao(emoRes.alerta_atencao_emocional)
     } catch (err) {
       console.error('Erro ao carregar dados do painel parental:', err)
     } finally {
@@ -160,8 +189,30 @@ export const GrafoPainel: React.FC = () => {
     }
   }
 
+  const handleExcluirMemoria = async (id: string) => {
+    if (
+      !confirm('Deseja que a Lumi esqueça esta memória sobre a criança? (Direito ao Esquecimento)')
+    )
+      return
+    try {
+      await excluirMemoria(id)
+      setMemorias((prev) => prev.filter((m) => m.id !== id))
+    } catch (err) {
+      console.error('Erro ao excluir memória:', err)
+    }
+  }
+
   // Agrupamento de matérias para nós do Grafo
   const materiasMap = Array.from(new Set(dificuldades.map((d) => d.materia)))
+
+  // Agrupamento de Memórias por Tipo (Frente 1)
+  const memoriasInteresses = memorias.filter((m) => m.tipo === 'interesse')
+  const memoriasPessoas = memorias.filter((m) => m.tipo === 'pessoa_relacao')
+  const memoriasRotinas = memorias.filter((m) => m.tipo === 'rotina')
+  const memoriasEstrategias = memorias.filter((m) => m.tipo === 'estrategia')
+  const memoriasOutras = memorias.filter(
+    (m) => !['interesse', 'pessoa_relacao', 'rotina', 'estrategia'].includes(m.tipo),
+  )
 
   return (
     <div className="space-y-6">
@@ -264,50 +315,88 @@ export const GrafoPainel: React.FC = () => {
         )}
       </div>
 
-      {/* BLOCO DE ALERTAS PRIORITÁRIOS (Protocolo de Proteção à Vida e Barreiras de Segurança) */}
+      {/* BLOCO DE ALERTAS PRIORITÁRIOS (Protocolo de Proteção à Vida e Barreiras de Segurança - Frente 3) */}
       {alertas.length > 0 && (
-        <div className="bg-white rounded-3xl p-6 shadow-soft border border-rose-200 space-y-3">
+        <div className="bg-white rounded-3xl p-6 shadow-soft border-2 border-rose-300 space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-rose-100">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-rose-600" />
-              <h3 className="text-sm font-bold text-slate-800">
-                Alertas Prioritários & Guardrails (Proteção à Vida)
-              </h3>
+              <div className="p-2 rounded-xl bg-rose-100 text-rose-700">
+                <ShieldAlert className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-800">
+                  Alertas de Proteção & Bem-Estar da Criança
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Protocolo de Proteção à Vida: escuta acolhedora, segurança e suporte imediato
+                </p>
+              </div>
             </div>
-            <span className="text-xs text-rose-600 font-semibold">
+            <span className="text-xs font-bold text-rose-700 bg-rose-100 px-3 py-1 rounded-full border border-rose-200">
               {alertasNaoLidos.length} não lido{alertasNaoLidos.length !== 1 ? 's' : ''}
             </span>
+          </div>
+
+          {/* Guia de Orientação ao Responsável */}
+          <div className="bg-rose-50/80 rounded-2xl p-4 border border-rose-200 text-xs text-rose-950 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-rose-900">
+              <PhoneCall className="w-4 h-4 text-rose-600" />
+              <span>Orientações de Proteção e Canais Oficiais de Apoio:</span>
+            </div>
+            <p className="leading-relaxed">
+              Converse com a criança com calma e afeto, sem repreensão. Se notar sinais de
+              sofrimento persistente, procure apoio profissional (psicólogos, orientação pedagógica
+              da escola). Em situações de crise emocional ou risco:
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1 font-semibold">
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 shadow-xs">
+                📞 <strong>CVV - Apoio Emocional:</strong> Ligue <strong>188</strong> (gratuito,
+                24h)
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 shadow-xs">
+                🛡️ <strong>Disque Direitos Humanos:</strong> Ligue <strong>100</strong> (Direitos da
+                Criança e Adolescente)
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 shadow-xs">
+                🚑 <strong>Emergência:</strong> 190 (Polícia) / 192 (SAMU)
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2.5">
             {alertas.map((al) => (
               <div
                 key={al.id}
-                className={`p-3.5 rounded-2xl border transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                className={`p-4 rounded-2xl border transition-colors flex flex-col sm:flex-row sm:items-start justify-between gap-3 ${
                   al.tipo === 'risco_seguranca'
-                    ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                    ? 'bg-rose-50/50 border-rose-300 text-rose-950'
                     : al.tipo === 'tema_sensivel'
-                      ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                      ? 'bg-amber-50/50 border-amber-200 text-amber-950'
                       : 'bg-slate-50 border-slate-200 text-slate-800'
-                } ${al.lido ? 'opacity-70' : ''}`}
+                } ${al.lido ? 'opacity-70 bg-white' : ''}`}
               >
-                <div className="space-y-1">
+                <div className="space-y-1.5 flex-1">
                   <div className="flex items-center gap-2">
                     <span
                       className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
                         al.tipo === 'risco_seguranca'
-                          ? 'bg-rose-200 text-rose-800'
+                          ? 'bg-rose-600 text-white'
                           : al.tipo === 'tema_sensivel'
-                            ? 'bg-amber-200 text-amber-800'
-                            : 'bg-slate-200 text-slate-700'
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-slate-600 text-white'
                       }`}
                     >
                       {al.tipo === 'risco_seguranca'
-                        ? '🚨 Risco à Integridade'
+                        ? '🚨 Risco Prioritário'
                         : al.tipo === 'tema_sensivel'
                           ? '⚠️ Tema Sensível'
                           : 'ℹ️ Fora de Escopo'}
                     </span>
+                    {al.nivel && (
+                      <span className="text-[10px] uppercase font-bold text-rose-700 bg-rose-100 px-1.5 py-0.2 rounded">
+                        Nível: {al.nivel}
+                      </span>
+                    )}
                     <span className="text-[11px] text-slate-500">
                       {new Date(al.created).toLocaleDateString('pt-BR', {
                         day: '2-digit',
@@ -318,24 +407,24 @@ export const GrafoPainel: React.FC = () => {
                     </span>
                     {al.lido && (
                       <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded">
-                        Visto
+                        Lido
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-semibold">{al.mensagem}</p>
+                  <p className="text-xs font-semibold leading-relaxed">{al.mensagem}</p>
                   {al.conteudo_detectado && (
-                    <p className="text-[11px] italic bg-white/60 p-2 rounded-xl border border-slate-200/50">
+                    <p className="text-[11px] italic bg-white p-2.5 rounded-xl border border-slate-200/70 text-slate-700">
                       &quot;{al.conteudo_detectado}&quot;
                     </p>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 pt-1">
                   {!al.lido && (
                     <button
                       type="button"
                       onClick={() => handleMarcarAlertaLido(al.id)}
-                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 transition-colors inline-flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold border border-slate-200 shadow-xs transition-colors inline-flex items-center gap-1.5"
                     >
                       <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Marcar como lido</span>
@@ -347,7 +436,7 @@ export const GrafoPainel: React.FC = () => {
                     className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                     title="Excluir alerta"
                   >
-                    ✕
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -355,6 +444,290 @@ export const GrafoPainel: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* FRENTE 2: TERMÔMETRO EMOCIONAL (Histórico dos últimos 7 a 14 dias) */}
+      <div className="bg-white rounded-3xl p-6 shadow-soft border border-slate-200/80 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-2xl bg-amber-100 text-amber-700">
+              <Heart className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Termômetro Emocional dos Estudos</h3>
+              <p className="text-[11px] text-slate-500">
+                Acompanhamento diário do humor de {criancaSelecionada?.nome || 'sua criança'} antes
+                de cada sessão
+              </p>
+            </div>
+          </div>
+
+          {alertaEmocionalPadrao && (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold animate-pulse">
+              <Flame className="w-4 h-4 text-amber-600" />
+              <span>Atenção: 3+ dias seguidos de desânimo ou tristeza</span>
+            </div>
+          )}
+        </div>
+
+        {/* Visão de sequência de dias */}
+        {historicoEmocional.length === 0 ? (
+          <p className="text-xs text-slate-400 py-4 text-center italic">
+            Nenhum check-in emocional registrado ainda. Ao abrir a aba de Conversa, a criança poderá
+            registrar seu humor diário.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-7 gap-2.5">
+              {historicoEmocional.slice(0, 14).map((ch) => {
+                const isNegativo = ch.humor === 'triste' || ch.humor === 'muito_triste'
+                const isPositivo = ch.humor === 'feliz' || ch.humor === 'muito_feliz'
+                return (
+                  <div
+                    key={ch.id}
+                    className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                      ch.humor === 'muito_feliz'
+                        ? 'bg-amber-50/70 border-amber-200'
+                        : ch.humor === 'feliz'
+                          ? 'bg-emerald-50/70 border-emerald-200'
+                          : ch.humor === 'neutro'
+                            ? 'bg-slate-50 border-slate-200'
+                            : ch.humor === 'triste'
+                              ? 'bg-indigo-50/70 border-indigo-200'
+                              : 'bg-rose-50/70 border-rose-200'
+                    }`}
+                  >
+                    <span className="text-2xl">
+                      {ch.humor === 'muito_feliz' && '🌟'}
+                      {ch.humor === 'feliz' && '😊'}
+                      {ch.humor === 'neutro' && '😐'}
+                      {ch.humor === 'triste' && '🙁'}
+                      {ch.humor === 'muito_triste' && '😢'}
+                    </span>
+                    <span className="text-[11px] font-extrabold text-slate-700 capitalize">
+                      {ch.humor.replace('_', ' ')}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      {new Date(ch.data + 'T12:00:00').toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: 'short',
+                      })}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {alertaEmocionalPadrao && (
+              <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs text-amber-900 leading-relaxed">
+                <strong>💡 Dica acolhedora da Lumi:</strong> A criança registrou sentimentos de
+                tristeza ou cansaço em múltiplos dias consecutivos. Vale planejar uma pausa
+                divertida, reduzir o tempo de tela e oferecer um abraço caloroso para recarregar as
+                energias!
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* FRENTE 1: SEÇÃO VISUAL "GRAFO DE INTERESSES E COTIDIANO" (Memórias extraídas da conversa) */}
+      <div className="bg-white rounded-3xl p-6 shadow-soft border border-slate-200/80 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-2xl bg-indigo-100 text-indigo-700">
+              <Sparkles className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">
+                Grafo de Interesses e Cotidiano Orgânico (Memória Contínua)
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Fatos e preferências aprendidos pela Lumi durante as conversas (PII Scrubber +
+                Indexação)
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full">
+            {memorias.length} memórias ativas
+          </span>
+        </div>
+
+        {memorias.length === 0 ? (
+          <p className="text-xs text-slate-400 py-6 text-center italic">
+            Nenhuma memória registrada ainda. Conforme a criança conversar com a Lumi sobre seus
+            hobbies, família e rotina, o grafo aprenderá automaticamente!
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 1. Interesses e Hobbies */}
+            <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-100 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-900 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span>🎨</span> Interesses
+                </span>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded">
+                  {memoriasInteresses.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {memoriasInteresses.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">Nenhum mapeado ainda</p>
+                ) : (
+                  memoriasInteresses.map((m) => (
+                    <div
+                      key={m.id}
+                      className="p-2.5 rounded-xl bg-white border border-amber-200/60 shadow-xs flex items-start justify-between gap-2 group"
+                    >
+                      <div>
+                        <p className="text-xs text-slate-800 font-semibold">{m.conteudo}</p>
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400">
+                          <span className="bg-amber-100/70 text-amber-800 px-1.5 py-0.2 rounded font-bold">
+                            da conversa
+                          </span>
+                          <span>{m.data}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirMemoria(m.id)}
+                        className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                        title="Esquecer memória"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 2. Pessoas e Vínculos */}
+            <div className="p-4 rounded-2xl bg-rose-50/50 border border-rose-100 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-rose-900 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span>👨‍👩‍👧</span> Pessoas & Relações
+                </span>
+                <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.2 rounded">
+                  {memoriasPessoas.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {memoriasPessoas.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">Nenhuma relação mapeada</p>
+                ) : (
+                  memoriasPessoas.map((m) => (
+                    <div
+                      key={m.id}
+                      className="p-2.5 rounded-xl bg-white border border-rose-200/60 shadow-xs flex items-start justify-between gap-2 group"
+                    >
+                      <div>
+                        <p className="text-xs text-slate-800 font-semibold">{m.conteudo}</p>
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400">
+                          <span className="bg-rose-100/70 text-rose-800 px-1.5 py-0.2 rounded font-bold">
+                            da conversa
+                          </span>
+                          <span>{m.data}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirMemoria(m.id)}
+                        className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                        title="Esquecer memória"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 3. Rotina e Cotidiano */}
+            <div className="p-4 rounded-2xl bg-sky-50/50 border border-sky-100 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-sky-900 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span>⏰</span> Rotinas & Cotidiano
+                </span>
+                <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.2 rounded">
+                  {memoriasRotinas.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {memoriasRotinas.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">Nenhuma rotina mapeada</p>
+                ) : (
+                  memoriasRotinas.map((m) => (
+                    <div
+                      key={m.id}
+                      className="p-2.5 rounded-xl bg-white border border-sky-200/60 shadow-xs flex items-start justify-between gap-2 group"
+                    >
+                      <div>
+                        <p className="text-xs text-slate-800 font-semibold">{m.conteudo}</p>
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400">
+                          <span className="bg-sky-100/70 text-sky-800 px-1.5 py-0.2 rounded font-bold">
+                            da conversa
+                          </span>
+                          <span>{m.data}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirMemoria(m.id)}
+                        className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                        title="Esquecer memória"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 4. Estratégias que Funcionam */}
+            <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-emerald-900 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span>💡</span> Estratégias & Sucessos
+                </span>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
+                  {memoriasEstrategias.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {memoriasEstrategias.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">Nenhuma estratégia relatada</p>
+                ) : (
+                  memoriasEstrategias.map((m) => (
+                    <div
+                      key={m.id}
+                      className="p-2.5 rounded-xl bg-white border border-emerald-200/60 shadow-xs flex items-start justify-between gap-2 group"
+                    >
+                      <div>
+                        <p className="text-xs text-slate-800 font-semibold">{m.conteudo}</p>
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400">
+                          <span className="bg-emerald-100/70 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
+                            da conversa
+                          </span>
+                          <span>{m.data}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirMemoria(m.id)}
+                        className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                        title="Esquecer memória"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* VISUALIZAÇÃO INTERATIVA DO GRAFO COGNITIVO */}
       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg border border-slate-800 relative overflow-hidden">

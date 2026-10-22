@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { enviarMensagemLumiStream, enviarMensagemLumiSync } from '@/services/lumiAgent'
 import { obterPromptAtivo } from '@/services/prompts'
-import type { EtapaSocratica, AcaoLumiExecutada } from '@/types'
+import { verificarCheckinHoje, registrarCheckinEmocional } from '@/services/checkinEmocional'
+import type { EtapaSocratica, AcaoLumiExecutada, HumorEmocional } from '@/types'
 import { TrilhaEtapasSocraticas } from '@/components/TrilhaEtapasSocraticas'
 import { CartaoAcaoLumi } from '@/components/CartaoAcaoLumi'
+import { CheckinEmocionalCard } from '@/components/CheckinEmocionalCard'
 import { QuadroVisualContainer } from '@/components/QuadroVisualContainer'
 
 interface ChatMessage {
@@ -24,6 +26,11 @@ export const ConversaQuadro: React.FC = () => {
   const [enviando, setEnviando] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [customPromptText, setCustomPromptText] = useState<string | null>(null)
+
+  // FRENTE 2: Check-in Emocional Diário
+  const [precisaCheckinHoje, setPrecisaCheckinHoje] = useState(false)
+  const [salvandoCheckin, setSalvandoCheckin] = useState(false)
+  const [humorHoje, setHumorHoje] = useState<HumorEmocional | null>(null)
 
   // Estados do Protocolo Socrático e Quadro Visual (Fase 2)
   const [etapaAtual, setEtapaAtual] = useState<EtapaSocratica>('entender')
@@ -47,7 +54,7 @@ export const ConversaQuadro: React.FC = () => {
     })
   }, [])
 
-  // Inicializar mensagens e etapa ao trocar de criança
+  // Inicializar mensagens, etapa e verificar check-in ao trocar de criança
   useEffect(() => {
     if (criancaSelecionada) {
       const etapaInicial: EtapaSocratica = criancaSelecionada.ultima_etapa_socratica || 'entender'
@@ -55,20 +62,68 @@ export const ConversaQuadro: React.FC = () => {
 
       setEtapaAtual(etapaInicial)
       setMateriaDetectada(materiaInicial)
+      setConversationId(null)
+
+      // Verificar se a criança já fez o check-in de hoje
+      verificarCheckinHoje(criancaSelecionada.id).then((res) => {
+        if (!res.fez_checkin) {
+          setPrecisaCheckinHoje(true)
+          setHumorHoje(null)
+        } else {
+          setPrecisaCheckinHoje(false)
+          setHumorHoje(res.checkin?.humor || null)
+          // Mensagem inicial adaptada
+          setMessages([
+            {
+              id: 'welcome',
+              sender: 'lumi',
+              text: `Olá! Eu sou a Lumi ✨. Olá, ${criancaSelecionada.nome}! Que bom te ver por aqui hoje. O que você gostaria de explorar, desenhar ou descobrir juntos?`,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              visualHint: 'Quadro preparado para investigações!',
+              etapa: etapaInicial,
+            },
+          ])
+        }
+      })
+    }
+  }, [criancaSelecionada])
+
+  // Ação ao selecionar o humor no card de check-in emocional
+  const handleSelecionarHumor = async (humor: HumorEmocional) => {
+    if (!criancaSelecionada) return
+    try {
+      setSalvandoCheckin(true)
+      await registrarCheckinEmocional(criancaSelecionada.id, humor)
+      setHumorHoje(humor)
+      setPrecisaCheckinHoje(false)
+
+      let textoBoasVindas = `Olá, ${criancaSelecionada.nome}! Eu sou a Lumi ✨. `
+      if (humor === 'triste' || humor === 'muito_triste') {
+        textoBoasVindas += `Percebi que você está se sentindo um pouquinho para baixo hoje. Saiba que você é muito especial, e aqui vamos no seu ritmo com todo o carinho do mundo! Se quiser, podemos fazer um momento de respiração calma ou conversar sobre algo leve que você gosta.`
+        setModoRespiracao(true) // Ativa respiração acolhedora
+      } else if (humor === 'muito_feliz' || humor === 'feliz') {
+        textoBoasVindas += `Que alegria sentir sua energia boa hoje! Vamos aproveitar esse ânimo para explorar descobertas incríveis? O que vamos investigar agora?`
+      } else {
+        textoBoasVindas += `Obrigada por me contar como você está! Estou aqui pronta para investigar e aprender com você passo a passo, sem pressa. Qual lição ou curiosidade vamos desvendar?`
+      }
 
       setMessages([
         {
-          id: 'welcome',
+          id: 'welcome_checkin',
           sender: 'lumi',
-          text: `Olá! Eu sou a Lumi ✨. Olá, ${criancaSelecionada.nome}! O que você gostaria de explorar, desenhar ou descobrir hoje? Lembre-se: não há respostas erradas, vamos investigar juntos passo a passo!`,
+          text: textoBoasVindas,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          visualHint: 'Quadro preparado para investigações!',
-          etapa: etapaInicial,
+          visualHint: 'Lumi conectada ao seu ritmo!',
+          etapa: etapaAtual,
         },
       ])
-      setConversationId(null)
+    } catch (err) {
+      console.error('Erro ao registrar check-in:', err)
+      setPrecisaCheckinHoje(false)
+    } finally {
+      setSalvandoCheckin(false)
     }
-  }, [criancaSelecionada])
+  }
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -242,6 +297,15 @@ export const ConversaQuadro: React.FC = () => {
         onSelecionarEtapa={(et) => setEtapaAtual(et)}
       />
 
+      {/* FRENTE 2: Card de Check-in Emocional Diário (aparece se a criança ainda não fez hoje) */}
+      {precisaCheckinHoje && (
+        <CheckinEmocionalCard
+          nomeCrianca={criancaSelecionada?.nome || 'Aluno'}
+          onSelecionarHumor={handleSelecionarHumor}
+          salvando={salvandoCheckin}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-18rem)]">
         {/* Coluna da Esquerda: Chat Socrático com a Lumi (7 colunas no desktop) */}
         <div className="lg:col-span-7 flex flex-col bg-white rounded-3xl shadow-soft border border-slate-200/80 overflow-hidden">
@@ -261,6 +325,15 @@ export const ConversaQuadro: React.FC = () => {
                   <span className="text-[11px] text-amber-800 bg-amber-100/80 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
                     Anti-Spoiler Ativo
                   </span>
+                  {humorHoje && (
+                    <span className="text-[11px] text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full font-bold">
+                      {humorHoje === 'muito_feliz' && '🌟 Muito Feliz'}
+                      {humorHoje === 'feliz' && '😊 Feliz'}
+                      {humorHoje === 'neutro' && '😐 Normal'}
+                      {humorHoje === 'triste' && '🙁 Acolhimento'}
+                      {humorHoje === 'muito_triste' && '😢 Cuidado Especial'}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-500">
                   Apoiando{' '}

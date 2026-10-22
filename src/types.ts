@@ -57,13 +57,49 @@ export interface CriancaRecord extends RecordModel {
 }
 
 export type TipoAlerta = 'risco_seguranca' | 'tema_sensivel' | 'fora_escopo' | 'aviso_geral'
+export type NivelAlerta = 'critico' | 'alto' | 'medio' | 'informativo'
 
 export interface AlertaRecord extends RecordModel {
   crianca: string
   tipo: TipoAlerta
+  nivel?: NivelAlerta
   mensagem: string
   conteudo_detectado?: string
   lido?: boolean
+  expand?: {
+    crianca?: CriancaRecord
+  }
+}
+
+export type TipoMemoria =
+  | 'interesse'
+  | 'pessoa_relacao'
+  | 'rotina'
+  | 'estrategia'
+  | 'dificuldade'
+  | 'emocao'
+
+export interface MemoriaRecord extends RecordModel {
+  crianca: string
+  tipo: TipoMemoria
+  conteudo: string
+  categoria?: string
+  confianca: 'alta' | 'media' | 'baixa'
+  origem?: string
+  data: string
+  ativo: boolean
+  expand?: {
+    crianca?: CriancaRecord
+  }
+}
+
+export type HumorEmocional = 'muito_feliz' | 'feliz' | 'neutro' | 'triste' | 'muito_triste'
+
+export interface CheckinEmocionalRecord extends RecordModel {
+  crianca: string
+  data: string
+  humor: HumorEmocional
+  nota?: string
   expand?: {
     crianca?: CriancaRecord
   }
@@ -123,6 +159,8 @@ export type Conhecimento = ConhecimentoRecord
 export type Agenda = AgendaRecord
 export type SystemPrompt = SystemPromptRecord
 export type Alerta = AlertaRecord
+export type Memoria = MemoriaRecord
+export type CheckinEmocional = CheckinEmocionalRecord
 
 export const MATERIAS: string[] = [
   'Português',

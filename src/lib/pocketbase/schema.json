@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-22T14:32:36.268Z",
+  "generatedAt": "2026-10-22T14:52:24.775Z",
   "collections": [
     {
       "name": "users",
@@ -482,11 +482,166 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "nivel",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["critico", "alto", "medio", "informativo"]
         }
       ],
       "indexes": [
         "CREATE INDEX idx_alertas_crianca ON alertas (crianca)",
         "CREATE INDEX idx_alertas_lido ON alertas (lido)"
+      ]
+    },
+    {
+      "name": "memorias",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "crianca",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "criancas"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "interesse",
+            "pessoa_relacao",
+            "rotina",
+            "estrategia",
+            "dificuldade",
+            "emocao"
+          ]
+        },
+        {
+          "name": "conteudo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "categoria",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "confianca",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["alta", "media", "baixa"]
+        },
+        {
+          "name": "origem",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_memorias_crianca ON memorias (crianca)",
+        "CREATE INDEX idx_memorias_tipo ON memorias (tipo)",
+        "CREATE INDEX idx_memorias_ativo ON memorias (ativo)",
+        "CREATE INDEX idx_memorias_data ON memorias (data)"
+      ]
+    },
+    {
+      "name": "checkins_emocionais",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
+        "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "crianca",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "criancas"
+        },
+        {
+          "name": "data",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "humor",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["muito_feliz", "feliz", "neutro", "triste", "muito_triste"]
+        },
+        {
+          "name": "nota",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_checkins_crianca ON checkins_emocionais (crianca)",
+        "CREATE INDEX idx_checkins_data ON checkins_emocionais (data)"
       ]
     }
   ]
