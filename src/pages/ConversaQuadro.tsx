@@ -85,7 +85,7 @@ export const ConversaQuadro: React.FC = () => {
     speak: synthSpeak,
     stop: synthStop,
   } = useSpeechSynthesis({
-    rate: 1.15,
+    rate: 1.35,
     pitch: 1.05,
     onEnd: () => {
       setMensagemFalandoId(null)
