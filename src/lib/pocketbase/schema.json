@@ -29,19 +29,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "consentimento_lgpd",
@@ -120,19 +115,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "localidade",
@@ -145,11 +135,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "Menina",
-            "Menino",
-            "Prefiro não informar"
-          ]
+          "selectValues": ["Menina", "Menino", "Prefiro não informar"]
         },
         {
           "name": "horarios_aula",
@@ -168,13 +154,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "entender",
-            "contextualizar",
-            "guiar",
-            "praticar",
-            "consolidar"
-          ]
+          "selectValues": ["entender", "contextualizar", "guiar", "praticar", "consolidar"]
         },
         {
           "name": "ultima_materia",
@@ -229,19 +209,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -284,19 +259,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -357,13 +327,7 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "prova",
-            "tarefa",
-            "revisao",
-            "projeto",
-            "outro"
-          ]
+          "selectValues": ["prova", "tarefa", "revisao", "projeto", "outro"]
         },
         {
           "name": "concluido",
@@ -376,19 +340,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -461,24 +420,17 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
-      "indexes": [
-        "CREATE INDEX idx_prompts_owner ON system_prompts (owner)"
-      ]
+      "indexes": ["CREATE INDEX idx_prompts_owner ON system_prompts (owner)"]
     },
     {
       "name": "alertas",
@@ -503,12 +455,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "risco_seguranca",
-            "tema_sensivel",
-            "fora_escopo",
-            "aviso_geral"
-          ]
+          "selectValues": ["risco_seguranca", "tema_sensivel", "fora_escopo", "aviso_geral"]
         },
         {
           "name": "mensagem",
@@ -533,31 +480,21 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
           "name": "nivel",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": [
-            "critico",
-            "alto",
-            "medio",
-            "informativo"
-          ]
+          "selectValues": ["critico", "alto", "medio", "informativo"]
         }
       ],
       "indexes": [
@@ -614,11 +551,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "alta",
-            "media",
-            "baixa"
-          ]
+          "selectValues": ["alta", "media", "baixa"]
         },
         {
           "name": "origem",
@@ -643,19 +576,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
@@ -694,13 +622,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": [
-            "muito_feliz",
-            "feliz",
-            "neutro",
-            "triste",
-            "muito_triste"
-          ]
+          "selectValues": ["muito_feliz", "feliz", "neutro", "triste", "muito_triste"]
         },
         {
           "name": "nota",
@@ -713,19 +635,14 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate"
-          ]
+          "autodateTriggers": ["onCreate"]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": [
-            "onCreate",
-            "onUpdate"
-          ]
+          "autodateTriggers": ["onCreate", "onUpdate"]
         }
       ],
       "indexes": [
