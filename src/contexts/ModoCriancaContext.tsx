@@ -21,9 +21,7 @@ interface ModoCriancaContextType {
   abrirModalSairModo: () => void
   fecharModalSairModo: () => void
   ativarModoCrianca: (crianca?: CriancaRecord | null) => void
-  tentarSairModoCrianca: (
-    pin: string,
-  ) => Promise<{
+  tentarSairModoCrianca: (pin: string) => Promise<{
     sucesso: boolean
     mensagem?: string
     bloqueado?: boolean

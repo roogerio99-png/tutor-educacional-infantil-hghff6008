@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { enviarMensagemLumiStream, enviarMensagemLumiSync } from '@/services/lumiAgent'
 import { obterPromptAtivo } from '@/services/prompts'
 import { verificarCheckinHoje, registrarCheckinEmocional } from '@/services/checkinEmocional'
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
+import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
+import { BotaoVozCrianca } from '@/components/BotaoVozCrianca'
+import { BotaoOuvirLumi } from '@/components/BotaoOuvirLumi'
+import { ToggleModoConversacao } from '@/components/ToggleModoConversacao'
 import type { EtapaSocratica, AcaoLumiExecutada, HumorEmocional } from '@/types'
 import { TrilhaEtapasSocraticas } from '@/components/TrilhaEtapasSocraticas'
 import { CartaoAcaoLumi } from '@/components/CartaoAcaoLumi'
@@ -30,6 +35,19 @@ export const ConversaQuadro: React.FC = () => {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [customPromptText, setCustomPromptText] = useState<string | null>(null)
 
+  // Modo Conversação por Voz (Criança fala + Lumi lê a resposta automaticamente)
+  const [modoConversacaoVoz, setModoConversacaoVoz] = useState<boolean>(() => {
+    try {
+      const salvo = localStorage.getItem('lumi_modo_conversacao_voz')
+      return salvo === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  // Mensagem atualmente sendo falada pela Lumi (ID para controle de botão individual)
+  const [mensagemFalandoId, setMensagemFalandoId] = useState<string | null>(null)
+
   // Aba ativa para telas móveis e controle de visualização limpa: 'chat' | 'quadro'
   const [abaAtivaMobile, setAbaAtivaMobile] = useState<'chat' | 'quadro'>('chat')
 
@@ -50,6 +68,247 @@ export const ConversaQuadro: React.FC = () => {
   )
 
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Preferências de acessibilidade da criança selecionada
+  const acessibilidadeReforcada =
+    (criancaSelecionada?.acessibilidade || '').toLowerCase().includes('apoio visual') ||
+    (criancaSelecionada?.acessibilidade || '').toLowerCase().includes('fonte grande')
+  const fonteGrande = (criancaSelecionada?.acessibilidade || '')
+    .toLowerCase()
+    .includes('fonte grande')
+
+  // Hook de Síntese de Voz (Lumi fala)
+  const {
+    isSupported: synthSuportado,
+    isSpeaking,
+    speak: synthSpeak,
+    stop: synthStop,
+  } = useSpeechSynthesis({
+    rate: 0.95,
+    pitch: 1.05,
+    onEnd: () => {
+      setMensagemFalandoId(null)
+    },
+    onError: () => {
+      setMensagemFalandoId(null)
+    },
+  })
+
+  // Função para falar a resposta da Lumi
+  const falarMensagemLumi = useCallback(
+    (msgId: string, texto: string) => {
+      if (mensagemFalandoId === msgId && isSpeaking) {
+        synthStop()
+        setMensagemFalandoId(null)
+      } else {
+        synthStop()
+        setMensagemFalandoId(msgId)
+        synthSpeak(texto)
+      }
+    },
+    [mensagemFalandoId, isSpeaking, synthStop, synthSpeak],
+  )
+
+  // Função de envio interno unificada (tanto digitação quanto fala)
+  const enviarTexto = useCallback(
+    async (textoParaEnviar: string) => {
+      const textoLimpo = textoParaEnviar.trim()
+      if (!textoLimpo || enviando) return
+
+      // Para a fala anterior da Lumi se estiver falando
+      synthStop()
+      setMensagemFalandoId(null)
+
+      const userMsg: ChatMessage = {
+        id: Date.now().toString(),
+        sender: 'user',
+        text: textoLimpo,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }
+
+      setMessages((prev) => [...prev, userMsg])
+      setInputText('')
+      setEnviando(true)
+
+      const lumiMsgId = (Date.now() + 1).toString()
+      let currentAssistantText = ''
+
+      // Placeholder da Lumi em tom fofo e infantil
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: lumiMsgId,
+          sender: 'lumi',
+          text: 'Lumi está pensando com carinho...',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ])
+
+      try {
+        const res = await enviarMensagemLumiStream(
+          {
+            message: textoLimpo,
+            conversationId,
+            criancaId: criancaSelecionada?.id,
+            customPrompt: customPromptText,
+          },
+          {
+            onChunk: (_delta, full) => {
+              currentAssistantText = full
+              setMessages((prev) =>
+                prev.map((m) => (m.id === lumiMsgId ? { ...m, text: full } : m)),
+              )
+            },
+          },
+        )
+
+        if (res.conversationId) {
+          setConversationId(res.conversationId)
+        }
+
+        if (res.etapa) {
+          setEtapaAtual(res.etapa)
+        }
+        if (res.materia) {
+          setMateriaDetectada(res.materia)
+        }
+
+        const textoFinalLumi = res.content || currentAssistantText
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === lumiMsgId
+              ? {
+                  ...m,
+                  text: textoFinalLumi,
+                  etapa: res.etapa,
+                  acoes: res.acoes,
+                }
+              : m,
+          ),
+        )
+
+        // Se modo conversação por voz estiver ativado, lê a resposta final da Lumi em voz alta!
+        if (modoConversacaoVoz && textoFinalLumi) {
+          setMensagemFalandoId(lumiMsgId)
+          synthSpeak(textoFinalLumi)
+        }
+      } catch (streamErr) {
+        console.warn('Streaming falhou, tentando fallback síncrono:', streamErr)
+        try {
+          const syncRes = await enviarMensagemLumiSync({
+            message: textoLimpo,
+            conversationId,
+            criancaId: criancaSelecionada?.id,
+            customPrompt: customPromptText,
+          })
+
+          if (syncRes.conversation_id) {
+            setConversationId(syncRes.conversation_id)
+          }
+
+          if (syncRes.etapa) {
+            setEtapaAtual(syncRes.etapa)
+          }
+          if (syncRes.materia) {
+            setMateriaDetectada(syncRes.materia)
+          }
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === lumiMsgId
+                ? {
+                    ...m,
+                    text: syncRes.content,
+                    etapa: syncRes.etapa,
+                    acoes: syncRes.acoes,
+                  }
+                : m,
+            ),
+          )
+
+          // Se modo conversação por voz ativo, lê a resposta
+          if (modoConversacaoVoz && syncRes.content) {
+            setMensagemFalandoId(lumiMsgId)
+            synthSpeak(syncRes.content)
+          }
+        } catch (err: unknown) {
+          console.error('Falha geral na IA:', err)
+          const textoErro =
+            'Tive uma pequena falha na conexão, mas estou aqui com você! Pode me contar de novo?'
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === lumiMsgId
+                ? {
+                    ...m,
+                    text: textoErro,
+                  }
+                : m,
+            ),
+          )
+          if (modoConversacaoVoz) {
+            setMensagemFalandoId(lumiMsgId)
+            synthSpeak(textoErro)
+          }
+        }
+      } finally {
+        setEnviando(false)
+      }
+    },
+    [
+      enviando,
+      conversationId,
+      criancaSelecionada?.id,
+      customPromptText,
+      modoConversacaoVoz,
+      synthSpeak,
+      synthStop,
+    ],
+  )
+
+  // Hook de Reconhecimento de Voz (Criança fala)
+  const {
+    isSupported: recSuportado,
+    isListening,
+    interimTranscript,
+    permissionDenied,
+    errorMessage: erroReconhecimento,
+    toggleListening,
+    stopListening,
+  } = useSpeechRecognition({
+    lang: 'pt-BR',
+    onFinalResult: (transcript) => {
+      if (transcript.trim()) {
+        // Preenche o input e envia automaticamente se estiver no modo conversação
+        if (modoConversacaoVoz) {
+          setInputText('')
+          enviarTexto(transcript.trim())
+        } else {
+          setInputText(transcript.trim())
+          // Foca no input
+          inputRef.current?.focus()
+        }
+      }
+    },
+  })
+
+  // Alterna o toggle do Modo Conversação por Voz
+  const handleToggleModoConversacao = () => {
+    const novoValor = !modoConversacaoVoz
+    setModoConversacaoVoz(novoValor)
+    try {
+      localStorage.setItem('lumi_modo_conversacao_voz', String(novoValor))
+    } catch {
+      // ignore
+    }
+
+    if (!novoValor) {
+      synthStop()
+      stopListening()
+      setMensagemFalandoId(null)
+    }
+  }
 
   // Carregar prompt do sistema ativo
   useEffect(() => {
@@ -136,121 +395,7 @@ export const ConversaQuadro: React.FC = () => {
   const handleEnviar = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if (!inputText.trim() || enviando) return
-
-    const textoUsuario = inputText.trim()
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: textoUsuario,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }
-
-    setMessages((prev) => [...prev, userMsg])
-    setInputText('')
-    setEnviando(true)
-
-    const lumiMsgId = (Date.now() + 1).toString()
-    let currentAssistantText = ''
-
-    // Placeholder da Lumi em tom fofo e infantil
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: lumiMsgId,
-        sender: 'lumi',
-        text: 'Lumi está pensando com carinho...',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ])
-
-    try {
-      const res = await enviarMensagemLumiStream(
-        {
-          message: textoUsuario,
-          conversationId,
-          criancaId: criancaSelecionada?.id,
-          customPrompt: customPromptText,
-        },
-        {
-          onChunk: (_delta, full) => {
-            currentAssistantText = full
-            setMessages((prev) => prev.map((m) => (m.id === lumiMsgId ? { ...m, text: full } : m)))
-          },
-        },
-      )
-
-      if (res.conversationId) {
-        setConversationId(res.conversationId)
-      }
-
-      if (res.etapa) {
-        setEtapaAtual(res.etapa)
-      }
-      if (res.materia) {
-        setMateriaDetectada(res.materia)
-      }
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === lumiMsgId
-            ? {
-                ...m,
-                text: res.content || currentAssistantText,
-                etapa: res.etapa,
-                acoes: res.acoes,
-              }
-            : m,
-        ),
-      )
-    } catch (streamErr) {
-      console.warn('Streaming falhou, tentando fallback síncrono:', streamErr)
-      try {
-        const syncRes = await enviarMensagemLumiSync({
-          message: textoUsuario,
-          conversationId,
-          criancaId: criancaSelecionada?.id,
-          customPrompt: customPromptText,
-        })
-
-        if (syncRes.conversation_id) {
-          setConversationId(syncRes.conversation_id)
-        }
-
-        if (syncRes.etapa) {
-          setEtapaAtual(syncRes.etapa)
-        }
-        if (syncRes.materia) {
-          setMateriaDetectada(syncRes.materia)
-        }
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === lumiMsgId
-              ? {
-                  ...m,
-                  text: syncRes.content,
-                  etapa: syncRes.etapa,
-                  acoes: syncRes.acoes,
-                }
-              : m,
-          ),
-        )
-      } catch (err: unknown) {
-        console.error('Falha geral na IA:', err)
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === lumiMsgId
-              ? {
-                  ...m,
-                  text: 'Tive uma pequena falha na conexão, mas estou aqui com você! Pode me contar de novo?',
-                }
-              : m,
-          ),
-        )
-      }
-    } finally {
-      setEnviando(false)
-    }
+    await enviarTexto(inputText)
   }
 
   // Sugestões rápidas amigáveis em linguagem infantil
@@ -294,13 +439,17 @@ export const ConversaQuadro: React.FC = () => {
 
   const handleNovaConversa = () => {
     if (confirm('Quer começar uma nova conversa com a Lumi?')) {
+      synthStop()
+      stopListening()
+      setMensagemFalandoId(null)
       setConversationId(null)
       setEtapaAtual('entender')
+      const msgNova = `Começando uma nova aventura! O que vamos descobrir hoje, ${criancaSelecionada?.nome || 'amigo(a)'}?`
       setMessages([
         {
           id: 'nova',
           sender: 'lumi',
-          text: `Começando uma nova aventura! O que vamos descobrir hoje, ${criancaSelecionada?.nome || 'amigo(a)'}?`,
+          text: msgNova,
           timestamp: new Date().toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
@@ -308,6 +457,10 @@ export const ConversaQuadro: React.FC = () => {
           etapa: 'entender',
         },
       ])
+      if (modoConversacaoVoz) {
+        setMensagemFalandoId('nova')
+        synthSpeak(msgNova)
+      }
     }
   }
 
@@ -400,6 +553,13 @@ export const ConversaQuadro: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Toggle do Modo Conversação por Voz (criança fala + Lumi lê a resposta) */}
+              <ToggleModoConversacao
+                ativo={modoConversacaoVoz}
+                onToggle={handleToggleModoConversacao}
+                acessibilidadeReforcada={acessibilidadeReforcada}
+              />
+
               {modoCriancaAtivo && (
                 <button
                   type="button"
@@ -408,7 +568,7 @@ export const ConversaQuadro: React.FC = () => {
                   className="text-xs text-amber-800 bg-amber-100/70 hover:bg-amber-100 px-2.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1 cursor-pointer min-h-[44px]"
                 >
                   <span>🔒</span>
-                  <span className="hidden md:inline">Sair do Modo</span>
+                  <span className="hidden md:inline">Sair</span>
                 </button>
               )}
 
@@ -423,6 +583,27 @@ export const ConversaQuadro: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* Banner do Modo Conversação Ativo com Dica Amigável */}
+          {modoConversacaoVoz && (
+            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/15 to-amber-100/40 border-b border-amber-200/80 px-4 py-2.5 flex items-center justify-between gap-2 text-xs text-amber-950">
+              <div className="flex items-center gap-2 font-bold">
+                <span className="text-base animate-bounce">🗣️</span>
+                <span>
+                  Modo Conversação Ativo: toque no microfone para falar e a Lumi responderá em voz!
+                </span>
+              </div>
+              {isSpeaking && (
+                <button
+                  type="button"
+                  onClick={synthStop}
+                  className="text-[11px] font-extrabold bg-amber-200 hover:bg-amber-300 text-amber-900 px-2.5 py-1 rounded-full cursor-pointer transition-colors"
+                >
+                  Pausar Lumi ⏹️
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Área das Mensagens com visual espaçoso e fontes infantis legíveis */}
           <div className="flex-1 p-3.5 sm:p-5 overflow-y-auto space-y-4 custom-scroll min-h-[380px] max-h-[560px] bg-slate-50/30">
@@ -468,9 +649,19 @@ export const ConversaQuadro: React.FC = () => {
                   >
                     <span>{msg.timestamp}</span>
                     {msg.sender === 'lumi' && (
-                      <span className="text-amber-700/80 font-bold flex items-center gap-1">
-                        <span>✨</span> Lumi
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {/* Botão de ouvir a Lumi falar esta mensagem individualmente */}
+                        {synthSuportado && (
+                          <BotaoOuvirLumi
+                            isSpeaking={mensagemFalandoId === msg.id && isSpeaking}
+                            onClick={() => falarMensagemLumi(msg.id, msg.text)}
+                            tamanho="sm"
+                          />
+                        )}
+                        <span className="text-amber-700/80 font-bold flex items-center gap-1">
+                          <span>✨</span> Lumi
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -492,12 +683,70 @@ export const ConversaQuadro: React.FC = () => {
             {enviando && (
               <div className="flex items-center gap-2 text-xs sm:text-sm text-amber-700 font-bold italic pl-12 animate-pulse">
                 <Sparkles className="w-4 h-4 text-amber-500 animate-spin" />
-                <span>Lumi está preparando a resposta...</span>
+                <span>Lumi está preparando a resposta com carinho...</span>
               </div>
             )}
 
             <div ref={chatEndRef} />
           </div>
+
+          {/* Feedback em tempo real quando o microfone está ouvindo a criança */}
+          {isListening && (
+            <div className="px-4 py-3 bg-red-50/90 border-t border-red-200/80 flex items-center justify-between gap-3 animate-fade-in-up">
+              <div className="flex items-center gap-3">
+                <div className="relative flex items-center justify-center">
+                  <span className="w-3.5 h-3.5 rounded-full bg-red-500 animate-ping absolute" />
+                  <span className="w-3.5 h-3.5 rounded-full bg-red-600 relative" />
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-extrabold text-red-900 flex items-center gap-1.5">
+                    <span>Estou ouvindo você... Pode falar! 🎤</span>
+                  </div>
+                  {interimTranscript ? (
+                    <p
+                      className={`text-red-950 font-bold italic mt-0.5 ${
+                        fonteGrande ? 'text-base sm:text-lg' : 'text-xs sm:text-sm'
+                      }`}
+                    >
+                      &ldquo;{interimTranscript}&rdquo;
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-red-700">
+                      Diga o que você quer perguntar para a Lumi...
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={stopListening}
+                className="px-3 py-1.5 rounded-xl bg-red-200 hover:bg-red-300 text-red-950 text-xs font-bold transition-all cursor-pointer min-h-[36px]"
+              >
+                Concluir fala ✓
+              </button>
+            </div>
+          )}
+
+          {/* Mensagem amigável de erro ou aviso sobre microfone (sem jargão técnico) */}
+          {permissionDenied && (
+            <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🎤</span>
+                <span>
+                  <strong>Atenção aos pais/responsáveis:</strong> Precisamos da permissão do
+                  microfone no navegador para a criança falar com a Lumi.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {erroReconhecimento && !permissionDenied && (
+            <div className="px-4 py-2 bg-orange-50 border-t border-orange-200 text-xs text-orange-900 flex items-center gap-2">
+              <span>😊</span>
+              <span>{erroReconhecimento}</span>
+            </div>
+          )}
 
           {/* Sugestões Rápidas em formato de pílulas fofas */}
           <div className="px-3 py-2 bg-amber-50/50 border-t border-amber-100/70 flex items-center gap-1.5 overflow-x-auto custom-scroll">
@@ -508,7 +757,10 @@ export const ConversaQuadro: React.FC = () => {
               <button
                 key={idx}
                 type="button"
-                onClick={() => setInputText(sug)}
+                onClick={() => {
+                  setInputText(sug)
+                  inputRef.current?.focus()
+                }}
                 className="text-xs bg-white hover:bg-amber-100 text-slate-700 hover:text-amber-900 border border-amber-200/90 px-3 py-1.5 rounded-full whitespace-nowrap transition-colors font-semibold cursor-pointer active:scale-95"
               >
                 {sug}
@@ -516,19 +768,39 @@ export const ConversaQuadro: React.FC = () => {
             ))}
           </div>
 
-          {/* Caixa de Entrada Amigável para Crianças */}
+          {/* Caixa de Entrada Amigável para Crianças com Botão de Microfone em Destaque */}
           <form
             onSubmit={handleEnviar}
-            className="p-3 sm:p-3.5 bg-white border-t border-amber-100 flex items-center gap-2"
+            className="p-3 sm:p-3.5 bg-white border-t border-amber-100 flex items-center gap-2.5"
           >
+            {/* Botão de Microfone GRANDE, colorido e redondo ao lado do campo */}
+            <BotaoVozCrianca
+              isListening={isListening}
+              isSupported={recSuportado}
+              disabled={enviando}
+              onClick={toggleListening}
+              acessibilidadeReforcada={acessibilidadeReforcada}
+              tamanho={modoConversacaoVoz ? 'grande' : 'normal'}
+            />
+
             <input
+              ref={inputRef}
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Escreva pra Lumi..."
+              placeholder={
+                isListening
+                  ? 'Ouvindo sua voz... 🎤'
+                  : modoConversacaoVoz
+                    ? 'Fale no microfone ou digite aqui...'
+                    : 'Escreva pra Lumi ou toque no microfone...'
+              }
               disabled={enviando}
-              className="flex-1 px-4 py-3 sm:py-3.5 rounded-2xl border-2 border-amber-200/80 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200 text-sm sm:text-base bg-amber-50/20 text-slate-800 placeholder:text-slate-400"
+              className={`flex-1 px-4 py-3 sm:py-3.5 rounded-2xl border-2 border-amber-200/80 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200 bg-amber-50/20 text-slate-800 placeholder:text-slate-400 ${
+                fonteGrande ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
+              }`}
             />
+
             <button
               type="submit"
               disabled={!inputText.trim() || enviando}
