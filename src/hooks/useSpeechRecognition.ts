@@ -22,6 +22,8 @@ interface SpeechRecognitionLike extends EventTarget {
   onend: ((this: SpeechRecognitionLike, ev: Event) => void) | null
   onerror: ((this: SpeechRecognitionLike, ev: SpeechRecognitionErrorEventLike) => void) | null
   onresult: ((this: SpeechRecognitionLike, ev: SpeechRecognitionEventLike) => void) | null
+  onspeechstart?: ((this: SpeechRecognitionLike, ev: Event) => void) | null
+  onspeechend?: ((this: SpeechRecognitionLike, ev: Event) => void) | null
 }
 
 interface SpeechRecognitionConstructor {
@@ -38,12 +40,34 @@ declare global {
 
 export interface UseSpeechRecognitionOptions {
   lang?: string
+  /**
+   * Tolerância de silêncio em milissegundos para concluir a fala.
+   * Conforme o manual da Lumi IA para crianças de 6 a 12 anos: padrão 1200ms
+   */
+  silenceDurationMs?: number
+  /**
+   * Callback disparado assim que a criança começa a falar (útil para Barge-in imediato < 50ms)
+   */
+  onSpeechStarted?: () => void
+  /**
+   * Callback para o texto provisório (interim) em tempo real
+   */
+  onInterimResult?: (transcript: string) => void
+  /**
+   * Callback quando a fala é finalizada após estabilização do silêncio
+   */
   onFinalResult?: (transcript: string) => void
+  /**
+   * Callback de erro
+   */
   onError?: (errorMessage: string, rawError: string) => void
 }
 
 export function useSpeechRecognition({
   lang = 'pt-BR',
+  silenceDurationMs = 1200,
+  onSpeechStarted,
+  onInterimResult,
   onFinalResult,
   onError,
 }: UseSpeechRecognitionOptions = {}) {
@@ -56,11 +80,13 @@ export function useSpeechRecognition({
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const isManuallyStoppedRef = useRef(false)
-  const callbacksRef = useRef({ onFinalResult, onError })
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const accumulatedTranscriptRef = useRef<string>('')
+  const callbacksRef = useRef({ onSpeechStarted, onInterimResult, onFinalResult, onError })
 
   useEffect(() => {
-    callbacksRef.current = { onFinalResult, onError }
-  }, [onFinalResult, onError])
+    callbacksRef.current = { onSpeechStarted, onInterimResult, onFinalResult, onError }
+  }, [onSpeechStarted, onInterimResult, onFinalResult, onError])
 
   useEffect(() => {
     const SpeechConstructor =
@@ -68,15 +94,19 @@ export function useSpeechRecognition({
         ? window.SpeechRecognition || window.webkitSpeechRecognition
         : undefined
 
-    if (SpeechConstructor) {
-      setIsSupported(true)
-    } else {
-      setIsSupported(false)
+    setIsSupported(!!SpeechConstructor)
+  }, [])
+
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
     }
   }, [])
 
   const stopListening = useCallback(() => {
     isManuallyStoppedRef.current = true
+    clearSilenceTimer()
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop()
@@ -85,7 +115,14 @@ export function useSpeechRecognition({
       }
     }
     setIsListening(false)
-  }, [])
+
+    // Se houver texto acumulado e o usuário parou manualmente, emite o resultado
+    const pending = accumulatedTranscriptRef.current.trim()
+    if (pending && callbacksRef.current.onFinalResult) {
+      callbacksRef.current.onFinalResult(pending)
+      accumulatedTranscriptRef.current = ''
+    }
+  }, [clearSilenceTimer])
 
   const startListening = useCallback(() => {
     const SpeechConstructor =
@@ -99,8 +136,10 @@ export function useSpeechRecognition({
     }
 
     // Limpa estados prévios
+    clearSilenceTimer()
     setInterimTranscript('')
     setFinalTranscript('')
+    accumulatedTranscriptRef.current = ''
     setErrorMessage(null)
     setPermissionDenied(false)
     isManuallyStoppedRef.current = false
@@ -115,7 +154,7 @@ export function useSpeechRecognition({
       }
 
       const recognition = new SpeechConstructor()
-      recognition.continuous = false
+      recognition.continuous = true
       recognition.interimResults = true
       recognition.lang = lang
 
@@ -123,53 +162,81 @@ export function useSpeechRecognition({
         setIsListening(true)
       }
 
+      if ('onspeechstart' in recognition) {
+        recognition.onspeechstart = () => {
+          callbacksRef.current.onSpeechStarted?.()
+        }
+      }
+
       recognition.onresult = (event: SpeechRecognitionEventLike) => {
+        // Gatilho imediato de barge-in na primeira detecção de voz
+        callbacksRef.current.onSpeechStarted?.()
+
         let currentInterim = ''
-        let currentFinal = ''
+        let currentFinalPart = ''
 
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const item = event.results[i]
           if (item.isFinal) {
-            currentFinal += item[0].transcript
+            currentFinalPart += item[0].transcript
           } else {
             currentInterim += item[0].transcript
           }
         }
 
-        if (currentFinal) {
-          setFinalTranscript((prev) => (prev ? `${prev} ${currentFinal}` : currentFinal))
-          if (callbacksRef.current.onFinalResult) {
-            callbacksRef.current.onFinalResult(currentFinal.trim())
-          }
+        if (currentFinalPart) {
+          accumulatedTranscriptRef.current = (
+            accumulatedTranscriptRef.current +
+            ' ' +
+            currentFinalPart
+          ).trim()
+          setFinalTranscript(accumulatedTranscriptRef.current)
         }
 
-        setInterimTranscript(currentInterim)
+        const textoExibicao = (accumulatedTranscriptRef.current + ' ' + currentInterim).trim()
+        setInterimTranscript(textoExibicao)
+        callbacksRef.current.onInterimResult?.(textoExibicao)
+
+        // Reinicia o Detector de Silêncio Infantil (calibrado para 1200ms)
+        // Nunca corta a criança no meio de uma frase enquanto ela pensa
+        clearSilenceTimer()
+        silenceTimerRef.current = setTimeout(() => {
+          const resultadoCompleto = accumulatedTranscriptRef.current.trim() || currentInterim.trim()
+          if (resultadoCompleto) {
+            callbacksRef.current.onFinalResult?.(resultadoCompleto)
+            accumulatedTranscriptRef.current = ''
+            setInterimTranscript('')
+            // Para o microfone após conclusão do turno da criança
+            try {
+              recognition.stop()
+            } catch {
+              // ignore
+            }
+          }
+        }, silenceDurationMs)
       }
 
       recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
+        clearSilenceTimer()
         const err = event.error || 'unknown'
         if (err === 'not-allowed' || err === 'service-not-allowed') {
           setPermissionDenied(true)
           const msg =
             'Precisamos da permissão do microfone para a criança poder falar com a Lumi 🎤'
           setErrorMessage(msg)
-          if (callbacksRef.current.onError) {
-            callbacksRef.current.onError(msg, err)
-          }
+          callbacksRef.current.onError?.(msg, err)
         } else if (err === 'no-speech') {
-          // Não capturou fala — apenas finaliza sem alarme
+          // Não capturou fala — sem alarme, mantém ouvindo se continuous
         } else if (err !== 'aborted') {
-          // Outro erro transitório
           const msg = 'Não consegui ouvir direito. Pode falar de novo? 😊'
           setErrorMessage(msg)
-          if (callbacksRef.current.onError) {
-            callbacksRef.current.onError(msg, err)
-          }
+          callbacksRef.current.onError?.(msg, err)
         }
         setIsListening(false)
       }
 
       recognition.onend = () => {
+        clearSilenceTimer()
         setIsListening(false)
         setInterimTranscript('')
       }
@@ -180,7 +247,7 @@ export function useSpeechRecognition({
       console.warn('Erro ao iniciar reconhecimento de voz:', err)
       setIsListening(false)
     }
-  }, [lang])
+  }, [lang, silenceDurationMs, clearSilenceTimer])
 
   const toggleListening = useCallback(() => {
     if (isListening) {
@@ -191,14 +258,17 @@ export function useSpeechRecognition({
   }, [isListening, startListening, stopListening])
 
   const resetTranscript = useCallback(() => {
+    clearSilenceTimer()
+    accumulatedTranscriptRef.current = ''
     setInterimTranscript('')
     setFinalTranscript('')
     setErrorMessage(null)
-  }, [])
+  }, [clearSilenceTimer])
 
   // Limpeza ao desmontar
   useEffect(() => {
     return () => {
+      clearSilenceTimer()
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort()
@@ -207,7 +277,7 @@ export function useSpeechRecognition({
         }
       }
     }
-  }, [])
+  }, [clearSilenceTimer])
 
   return {
     isSupported,

@@ -504,13 +504,38 @@ routerAdd(
         const acessibilidade = criancaAtual.getString('acessibilidade')
         const ultimaEtapa = criancaAtual.getString('ultima_etapa_socratica') || 'entender'
 
-        extraContext += `\n[PERFIL BASE DA CRIANÇA]: Nome: ${nome}, Idade: ${idade} anos, Série: ${serie}, Escola: ${escola || 'Não informada'}.`
-        if (localidade) extraContext += ` Localidade/Região: ${localidade}.`
-        if (genero && genero !== 'Prefiro não informar') extraContext += ` Gênero: ${genero}.`
-        if (horariosAula) extraContext += ` Turno/Horários de aula: ${horariosAula}.`
+        // Calibragem Psicopedagógica Piaget
+        let estagioPiaget = 'Operatório Concreto (8–10 anos)'
+        let diretrizPiaget =
+          'Diálogo investigativo ("explorador"), conectando causa e efeito com situações práticas cotidianas e problemas análogos.'
+        if (idade <= 7) {
+          estagioPiaget = 'Pré-Operatório / Transição (6–7 anos)'
+          diretrizPiaget =
+            'Frases curtas (máximo de 2 períodos por turno), entonação lúdica e acolhedora, vocabulário concreto, contagem visual unitária e perguntas binárias simples.'
+        } else if (idade >= 11) {
+          estagioPiaget = 'Operatório Formal Inicial (11–12 anos)'
+          diretrizPiaget =
+            'Tom de parceria intelectual curiosa, hipóteses científicas, planejamento autônomo e perguntas metacognitivas ("Como você testaria essa ideia?").'
+        }
+
+        const pronomesTratamento =
+          genero === 'Menina'
+            ? 'ela/dela (amiga)'
+            : genero === 'Menino'
+              ? 'ele/dele (amigo)'
+              : 'neutro/amigável'
+
+        extraContext += `\n[PERFIL BASE DA CRIANÇA]:
+- Nome: ${nome} | Idade: ${idade} anos
+- Estágio Cognitivo Piaget: ${estagioPiaget}
+- Pronomes/Tratamento: ${pronomesTratamento}
+- Localidade e Bioma: ${localidade || 'Brasil'}
+- Série Escolar: ${serie} | Escola: ${escola || 'Não informada'}
+[DIRETRIZ PEDAGÓGICA PIAGET PARA ESTA FAIXA ETÁRIA]: ${diretrizPiaget}`
+        if (horariosAula) extraContext += `\n- Turno/Horários: ${horariosAula}.`
         if (acessibilidade && acessibilidade !== 'Nenhuma')
-          extraContext += ` Preferências de acessibilidade: ${acessibilidade}.`
-        if (obs) extraContext += ` Observações gerais: ${obs}.`
+          extraContext += `\n- Acessibilidade: ${acessibilidade}.`
+        if (obs) extraContext += `\n- Observações: ${obs}.`
         extraContext += `\n[ETAPA SOCRÁTICA ANTERIOR]: ${ultimaEtapa}. Avance pelo Protocolo Socrático conforme as respostas.`
 
         // Check-in emocional de hoje
@@ -1238,13 +1263,38 @@ routerAdd(
         const ultimaEtapa = criancaAtual.getString('ultima_etapa_socratica') || 'entender'
         etapaEstimada = ultimaEtapa
 
-        extraContext += `\n[PERFIL BASE DA CRIANÇA]: Nome: ${nome}, Idade: ${idade} anos, Série: ${serie}, Escola: ${escola || 'Não informada'}.`
-        if (localidade) extraContext += ` Localidade/Região: ${localidade}.`
-        if (genero && genero !== 'Prefiro não informar') extraContext += ` Gênero: ${genero}.`
-        if (horariosAula) extraContext += ` Turno/Horários de aula: ${horariosAula}.`
+        // Calibragem Psicopedagógica Piaget
+        let estagioPiaget = 'Operatório Concreto (8–10 anos)'
+        let diretrizPiaget =
+          'Diálogo investigativo ("explorador"), conectando causa e efeito com situações práticas cotidianas e problemas análogos.'
+        if (idade <= 7) {
+          estagioPiaget = 'Pré-Operatório / Transição (6–7 anos)'
+          diretrizPiaget =
+            'Frases curtas (máximo de 2 períodos por turno), entonação lúdica e acolhedora, vocabulário concreto, contagem visual unitária e perguntas binárias simples.'
+        } else if (idade >= 11) {
+          estagioPiaget = 'Operatório Formal Inicial (11–12 anos)'
+          diretrizPiaget =
+            'Tom de parceria intelectual curiosa, hipóteses científicas, planejamento autônomo e perguntas metacognitivas ("Como você testaria essa ideia?").'
+        }
+
+        const pronomesTratamento =
+          genero === 'Menina'
+            ? 'ela/dela (amiga)'
+            : genero === 'Menino'
+              ? 'ele/dele (amigo)'
+              : 'neutro/amigável'
+
+        extraContext += `\n[PERFIL BASE DA CRIANÇA]:
+- Nome: ${nome} | Idade: ${idade} anos
+- Estágio Cognitivo Piaget: ${estagioPiaget}
+- Pronomes/Tratamento: ${pronomesTratamento}
+- Localidade e Bioma: ${localidade || 'Brasil'}
+- Série Escolar: ${serie} | Escola: ${escola || 'Não informada'}
+[DIRETRIZ PEDAGÓGICA PIAGET PARA ESTA FAIXA ETÁRIA]: ${diretrizPiaget}`
+        if (horariosAula) extraContext += `\n- Turno/Horários: ${horariosAula}.`
         if (acessibilidade && acessibilidade !== 'Nenhuma')
-          extraContext += ` Preferências de acessibilidade: ${acessibilidade}.`
-        if (obs) extraContext += ` Observações gerais: ${obs}.`
+          extraContext += `\n- Acessibilidade: ${acessibilidade}.`
+        if (obs) extraContext += `\n- Observações: ${obs}.`
         extraContext += `\n[ETAPA SOCRÁTICA ANTERIOR]: ${ultimaEtapa}. Avance pelo Protocolo Socrático conforme as respostas.`
 
         try {

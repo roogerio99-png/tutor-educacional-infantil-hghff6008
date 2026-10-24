@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { enviarMensagemLumiStream, enviarMensagemLumiSync } from '@/services/lumiAgent'
 import { obterPromptAtivo } from '@/services/prompts'
@@ -14,7 +14,21 @@ import { CartaoAcaoLumi } from '@/components/CartaoAcaoLumi'
 import { CheckinEmocionalCard } from '@/components/CheckinEmocionalCard'
 import { QuadroVisualContainer } from '@/components/QuadroVisualContainer'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
-import { MessageCircle, Palette, Sparkles, Send, RefreshCw, Wind } from 'lucide-react'
+import { OrbeLumiLive, type EstadoLumiLive } from '@/components/OrbeLumiLive'
+import { BarraCenariosTeste, type CenárioTesteInfo } from '@/components/BarraCenariosTeste'
+import { TelemetriaCerebro, type EventoTelemetria } from '@/components/TelemetriaCerebro'
+import {
+  MessageCircle,
+  Palette,
+  Sparkles,
+  Send,
+  RefreshCw,
+  Wind,
+  Volume2,
+  VolumeX,
+  Gauge,
+  Hand,
+} from 'lucide-react'
 
 interface ChatMessage {
   id: string
@@ -26,6 +40,31 @@ interface ChatMessage {
   acoes?: AcaoLumiExecutada[]
 }
 
+// Presets de Ritmo da Voz
+interface RitmoPreset {
+  id: string
+  nome: string
+  rate: number
+  descricao: string
+}
+
+const PRESETS_RITMO: RitmoPreset[] = [
+  { id: 'rapido', nome: '⚡ Rápido (1.35x)', rate: 1.35, descricao: 'Ágil e dinâmico (padrão)' },
+  {
+    id: 'calmo',
+    nome: '🐢 Bem Calmo (0.85x)',
+    rate: 0.85,
+    descricao: 'Pausado para alfabetização',
+  },
+  {
+    id: 'natural',
+    nome: 'Natural Infantil (0.95x)',
+    rate: 0.95,
+    descricao: 'Cadência suave de história',
+  },
+  { id: 'dinamico', nome: 'Dinâmico (1.08x)', rate: 1.08, descricao: 'Ritmo conversacional ativo' },
+]
+
 export const ConversaQuadro: React.FC = () => {
   const { criancaSelecionada } = useCrianca()
   const { modoCriancaAtivo, abrirModalSairModo } = useModoCrianca()
@@ -35,7 +74,7 @@ export const ConversaQuadro: React.FC = () => {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [customPromptText, setCustomPromptText] = useState<string | null>(null)
 
-  // Modo Conversação por Voz (Criança fala + Lumi lê a resposta automaticamente)
+  // Modo Conversação por Voz (Lumi Live com Orbe Animada)
   const [modoConversacaoVoz, setModoConversacaoVoz] = useState<boolean>(() => {
     try {
       const salvo = localStorage.getItem('lumi_modo_conversacao_voz')
@@ -45,10 +84,69 @@ export const ConversaQuadro: React.FC = () => {
     }
   })
 
+  // Visão no chat: 'texto' (chat tradicional com bolhas) vs 'orbe' (Lumi Live Orbe imersiva)
+  const [visaoChat, setVisaoChat] = useState<'texto' | 'orbe'>(() => {
+    try {
+      const salvo = localStorage.getItem('lumi_modo_conversacao_voz')
+      return salvo === 'true' ? 'orbe' : 'texto'
+    } catch {
+      return 'texto'
+    }
+  })
+
+  // Liga/Desliga Síntese Vocal da Lumi
+  const [vozHabilitada, setVozHabilitada] = useState<boolean>(() => {
+    try {
+      const salvo = localStorage.getItem('lumi_voz_habilitada')
+      return salvo !== 'false'
+    } catch {
+      return true
+    }
+  })
+
+  // Ritmo da Voz (Presets: Padrão 1.35x)
+  const [ritmoId, setRitmoId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('lumi_ritmo_voz') || 'rapido'
+    } catch {
+      return 'rapido'
+    }
+  })
+
+  const ritmoAtual = useMemo(() => {
+    return PRESETS_RITMO.find((r) => r.id === ritmoId) || PRESETS_RITMO[0]
+  }, [ritmoId])
+
+  // Calibragem Psicopedagógica Piaget
+  const estagioPiaget = useMemo(() => {
+    const idade = criancaSelecionada?.idade || 8
+    if (idade <= 7) {
+      return {
+        nome: 'Pré-Operatório / Transição',
+        faixa: '6–7 anos',
+        descricao:
+          'Frases curtas (máx. 2 períodos), vocabulário concreto, contagem visual unitária.',
+      }
+    }
+    if (idade >= 11) {
+      return {
+        nome: 'Operatório Formal Inicial',
+        faixa: '11–12 anos',
+        descricao: 'Parceria intelectual, hipóteses científicas e perguntas metacognitivas.',
+      }
+    }
+    return {
+      nome: 'Operatório Concreto',
+      faixa: '8–10 anos',
+      descricao: 'Diálogo investigativo conectando causa e efeito, problemas análogos.',
+    }
+  }, [criancaSelecionada?.idade])
+
   // Mensagem atualmente sendo falada pela Lumi (ID para controle de botão individual)
   const [mensagemFalandoId, setMensagemFalandoId] = useState<string | null>(null)
+  const [legendaFalando, setLegendaFalando] = useState<string>('')
 
-  // Aba ativa para telas móveis e controle de visualização limpa: 'chat' | 'quadro'
+  // Aba ativa para telas móveis: 'chat' | 'quadro'
   const [abaAtivaMobile, setAbaAtivaMobile] = useState<'chat' | 'quadro'>('chat')
 
   // Check-in Emocional Diário
@@ -67,6 +165,23 @@ export const ConversaQuadro: React.FC = () => {
     'Dica da Lumi: quando você explica com suas próprias palavras, seu cérebro guarda muito melhor! ✨',
   )
 
+  // Telemetria do Cérebro Conversacional
+  const [eventosTelemetria, setEventosTelemetria] = useState<EventoTelemetria[]>([])
+  const [acoesRecentes, setAcoesRecentes] = useState<AcaoLumiExecutada[]>([])
+
+  const adicionarEventoTelemetria = useCallback((ev: Omit<EventoTelemetria, 'id' | 'horario'>) => {
+    const novo: EventoTelemetria = {
+      id: Date.now().toString() + Math.random().toString(36).substring(2, 5),
+      horario: new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+      ...ev,
+    }
+    setEventosTelemetria((prev) => [novo, ...prev].slice(0, 30))
+  }, [])
+
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -78,47 +193,71 @@ export const ConversaQuadro: React.FC = () => {
     .toLowerCase()
     .includes('fonte grande')
 
-  // Hook de Síntese de Voz (Lumi fala)
+  // Hook de Síntese de Voz (Lumi fala) com o rate selecionado
   const {
     isSupported: synthSuportado,
     isSpeaking,
     speak: synthSpeak,
     stop: synthStop,
   } = useSpeechSynthesis({
-    rate: 1.35,
+    rate: ritmoAtual.rate,
     pitch: 1.05,
     onEnd: () => {
       setMensagemFalandoId(null)
+      setLegendaFalando('')
     },
     onError: () => {
       setMensagemFalandoId(null)
+      setLegendaFalando('')
     },
   })
 
-  // Função para falar a resposta da Lumi
+  // Função para falar a resposta da Lumi (respeita toggle de voz)
   const falarMensagemLumi = useCallback(
     (msgId: string, texto: string) => {
+      if (!vozHabilitada) return
       if (mensagemFalandoId === msgId && isSpeaking) {
         synthStop()
         setMensagemFalandoId(null)
+        setLegendaFalando('')
       } else {
         synthStop()
         setMensagemFalandoId(msgId)
+        setLegendaFalando(texto)
         synthSpeak(texto)
       }
     },
-    [mensagemFalandoId, isSpeaking, synthStop, synthSpeak],
+    [vozHabilitada, mensagemFalandoId, isSpeaking, synthStop, synthSpeak],
   )
 
-  // Função de envio interno unificada (tanto digitação quanto fala)
+  // Barge-in Instantâneo (< 50ms): Interrompe a Lumi assim que a criança fala ou clica no botão
+  const executarBargeIn = useCallback(
+    (motivo = 'Fala da criança') => {
+      if (isSpeaking || mensagemFalandoId || enviando) {
+        synthStop()
+        setMensagemFalandoId(null)
+        setLegendaFalando('')
+        adicionarEventoTelemetria({
+          tipo: 'socratica',
+          titulo: 'Barge-In Acionado (Interrupção Natural)',
+          detalhe: `${motivo} interrompeu a fala da Lumi imediatamente. Turno devolvido à criança.`,
+          status: 'executado',
+        })
+      }
+    },
+    [isSpeaking, mensagemFalandoId, enviando, synthStop, adicionarEventoTelemetria],
+  )
+
+  // Função de envio unificada (digitação ou fala)
   const enviarTexto = useCallback(
     async (textoParaEnviar: string) => {
       const textoLimpo = textoParaEnviar.trim()
       if (!textoLimpo || enviando) return
 
-      // Para a fala anterior da Lumi se estiver falando
+      // Interrompe imediatamente qualquer fala anterior da Lumi (< 50ms)
       synthStop()
       setMensagemFalandoId(null)
+      setLegendaFalando('')
 
       const userMsg: ChatMessage = {
         id: Date.now().toString(),
@@ -134,7 +273,6 @@ export const ConversaQuadro: React.FC = () => {
       const lumiMsgId = (Date.now() + 1).toString()
       let currentAssistantText = ''
 
-      // Placeholder da Lumi em tom fofo e infantil
       setMessages((prev) => [
         ...prev,
         {
@@ -159,6 +297,9 @@ export const ConversaQuadro: React.FC = () => {
               setMessages((prev) =>
                 prev.map((m) => (m.id === lumiMsgId ? { ...m, text: full } : m)),
               )
+              if (visaoChat === 'orbe') {
+                setLegendaFalando(full)
+              }
             },
           },
         )
@@ -169,9 +310,33 @@ export const ConversaQuadro: React.FC = () => {
 
         if (res.etapa) {
           setEtapaAtual(res.etapa)
+          adicionarEventoTelemetria({
+            tipo: 'socratica',
+            titulo: `Etapa Socrática: ${res.etapa.toUpperCase()}`,
+            detalhe: `Transição pedagógica adaptada à resposta da criança.`,
+            status: 'ativo',
+          })
         }
         if (res.materia) {
           setMateriaDetectada(res.materia)
+          adicionarEventoTelemetria({
+            tipo: 'quadro',
+            titulo: `Matéria Detectada: ${res.materia}`,
+            detalhe: `Quadro visual sincronizado para ilustrações de ${res.materia}.`,
+            status: 'executado',
+          })
+        }
+
+        if (res.acoes && res.acoes.length > 0) {
+          setAcoesRecentes(res.acoes)
+          res.acoes.forEach((ac) => {
+            adicionarEventoTelemetria({
+              tipo: ac.tipo.includes('agenda') ? 'agenda' : 'subsunçor',
+              titulo: ac.titulo || 'Ação Automatizada',
+              detalhe: ac.conteudo || `Evento em ${ac.data || 'hoje'}`,
+              status: 'executado',
+            })
+          })
         }
 
         const textoFinalLumi = res.content || currentAssistantText
@@ -189,9 +354,10 @@ export const ConversaQuadro: React.FC = () => {
           ),
         )
 
-        // Se modo conversação por voz estiver ativado, lê a resposta final da Lumi em voz alta!
-        if (modoConversacaoVoz && textoFinalLumi) {
+        // Se síntese vocal estiver habilitada, lê a resposta em voz alta!
+        if (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe') && textoFinalLumi) {
           setMensagemFalandoId(lumiMsgId)
+          setLegendaFalando(textoFinalLumi)
           synthSpeak(textoFinalLumi)
         }
       } catch (streamErr) {
@@ -215,6 +381,10 @@ export const ConversaQuadro: React.FC = () => {
             setMateriaDetectada(syncRes.materia)
           }
 
+          if (syncRes.acoes && syncRes.acoes.length > 0) {
+            setAcoesRecentes(syncRes.acoes)
+          }
+
           setMessages((prev) =>
             prev.map((m) =>
               m.id === lumiMsgId
@@ -228,9 +398,9 @@ export const ConversaQuadro: React.FC = () => {
             ),
           )
 
-          // Se modo conversação por voz ativo, lê a resposta
-          if (modoConversacaoVoz && syncRes.content) {
+          if (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe') && syncRes.content) {
             setMensagemFalandoId(lumiMsgId)
+            setLegendaFalando(syncRes.content)
             synthSpeak(syncRes.content)
           }
         } catch (err: unknown) {
@@ -247,10 +417,6 @@ export const ConversaQuadro: React.FC = () => {
                 : m,
             ),
           )
-          if (modoConversacaoVoz) {
-            setMensagemFalandoId(lumiMsgId)
-            synthSpeak(textoErro)
-          }
         }
       } finally {
         setEnviando(false)
@@ -261,13 +427,16 @@ export const ConversaQuadro: React.FC = () => {
       conversationId,
       criancaSelecionada?.id,
       customPromptText,
+      visaoChat,
       modoConversacaoVoz,
+      vozHabilitada,
       synthSpeak,
       synthStop,
+      adicionarEventoTelemetria,
     ],
   )
 
-  // Hook de Reconhecimento de Voz (Criança fala)
+  // Hook de Reconhecimento de Voz Infantil (1200ms de tolerância de silêncio + barge-in no speechstart)
   const {
     isSupported: recSuportado,
     isListening,
@@ -278,25 +447,29 @@ export const ConversaQuadro: React.FC = () => {
     stopListening,
   } = useSpeechRecognition({
     lang: 'pt-BR',
+    silenceDurationMs: 1200,
+    onSpeechStarted: () => {
+      // Barge-in instantâneo: se a criança fala enquanto a Lumi está falando, para o áudio
+      executarBargeIn('Início da fala da criança')
+    },
     onFinalResult: (transcript) => {
       if (transcript.trim()) {
-        // Preenche o input e envia automaticamente se estiver no modo conversação
-        if (modoConversacaoVoz) {
+        if (modoConversacaoVoz || visaoChat === 'orbe') {
           setInputText('')
           enviarTexto(transcript.trim())
         } else {
           setInputText(transcript.trim())
-          // Foca no input
           inputRef.current?.focus()
         }
       }
     },
   })
 
-  // Alterna o toggle do Modo Conversação por Voz
+  // Alterna o toggle do Modo Conversação por Voz (Lumi Live)
   const handleToggleModoConversacao = () => {
     const novoValor = !modoConversacaoVoz
     setModoConversacaoVoz(novoValor)
+    setVisaoChat(novoValor ? 'orbe' : 'texto')
     try {
       localStorage.setItem('lumi_modo_conversacao_voz', String(novoValor))
     } catch {
@@ -307,7 +480,62 @@ export const ConversaQuadro: React.FC = () => {
       synthStop()
       stopListening()
       setMensagemFalandoId(null)
+      setLegendaFalando('')
     }
+  }
+
+  // Alterna o som da voz da Lumi
+  const handleToggleVoz = () => {
+    const novo = !vozHabilitada
+    setVozHabilitada(novo)
+    try {
+      localStorage.setItem('lumi_voz_habilitada', String(novo))
+    } catch {
+      // ignore
+    }
+    if (!novo) {
+      synthStop()
+      setMensagemFalandoId(null)
+      setLegendaFalando('')
+    }
+  }
+
+  // Ciclo dos presets de ritmo da voz
+  const handleCicloRitmo = () => {
+    const idx = PRESETS_RITMO.findIndex((r) => r.id === ritmoId)
+    const proximo = PRESETS_RITMO[(idx + 1) % PRESETS_RITMO.length]
+    setRitmoId(proximo.id)
+    try {
+      localStorage.setItem('lumi_ritmo_voz', proximo.id)
+    } catch {
+      // ignore
+    }
+    adicionarEventoTelemetria({
+      tipo: 'piaget',
+      titulo: `Ritmo da Voz Alterado: ${proximo.nome}`,
+      detalhe: proximo.descricao,
+      status: 'ativo',
+    })
+  }
+
+  // Executar Cenário Rápido de Teste (do manual pedagógico)
+  const handleExecutarCenario = async (cenario: CenárioTesteInfo) => {
+    executarBargeIn('Cenário de teste disparado')
+    setEtapaAtual(cenario.simulacaoEtapa)
+    setMateriaDetectada(cenario.simulacaoMateria)
+
+    adicionarEventoTelemetria({
+      tipo: cenario.id === 'teste_guardrail' ? 'guardrail' : 'socratica',
+      titulo: `Cenário: ${cenario.titulo}`,
+      detalhe: cenario.acaoSincronizada,
+      status: 'executado',
+    })
+
+    if (cenario.id === 'estou_frustrado') {
+      setModoRespiracao(true)
+    }
+
+    await enviarTexto(cenario.mensagemUsuario)
   }
 
   // Carregar prompt do sistema ativo
@@ -329,6 +557,13 @@ export const ConversaQuadro: React.FC = () => {
       setMateriaDetectada(materiaInicial)
       setConversationId(null)
 
+      adicionarEventoTelemetria({
+        tipo: 'piaget',
+        titulo: `Criança Conectada: ${criancaSelecionada.nome}`,
+        detalhe: `Estágio Piaget: ${estagioPiaget.nome} (${estagioPiaget.faixa}) | Bioma/Local: ${criancaSelecionada.localidade || 'Brasil'}`,
+        status: 'ativo',
+      })
+
       verificarCheckinHoje(criancaSelecionada.id).then((res) => {
         if (!res.fez_checkin) {
           setPrecisaCheckinHoje(true)
@@ -349,7 +584,7 @@ export const ConversaQuadro: React.FC = () => {
         }
       })
     }
-  }, [criancaSelecionada])
+  }, [criancaSelecionada, estagioPiaget, adicionarEventoTelemetria])
 
   // Ação ao selecionar o humor no card de check-in emocional
   const handleSelecionarHumor = async (humor: HumorEmocional) => {
@@ -380,6 +615,13 @@ export const ConversaQuadro: React.FC = () => {
           etapa: etapaAtual,
         },
       ])
+
+      adicionarEventoTelemetria({
+        tipo: 'piaget',
+        titulo: 'Check-in Emocional Registrado',
+        detalhe: `Humor: ${humor}. Resposta da Lumi adaptada com acolhimento.`,
+        status: 'executado',
+      })
     } catch (err) {
       console.error('Erro ao registrar check-in:', err)
       setPrecisaCheckinHoje(false)
@@ -398,7 +640,7 @@ export const ConversaQuadro: React.FC = () => {
     await enviarTexto(inputText)
   }
 
-  // Sugestões rápidas amigáveis em linguagem infantil
+  // Sugestões rápidas amigáveis
   const sugestoesRapidas = [
     'Como as plantas bebem água?',
     'Me ajuda a entender frações?',
@@ -442,6 +684,7 @@ export const ConversaQuadro: React.FC = () => {
       synthStop()
       stopListening()
       setMensagemFalandoId(null)
+      setLegendaFalando('')
       setConversationId(null)
       setEtapaAtual('entender')
       const msgNova = `Começando uma nova aventura! O que vamos descobrir hoje, ${criancaSelecionada?.nome || 'amigo(a)'}?`
@@ -457,22 +700,37 @@ export const ConversaQuadro: React.FC = () => {
           etapa: 'entender',
         },
       ])
-      if (modoConversacaoVoz) {
+      if (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe')) {
         setMensagemFalandoId('nova')
+        setLegendaFalando(msgNova)
         synthSpeak(msgNova)
       }
     }
   }
 
+  // Estado atual da Orbe Lumi Live
+  const estadoOrbe: EstadoLumiLive = isListening
+    ? 'ouvindo'
+    : enviando
+      ? 'pensando'
+      : isSpeaking
+        ? 'falando'
+        : 'ocioso'
+
   return (
-    <div className="space-y-3 sm:space-y-4 max-w-7xl mx-auto pb-6">
+    <div className="space-y-4 max-w-7xl mx-auto pb-8">
       {/* 1. Trilha Socrática em linguagem infantil e discreta */}
       <TrilhaEtapasSocraticas
         etapaAtiva={etapaAtual}
         onSelecionarEtapa={(et) => setEtapaAtual(et)}
       />
 
-      {/* 2. Check-in Emocional Diário (aparece quando a criança ainda não fez hoje) */}
+      {/* 2. Barra de Cenários Rápidos de Teste (visível apenas para o Responsável, escondida no Modo Criança) */}
+      {!modoCriancaAtivo && (
+        <BarraCenariosTeste onExecutarCenario={handleExecutarCenario} disabled={enviando} />
+      )}
+
+      {/* 3. Check-in Emocional Diário */}
       {precisaCheckinHoje && (
         <CheckinEmocionalCard
           nomeCrianca={criancaSelecionada?.nome || 'Amigo(a)'}
@@ -481,7 +739,7 @@ export const ConversaQuadro: React.FC = () => {
         />
       )}
 
-      {/* 3. Seletor de Abas para Celulares e Telas Pequenas (Conversar vs Quadro) */}
+      {/* 4. Seletor de Abas para Celulares e Telas Pequenas (Conversar vs Quadro) */}
       <div className="flex lg:hidden bg-amber-100/70 p-1 rounded-2xl gap-1">
         <button
           type="button"
@@ -510,16 +768,16 @@ export const ConversaQuadro: React.FC = () => {
         </button>
       </div>
 
-      {/* 4. Grade Principal: Chat (prioritário) + Quadro Visual Secundário */}
+      {/* 5. Grade Principal: Chat/Orbe + Quadro Visual Secundário */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Coluna do Chat (7 colunas no desktop) */}
+        {/* Coluna do Chat / Lumi Live (7 colunas no desktop) */}
         <div
           className={`lg:col-span-7 flex flex-col bg-white rounded-3xl shadow-soft border border-amber-100 overflow-hidden ${
             abaAtivaMobile === 'quadro' ? 'hidden lg:flex' : 'flex'
           }`}
         >
           {/* Topo do Chat amigável */}
-          <div className="p-3.5 sm:p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50/50 border-b border-amber-100/90 flex items-center justify-between gap-2">
+          <div className="p-3.5 sm:p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50/50 border-b border-amber-100/90 flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-400 text-white flex items-center justify-center text-xl shadow-md shadow-amber-400/30 shrink-0">
                 ✨
@@ -531,6 +789,17 @@ export const ConversaQuadro: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     Online
                   </span>
+
+                  {/* Indicador discreto de Estágio Piaget para os Pais */}
+                  {!modoCriancaAtivo && (
+                    <span
+                      title={estagioPiaget.descricao}
+                      className="text-[10px] font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full hidden sm:inline-flex items-center gap-1"
+                    >
+                      <span>🌱</span>
+                      <span>Piaget: {estagioPiaget.faixa}</span>
+                    </span>
+                  )}
 
                   {humorHoje && (
                     <span className="text-[11px] text-amber-900 bg-amber-100/80 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold">
@@ -552,8 +821,80 @@ export const ConversaQuadro: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {/* Toggle do Modo Conversação por Voz (criança fala + Lumi lê a resposta) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              {/* Botão de alternar visão Texto / Orbe Live */}
+              <div className="flex bg-amber-100/80 p-0.5 rounded-xl border border-amber-200">
+                <button
+                  type="button"
+                  onClick={() => setVisaoChat('texto')}
+                  title="Ver mensagens escritas em chat"
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    visaoChat === 'texto'
+                      ? 'bg-white text-amber-950 shadow-2xs'
+                      : 'text-amber-800/80 hover:text-amber-950'
+                  }`}
+                >
+                  💬 Texto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVisaoChat('orbe')
+                    setModoConversacaoVoz(true)
+                  }}
+                  title="Modo Lumi Live (Voz em tempo real + Orbe animada)"
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    visaoChat === 'orbe'
+                      ? 'bg-amber-500 text-white shadow-2xs'
+                      : 'text-amber-800/80 hover:text-amber-950'
+                  }`}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Orbe Live</span>
+                </button>
+              </div>
+
+              {/* Botão de Voz da Lumi: Ligada / Desligada */}
+              <button
+                type="button"
+                onClick={handleToggleVoz}
+                title={
+                  vozHabilitada
+                    ? 'Voz da Lumi ativada (clique para silenciar)'
+                    : 'Voz da Lumi silenciada (clique para ligar)'
+                }
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1 cursor-pointer min-h-[38px] ${
+                  vozHabilitada
+                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-300'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
+                }`}
+              >
+                {vozHabilitada ? (
+                  <>
+                    <Volume2 className="w-3.5 h-3.5 text-amber-700" />
+                    <span className="hidden sm:inline">Voz: Ligada</span>
+                  </>
+                ) : (
+                  <>
+                    <VolumeX className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="hidden sm:inline">Voz: Desligada</span>
+                  </>
+                )}
+              </button>
+
+              {/* Seletor de Ritmo da Voz (Presets) */}
+              <button
+                type="button"
+                onClick={handleCicloRitmo}
+                title={`Ritmo da voz atual: ${ritmoAtual.nome}. Clique para alternar.`}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors flex items-center gap-1 cursor-pointer min-h-[38px]"
+              >
+                <Gauge className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden md:inline">{ritmoAtual.nome}</span>
+                <span className="md:hidden">{ritmoAtual.rate}x</span>
+              </button>
+
+              {/* Toggle do Modo Conversação por Voz */}
               <ToggleModoConversacao
                 ativo={modoConversacaoVoz}
                 onToggle={handleToggleModoConversacao}
@@ -565,7 +906,7 @@ export const ConversaQuadro: React.FC = () => {
                   type="button"
                   onClick={abrirModalSairModo}
                   title="Sair do Modo Criança (pede PIN)"
-                  className="text-xs text-amber-800 bg-amber-100/70 hover:bg-amber-100 px-2.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1 cursor-pointer min-h-[44px]"
+                  className="text-xs text-amber-800 bg-amber-100/70 hover:bg-amber-100 px-2.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1 cursor-pointer min-h-[38px]"
                 >
                   <span>🔒</span>
                   <span className="hidden md:inline">Sair</span>
@@ -576,7 +917,7 @@ export const ConversaQuadro: React.FC = () => {
                 type="button"
                 onClick={handleNovaConversa}
                 title="Começar de novo"
-                className="text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer min-h-[44px]"
+                className="text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl font-bold transition-all flex items-center gap-1.5 cursor-pointer min-h-[38px]"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Recomeçar</span>
@@ -584,196 +925,219 @@ export const ConversaQuadro: React.FC = () => {
             </div>
           </div>
 
-          {/* Banner do Modo Conversação Ativo com Dica Amigável */}
+          {/* Banner do Modo Conversação / Barge-in em Destaque */}
           {modoConversacaoVoz && (
-            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/15 to-amber-100/40 border-b border-amber-200/80 px-4 py-2.5 flex items-center justify-between gap-2 text-xs text-amber-950">
+            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/15 to-amber-100/40 border-b border-amber-200/80 px-4 py-2.5 flex items-center justify-between gap-2 text-xs text-amber-950 flex-wrap">
               <div className="flex items-center gap-2 font-bold">
                 <span className="text-base animate-bounce">🗣️</span>
                 <span>
-                  Modo Conversação Ativo: toque no microfone para falar e a Lumi responderá em voz!
+                  Lumi Live Full-Duplex: fale a qualquer momento e a Lumi para instantaneamente
+                  (barge-in)!
                 </span>
               </div>
-              {isSpeaking && (
-                <button
-                  type="button"
-                  onClick={synthStop}
-                  className="text-[11px] font-extrabold bg-amber-200 hover:bg-amber-300 text-amber-900 px-2.5 py-1 rounded-full cursor-pointer transition-colors"
-                >
-                  Pausar Lumi ⏹️
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {isSpeaking && (
+                  <button
+                    type="button"
+                    onClick={() => executarBargeIn('Interrupção manual do usuário')}
+                    className="text-xs font-black bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded-full cursor-pointer transition-all shadow-xs flex items-center gap-1"
+                  >
+                    <Hand className="w-3.5 h-3.5" />
+                    <span>✋ Interromper Lumi</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Área das Mensagens com visual espaçoso e fontes infantis legíveis */}
-          <div className="flex-1 p-3.5 sm:p-5 overflow-y-auto space-y-4 custom-scroll min-h-[380px] max-h-[560px] bg-slate-50/30">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex items-end gap-2.5 sm:gap-3 ${
-                  msg.sender === 'user' ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {/* Avatar da Lumi sempre visível e destacado */}
-                {msg.sender === 'lumi' && (
+          {/* EXIBIÇÃO: ORBE LUMI LIVE vs CHAT TRADICIONAL */}
+          {visaoChat === 'orbe' ? (
+            <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between bg-slate-50/40">
+              <OrbeLumiLive
+                estado={estadoOrbe}
+                legendaOuvindo={interimTranscript}
+                legendaFalando={
+                  legendaFalando ||
+                  (messages[messages.length - 1]?.sender === 'lumi'
+                    ? messages[messages.length - 1]?.text
+                    : '')
+                }
+                vozHabilitada={vozHabilitada}
+                onToggleVoz={handleToggleVoz}
+                onInterromper={() => executarBargeIn('Botão Interromper Lumi')}
+                onFalarAgora={toggleListening}
+                isListening={isListening}
+                ritmoNome={ritmoAtual.nome}
+                onCicloRitmo={handleCicloRitmo}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Área das Mensagens com visual espaçoso e fontes infantis legíveis */}
+              <div className="flex-1 p-3.5 sm:p-5 overflow-y-auto space-y-4 custom-scroll min-h-[380px] max-h-[560px] bg-slate-50/30">
+                {messages.map((msg) => (
                   <div
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-400 text-white flex items-center justify-center text-lg font-bold shadow-xs shrink-0"
-                    aria-label="Lumi"
-                  >
-                    ✨
-                  </div>
-                )}
-
-                <div
-                  className={`max-w-[88%] sm:max-w-[82%] rounded-3xl p-3.5 sm:p-4 shadow-xs text-sm sm:text-base leading-relaxed ${
-                    msg.sender === 'user'
-                      ? 'bg-amber-500 text-white font-medium rounded-br-xs'
-                      : 'bg-white text-slate-800 border border-amber-100 rounded-bl-xs'
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap">{msg.text}</div>
-
-                  {/* Cartõezinhos fofos de ações que a Lumi executou */}
-                  {msg.acoes && msg.acoes.length > 0 && (
-                    <div className="space-y-2 mt-2.5">
-                      {msg.acoes.map((acao, i) => (
-                        <CartaoAcaoLumi key={i} acao={acao} />
-                      ))}
-                    </div>
-                  )}
-
-                  <div
-                    className={`mt-1.5 text-[10px] sm:text-[11px] flex items-center justify-between gap-3 ${
-                      msg.sender === 'user' ? 'text-amber-100' : 'text-slate-400'
+                    key={msg.id}
+                    className={`flex items-end gap-2.5 sm:gap-3 ${
+                      msg.sender === 'user' ? 'justify-end' : 'justify-start'
                     }`}
                   >
-                    <span>{msg.timestamp}</span>
                     {msg.sender === 'lumi' && (
-                      <div className="flex items-center gap-2">
-                        {/* Botão de ouvir a Lumi falar esta mensagem individualmente */}
-                        {synthSuportado && (
-                          <BotaoOuvirLumi
-                            isSpeaking={mensagemFalandoId === msg.id && isSpeaking}
-                            onClick={() => falarMensagemLumi(msg.id, msg.text)}
-                            tamanho="sm"
-                          />
+                      <div
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-400 text-white flex items-center justify-center text-lg font-bold shadow-xs shrink-0"
+                        aria-label="Lumi"
+                      >
+                        ✨
+                      </div>
+                    )}
+
+                    <div
+                      className={`max-w-[88%] sm:max-w-[82%] rounded-3xl p-3.5 sm:p-4 shadow-xs text-sm sm:text-base leading-relaxed ${
+                        msg.sender === 'user'
+                          ? 'bg-amber-500 text-white font-medium rounded-br-xs'
+                          : 'bg-white text-slate-800 border border-amber-100 rounded-bl-xs'
+                      }`}
+                    >
+                      <div className="whitespace-pre-wrap">{msg.text}</div>
+
+                      {msg.acoes && msg.acoes.length > 0 && (
+                        <div className="space-y-2 mt-2.5">
+                          {msg.acoes.map((acao, i) => (
+                            <CartaoAcaoLumi key={i} acao={acao} />
+                          ))}
+                        </div>
+                      )}
+
+                      <div
+                        className={`mt-1.5 text-[10px] sm:text-[11px] flex items-center justify-between gap-3 ${
+                          msg.sender === 'user' ? 'text-amber-100' : 'text-slate-400'
+                        }`}
+                      >
+                        <span>{msg.timestamp}</span>
+                        {msg.sender === 'lumi' && (
+                          <div className="flex items-center gap-2">
+                            {synthSuportado && (
+                              <BotaoOuvirLumi
+                                isSpeaking={mensagemFalandoId === msg.id && isSpeaking}
+                                onClick={() => falarMensagemLumi(msg.id, msg.text)}
+                                tamanho="sm"
+                              />
+                            )}
+                            <span className="text-amber-700/80 font-bold flex items-center gap-1">
+                              <span>✨</span> Lumi
+                            </span>
+                          </div>
                         )}
-                        <span className="text-amber-700/80 font-bold flex items-center gap-1">
-                          <span>✨</span> Lumi
-                        </span>
+                      </div>
+                    </div>
+
+                    {msg.sender === 'user' && (
+                      <div
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-800 text-amber-300 flex items-center justify-center text-sm font-black shrink-0 shadow-xs"
+                        aria-label={criancaSelecionada?.nome || 'Você'}
+                      >
+                        {criancaSelecionada?.nome
+                          ? criancaSelecionada.nome.charAt(0).toUpperCase()
+                          : '😊'}
                       </div>
                     )}
                   </div>
-                </div>
+                ))}
 
-                {/* Avatar da Criança */}
-                {msg.sender === 'user' && (
-                  <div
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-800 text-amber-300 flex items-center justify-center text-sm font-black shrink-0 shadow-xs"
-                    aria-label={criancaSelecionada?.nome || 'Você'}
-                  >
-                    {criancaSelecionada?.nome
-                      ? criancaSelecionada.nome.charAt(0).toUpperCase()
-                      : '😊'}
+                {enviando && (
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-amber-700 font-bold italic pl-12 animate-pulse">
+                    <Sparkles className="w-4 h-4 text-amber-500 animate-spin" />
+                    <span>Lumi está preparando a resposta com carinho...</span>
                   </div>
                 )}
+
+                <div ref={chatEndRef} />
               </div>
-            ))}
 
-            {enviando && (
-              <div className="flex items-center gap-2 text-xs sm:text-sm text-amber-700 font-bold italic pl-12 animate-pulse">
-                <Sparkles className="w-4 h-4 text-amber-500 animate-spin" />
-                <span>Lumi está preparando a resposta com carinho...</span>
-              </div>
-            )}
-
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Feedback em tempo real quando o microfone está ouvindo a criança */}
-          {isListening && (
-            <div className="px-4 py-3 bg-red-50/90 border-t border-red-200/80 flex items-center justify-between gap-3 animate-fade-in-up">
-              <div className="flex items-center gap-3">
-                <div className="relative flex items-center justify-center">
-                  <span className="w-3.5 h-3.5 rounded-full bg-red-500 animate-ping absolute" />
-                  <span className="w-3.5 h-3.5 rounded-full bg-red-600 relative" />
-                </div>
-                <div>
-                  <div className="text-xs sm:text-sm font-extrabold text-red-900 flex items-center gap-1.5">
-                    <span>Estou ouvindo você... Pode falar! 🎤</span>
+              {/* Feedback em tempo real com transcrição provisória grande e botão barge-in */}
+              {isListening && (
+                <div className="px-4 py-3 bg-red-50/90 border-t border-red-200/80 flex items-center justify-between gap-3 animate-fade-in-up">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex items-center justify-center">
+                      <span className="w-3.5 h-3.5 rounded-full bg-red-500 animate-ping absolute" />
+                      <span className="w-3.5 h-3.5 rounded-full bg-red-600 relative" />
+                    </div>
+                    <div>
+                      <div className="text-xs sm:text-sm font-extrabold text-red-900 flex items-center gap-1.5">
+                        <span>Ouvindo você com atenção... Pode falar! 🎤</span>
+                      </div>
+                      {interimTranscript ? (
+                        <p
+                          className={`text-red-950 font-black italic mt-0.5 ${
+                            fonteGrande ? 'text-lg sm:text-xl' : 'text-sm sm:text-base'
+                          }`}
+                        >
+                          &ldquo;{interimTranscript}&rdquo;
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-red-700">
+                          Pausa calibrada para seu raciocínio (1,2s). Fale sem pressa!
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {interimTranscript ? (
-                    <p
-                      className={`text-red-950 font-bold italic mt-0.5 ${
-                        fonteGrande ? 'text-base sm:text-lg' : 'text-xs sm:text-sm'
-                      }`}
-                    >
-                      &ldquo;{interimTranscript}&rdquo;
-                    </p>
-                  ) : (
-                    <p className="text-[11px] text-red-700">
-                      Diga o que você quer perguntar para a Lumi...
-                    </p>
-                  )}
+
+                  <button
+                    type="button"
+                    onClick={stopListening}
+                    className="px-3.5 py-2 rounded-xl bg-red-200 hover:bg-red-300 text-red-950 text-xs font-bold transition-all cursor-pointer min-h-[36px]"
+                  >
+                    Concluir fala ✓
+                  </button>
                 </div>
-              </div>
+              )}
 
-              <button
-                type="button"
-                onClick={stopListening}
-                className="px-3 py-1.5 rounded-xl bg-red-200 hover:bg-red-300 text-red-950 text-xs font-bold transition-all cursor-pointer min-h-[36px]"
-              >
-                Concluir fala ✓
-              </button>
-            </div>
-          )}
+              {permissionDenied && (
+                <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🎤</span>
+                    <span>
+                      <strong>Atenção aos pais/responsáveis:</strong> Precisamos da permissão do
+                      microfone no navegador para a criança falar com a Lumi.
+                    </span>
+                  </div>
+                </div>
+              )}
 
-          {/* Mensagem amigável de erro ou aviso sobre microfone (sem jargão técnico) */}
-          {permissionDenied && (
-            <div className="px-4 py-2.5 bg-amber-50 border-t border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-base">🎤</span>
-                <span>
-                  <strong>Atenção aos pais/responsáveis:</strong> Precisamos da permissão do
-                  microfone no navegador para a criança falar com a Lumi.
+              {erroReconhecimento && !permissionDenied && (
+                <div className="px-4 py-2 bg-orange-50 border-t border-orange-200 text-xs text-orange-900 flex items-center gap-2">
+                  <span>😊</span>
+                  <span>{erroReconhecimento}</span>
+                </div>
+              )}
+
+              {/* Sugestões Rápidas */}
+              <div className="px-3 py-2 bg-amber-50/50 border-t border-amber-100/70 flex items-center gap-1.5 overflow-x-auto custom-scroll">
+                <span className="text-[11px] font-bold text-amber-800/80 uppercase tracking-wider shrink-0 mr-1">
+                  Dica rápida:
                 </span>
+                {sugestoesRapidas.map((sug, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setInputText(sug)
+                      inputRef.current?.focus()
+                    }}
+                    className="text-xs bg-white hover:bg-amber-100 text-slate-700 hover:text-amber-900 border border-amber-200/90 px-3 py-1.5 rounded-full whitespace-nowrap transition-colors font-semibold cursor-pointer active:scale-95"
+                  >
+                    {sug}
+                  </button>
+                ))}
               </div>
-            </div>
+            </>
           )}
 
-          {erroReconhecimento && !permissionDenied && (
-            <div className="px-4 py-2 bg-orange-50 border-t border-orange-200 text-xs text-orange-900 flex items-center gap-2">
-              <span>😊</span>
-              <span>{erroReconhecimento}</span>
-            </div>
-          )}
-
-          {/* Sugestões Rápidas em formato de pílulas fofas */}
-          <div className="px-3 py-2 bg-amber-50/50 border-t border-amber-100/70 flex items-center gap-1.5 overflow-x-auto custom-scroll">
-            <span className="text-[11px] font-bold text-amber-800/80 uppercase tracking-wider shrink-0 mr-1">
-              Dica rápida:
-            </span>
-            {sugestoesRapidas.map((sug, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => {
-                  setInputText(sug)
-                  inputRef.current?.focus()
-                }}
-                className="text-xs bg-white hover:bg-amber-100 text-slate-700 hover:text-amber-900 border border-amber-200/90 px-3 py-1.5 rounded-full whitespace-nowrap transition-colors font-semibold cursor-pointer active:scale-95"
-              >
-                {sug}
-              </button>
-            ))}
-          </div>
-
-          {/* Caixa de Entrada Amigável para Crianças com Botão de Microfone em Destaque */}
+          {/* Caixa de Entrada Amigável para Crianças */}
           <form
             onSubmit={handleEnviar}
             className="p-3 sm:p-3.5 bg-white border-t border-amber-100 flex items-center gap-2.5"
           >
-            {/* Botão de Microfone GRANDE, colorido e redondo ao lado do campo */}
             <BotaoVozCrianca
               isListening={isListening}
               isSupported={recSuportado}
@@ -790,7 +1154,7 @@ export const ConversaQuadro: React.FC = () => {
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
                 isListening
-                  ? 'Ouvindo sua voz... 🎤'
+                  ? 'Ouvindo sua voz com carinho... 🎤'
                   : modoConversacaoVoz
                     ? 'Fale no microfone ou digite aqui...'
                     : 'Escreva pra Lumi ou toque no microfone...'
@@ -828,6 +1192,18 @@ export const ConversaQuadro: React.FC = () => {
             onTrocarTopico={handleTrocarTopicoQuadro}
           />
 
+          {/* Telemetria do Cérebro Conversacional (visível fora do Modo Criança) */}
+          {!modoCriancaAtivo && (
+            <TelemetriaCerebro
+              etapaAtual={etapaAtual}
+              materiaAtual={materiaDetectada}
+              estagioPiaget={estagioPiaget}
+              acoesRecentes={acoesRecentes}
+              eventos={eventosTelemetria}
+              guardrailAtivo={true}
+            />
+          )}
+
           {/* Caderninho de descobertas da criança */}
           <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-soft border border-amber-100">
             <div className="flex items-center justify-between mb-2">
@@ -847,7 +1223,7 @@ export const ConversaQuadro: React.FC = () => {
             />
           </div>
 
-          {/* Card Amigável: Momento Calma & Foco (Respiração Guiada) */}
+          {/* Card Amigável: Momento Calma & Foco (Respiração Guiada "Flor e Vela") */}
           <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-3xl p-4 sm:p-5 text-white shadow-soft relative overflow-hidden">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5">
@@ -857,7 +1233,7 @@ export const ConversaQuadro: React.FC = () => {
                 <div>
                   <h4 className="text-xs sm:text-sm font-black text-white">Momento Calma & Foco</h4>
                   <p className="text-[11px] text-indigo-200">
-                    Respire fundo para destravarmos o cérebro
+                    Respiração da Flor e da Vela (inspire 4s, expire 4s)
                   </p>
                 </div>
               </div>
@@ -877,16 +1253,16 @@ export const ConversaQuadro: React.FC = () => {
                 }`}
               >
                 <div className="text-center p-2">
-                  <span className="block text-base sm:text-lg">🧘</span>
+                  <span className="block text-base sm:text-lg">🌸🕯️</span>
                   <span className="text-[9px] sm:text-[10px] font-black uppercase text-indigo-950">
-                    {modoRespiracao ? 'Inspire... Expire...' : 'Respirar'}
+                    {modoRespiracao ? 'Inspire a flor... Assopre a vela...' : 'Respirar'}
                   </span>
                 </div>
               </div>
               <p className="text-xs text-indigo-200 text-center mt-3 max-w-xs leading-relaxed">
                 {modoRespiracao
-                  ? 'Acompanhe a bolinha crescendo e diminuindo com calma. Sinta o ar entrar e sair.'
-                  : 'Quando uma dúvida parecer difícil, respirar com calma ajuda nosso cérebro a pensar melhor!'}
+                  ? 'Cheire a flor (inspire com calma) e assopre a velinha sem apagar (expire suavemente).'
+                  : 'Quando uma dúvida parecer difícil ou der frustração, respirar com calma destrava o cérebro!'}
               </p>
             </div>
           </div>
