@@ -32,7 +32,7 @@ export const PublicOnlyRoute: React.FC = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/filhos" replace />
+    return <Navigate to="/conversa" replace />
   }
 
   return <Outlet />

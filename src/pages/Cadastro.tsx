@@ -58,7 +58,7 @@ export default function Cadastro() {
           title: 'Conta criada com sucesso!',
           description: 'Bem-vindo ao Aprende+ Tutor. Verifique seu e-mail para confirmar a conta.',
         })
-        navigate('/filhos')
+        navigate('/conversa')
       } catch {
         toast({
           title: 'Conta criada com sucesso!',

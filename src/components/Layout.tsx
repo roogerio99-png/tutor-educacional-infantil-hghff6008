@@ -10,14 +10,7 @@ export const Layout: React.FC = () => {
 
   // Se o Modo Criança estiver ativo e o usuário tentar acessar páginas de adulto,
   // redireciona silenciosamente para o chat /conversa
-  const rotasAdulto = [
-    '/grafo-painel',
-    '/prompts',
-    '/filhos',
-    '/dificuldades',
-    '/base-de-conhecimento',
-    '/perfil',
-  ]
+  const rotasAdulto = ['/grafo-painel', '/prompts', '/agenda']
   const tentandoAcessarAdulto = rotasAdulto.some((r) => location.pathname.startsWith(r))
 
   if (modoCriancaAtivo && tentandoAcessarAdulto) {

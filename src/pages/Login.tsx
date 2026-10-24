@@ -17,7 +17,7 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/filhos'
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/conversa'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

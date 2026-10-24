@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-24T18:13:41.838Z",
+  "generatedAt": "2026-10-24T18:51:01.087Z",
   "collections": [
     {
       "name": "users",
@@ -438,7 +438,7 @@
       "apiRules": {
         "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
-        "create": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
       },
@@ -508,7 +508,7 @@
       "apiRules": {
         "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
-        "create": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
       },
@@ -599,7 +599,7 @@
       "apiRules": {
         "list": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "view": "@request.auth.id != '' && crianca.owner = @request.auth.id",
-        "create": "@request.auth.id != ''",
+        "create": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "update": "@request.auth.id != '' && crianca.owner = @request.auth.id",
         "delete": "@request.auth.id != '' && crianca.owner = @request.auth.id"
       },

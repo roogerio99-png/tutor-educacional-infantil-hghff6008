@@ -98,21 +98,20 @@ export async function obterHistoricoEmocional(
         batch: 14,
       })
 
-      let diasNeg = 0
-      let maxNeg = 0
+      // Sequência a partir dos dias mais recentes (hoje para trás)
+      let sequenciaRecenteNegativa = 0
       for (const item of items) {
         if (item.humor === 'triste' || item.humor === 'muito_triste') {
-          diasNeg++
-          if (diasNeg > maxNeg) maxNeg = diasNeg
+          sequenciaRecenteNegativa++
         } else {
-          diasNeg = 0
+          break
         }
       }
 
       return {
         historico: items,
-        alerta_atencao_emocional: maxNeg >= 3,
-        dias_negativos_consecutivos: maxNeg,
+        alerta_atencao_emocional: sequenciaRecenteNegativa >= 3,
+        dias_negativos_consecutivos: sequenciaRecenteNegativa,
       }
     }
 
