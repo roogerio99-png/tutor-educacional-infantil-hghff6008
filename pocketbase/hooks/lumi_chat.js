@@ -600,6 +600,13 @@ routerAdd(
 
       extraContext += `\n[DIRETRIZ DE SEGURANÇA E PROTEÇÃO]: Você é uma tutora infantil, NÃO terapeuta ou médica. Diante de qualquer sinal de risco, sofrimento intenso ou violação, acolha sem julgar e priorize o encaminhamento imediato a um adulto de confiança da família ou da escola.`
 
+      // Diretriz rigorosa de concisão e simplicidade para crianças
+      extraContext += `\n[REGRA CRÍTICA DE COMUNICAÇÃO INFANTIL - CONCISÃO & SIMPLICIDADE]:
+1. Fale SEMPRE em frases CURTAS e linguagem SIMPLES de criança (máximo 2 a 3 frases curtas por resposta).
+2. Se a mensagem for saudação ou social ("oi", "olá", "tudo bem?", "boa tarde"), responda com APENAS UMA FRASE simpática e acolhedora, sem palestras nem textos complexos (ex: "Oi! Que alegria falar com você! O que vamos aprender juntos hoje? ✨").
+3. Uma ideia por frase. Nunca use termos adultos, formais ou parágrafos longos.
+4. Mantenha o método socrático fazendo UMA pergunta investigativa curta por vez.`
+
       if (body.custom_prompt) {
         extraContext += `\n[INSTRUÇÃO DE SISTEMA PERSONALIZADA]: ${body.custom_prompt}`
       }
@@ -615,7 +622,7 @@ routerAdd(
         message: composedMessage,
       })
 
-      // 5. Pós-processamento Socrático
+      // 5. Pós-processamento Socrático e Validador de Concisão
       let conteudoFinal = result.content || ''
       const saidaNormalizada = conteudoFinal
         .toLowerCase()
@@ -636,6 +643,68 @@ routerAdd(
             'Se pensarmos juntos no caminho para chegar a essa conclusão, que pistas os números e o enunciado nos dão?',
           )
         }
+      }
+
+      // Validador de comprimento e saudações (Barreira de Concisão Infantil)
+      const ehSaudacaoOuSocial = (texto) => {
+        const t = (texto || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9\s]/g, '')
+          .trim()
+        return (
+          /^(oi|oii|oiii|ola|opa|e ai|bom dia|boa tarde|boa noite|tudo bem|tudo bom|como vai|salve|fala lumi|oi lumi|ola lumi)$/.test(
+            t,
+          ) ||
+          (/^(oi|ola|bom dia|boa tarde|boa noite)/.test(t) && t.split(/\s+/).length <= 4)
+        )
+      }
+
+      // Extrai tag de etapa antes de manipular frases para não perder os metadados
+      let tagExtraida = ''
+      const matchTagTemp = conteudoFinal.match(/\[\[ETAPA:[^\]]+\]\]/i)
+      if (matchTagTemp) {
+        tagExtraida = matchTagTemp[0]
+        conteudoFinal = conteudoFinal.replace(tagExtraida, '').trim()
+      }
+
+      // Divisão segura de frases mantendo pontuação
+      const dividirFrases = (str) => {
+        if (!str) return []
+        const partes = str.match(/[^.!?\n]+[.!?]+(?:\s+|$)|[^.!?\n]+$/g) || []
+        return partes.map((p) => p.trim()).filter((p) => p.length > 0)
+      }
+
+      const nomeCrianca = criancaAtual ? criancaAtual.getString('nome') : ''
+
+      if (ehSaudacaoOuSocial(userMsg)) {
+        // Se a criança apenas deu "oi" ou equivalente social, Lumi deve dar no máximo 1 frase afetuosa
+        const frasesSaida = dividirFrases(conteudoFinal)
+        if (frasesSaida.length > 1 || conteudoFinal.length > 140) {
+          // Seleciona uma saudação amigável curta e limpa
+          conteudoFinal = nomeCrianca
+            ? `Oi, ${nomeCrianca}! Que alegria falar com você! O que vamos explorar juntos hoje? ✨`
+            : `Oi! Que alegria falar com você! O que você gostaria de explorar hoje? ✨`
+        }
+      } else {
+        // Para mensagens gerais: limitar a no máximo 3 frases curtas
+        const frasesGerais = dividirFrases(conteudoFinal)
+        if (frasesGerais.length > 3) {
+          // Mantém as 2 primeiras frases e a última (que costuma conter a pergunta socrática)
+          const primeiras = frasesGerais.slice(0, 2)
+          const ultima = frasesGerais[frasesGerais.length - 1]
+          if (!primeiras.includes(ultima)) {
+            conteudoFinal = `${primeiras.join(' ')} ${ultima}`
+          } else {
+            conteudoFinal = primeiras.join(' ')
+          }
+        }
+      }
+
+      // Restaura a tag de etapa para que o detector de etapas a processe
+      if (tagExtraida) {
+        conteudoFinal = `${conteudoFinal}\n${tagExtraida}`
       }
 
       let etapaDetectada = 'entender'
@@ -1261,6 +1330,13 @@ routerAdd(
       }
 
       extraContext += `\n[DIRETRIZ DE SEGURANÇA E PROTEÇÃO]: Você é uma tutora infantil, NÃO terapeuta ou médica. Diante de qualquer sinal de risco, sofrimento intenso ou violação, acolha sem julgar e priorize o encaminhamento imediato a um adulto de confiança da família ou da escola.`
+
+      // Diretriz rigorosa de concisão e simplicidade para crianças
+      extraContext += `\n[REGRA CRÍTICA DE COMUNICAÇÃO INFANTIL - CONCISÃO & SIMPLICIDADE]:
+1. Fale SEMPRE em frases CURTAS e linguagem SIMPLES de criança (máximo 2 a 3 frases curtas por resposta).
+2. Se a mensagem for saudação ou social ("oi", "olá", "tudo bem?", "boa tarde"), responda com APENAS UMA FRASE simpática e acolhedora, sem palestras nem textos complexos (ex: "Oi! Que alegria falar com você! O que vamos aprender juntos hoje? ✨").
+3. Uma ideia por frase. Nunca use termos adultos, formais ou parágrafos longos.
+4. Mantenha o método socrático fazendo UMA pergunta investigativa curta por vez.`
 
       if (body.custom_prompt) {
         extraContext += `\n[INSTRUÇÃO DE SISTEMA PERSONALIZADA]: ${body.custom_prompt}`

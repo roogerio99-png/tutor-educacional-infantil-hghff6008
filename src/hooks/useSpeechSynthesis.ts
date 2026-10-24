@@ -12,7 +12,7 @@ export interface UseSpeechSynthesisOptions {
 
 export function useSpeechSynthesis({
   lang = 'pt-BR',
-  rate = 0.95,
+  rate = 1.15,
   pitch = 1.05,
   onStart,
   onEnd,
