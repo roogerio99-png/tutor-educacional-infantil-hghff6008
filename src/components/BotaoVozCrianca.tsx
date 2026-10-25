@@ -8,6 +8,7 @@ export interface BotaoVozCriancaProps {
   onClick: () => void
   acessibilidadeReforcada?: boolean
   tamanho?: 'normal' | 'grande'
+  permissionDenied?: boolean
 }
 
 export const BotaoVozCrianca: React.FC<BotaoVozCriancaProps> = ({
@@ -17,9 +18,18 @@ export const BotaoVozCrianca: React.FC<BotaoVozCriancaProps> = ({
   onClick,
   acessibilidadeReforcada = false,
   tamanho = 'normal',
+  permissionDenied = false,
 }) => {
   if (!isSupported) {
-    return null
+    return (
+      <div
+        className="inline-flex items-center justify-center text-xs text-slate-400 bg-slate-100 rounded-full px-2.5 py-1.5 border border-slate-200"
+        title="Voz não suportada neste navegador. Use o Chrome ou Edge para falar com a Lumi."
+      >
+        <span className="text-sm mr-1">🎤❌</span>
+        <span className="hidden sm:inline">Sem suporte de voz</span>
+      </div>
+    )
   }
 
   const dimensoes =
@@ -43,12 +53,26 @@ export const BotaoVozCrianca: React.FC<BotaoVozCriancaProps> = ({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        aria-label={isListening ? 'Parar de falar' : 'Falar com a Lumi por voz'}
-        title={isListening ? 'Toque para finalizar fala' : 'Toque para falar com a Lumi'}
+        aria-label={
+          permissionDenied
+            ? 'Permissão de microfone necessária'
+            : isListening
+              ? 'Parar de falar'
+              : 'Falar com a Lumi por voz'
+        }
+        title={
+          permissionDenied
+            ? 'Permissão de microfone bloqueada. Clique para liberar no navegador.'
+            : isListening
+              ? 'Toque para finalizar fala'
+              : 'Toque para falar com a Lumi'
+        }
         className={`relative z-10 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md select-none active:scale-95 disabled:opacity-40 disabled:pointer-events-none ${dimensoes} ${
-          isListening
-            ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/40 ring-4 ring-red-200'
-            : 'bg-gradient-to-tr from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white shadow-amber-500/30 ring-2 ring-amber-200/80 hover:scale-105'
+          permissionDenied
+            ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/30 ring-2 ring-amber-300'
+            : isListening
+              ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/40 ring-4 ring-red-200'
+              : 'bg-gradient-to-tr from-amber-500 to-orange-400 hover:from-amber-600 hover:to-orange-500 text-white shadow-amber-500/30 ring-2 ring-amber-200/80 hover:scale-105'
         }`}
       >
         {isListening ? (

@@ -205,10 +205,21 @@ export const ConversaQuadro: React.FC = () => {
     onEnd: () => {
       setMensagemFalandoId(null)
       setLegendaFalando('')
+      // No Modo Conversação por Voz (Lumi Live), devolve o microfone para a criança falar
+      if (modoConversacaoVoz || visaoChat === 'orbe') {
+        setTimeout(() => {
+          startListening()
+        }, 300)
+      }
     },
     onError: () => {
       setMensagemFalandoId(null)
       setLegendaFalando('')
+      if (modoConversacaoVoz || visaoChat === 'orbe') {
+        setTimeout(() => {
+          startListening()
+        }, 300)
+      }
     },
   })
 
@@ -443,6 +454,7 @@ export const ConversaQuadro: React.FC = () => {
     interimTranscript,
     permissionDenied,
     errorMessage: erroReconhecimento,
+    startListening,
     toggleListening,
     stopListening,
   } = useSpeechRecognition({
@@ -481,6 +493,11 @@ export const ConversaQuadro: React.FC = () => {
       stopListening()
       setMensagemFalandoId(null)
       setLegendaFalando('')
+    } else {
+      // Ao ativar o modo conversação, se não estiver falando nem enviando, liga o microfone
+      if (!isSpeaking && !enviando) {
+        startListening()
+      }
     }
   }
 
@@ -841,6 +858,14 @@ export const ConversaQuadro: React.FC = () => {
                   onClick={() => {
                     setVisaoChat('orbe')
                     setModoConversacaoVoz(true)
+                    try {
+                      localStorage.setItem('lumi_modo_conversacao_voz', 'true')
+                    } catch {
+                      // ignore
+                    }
+                    if (!isSpeaking && !enviando) {
+                      startListening()
+                    }
                   }}
                   title="Modo Lumi Live (Voz em tempo real + Orbe animada)"
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
@@ -969,6 +994,9 @@ export const ConversaQuadro: React.FC = () => {
                 isListening={isListening}
                 ritmoNome={ritmoAtual.nome}
                 onCicloRitmo={handleCicloRitmo}
+                isSupported={recSuportado}
+                permissionDenied={permissionDenied}
+                errorMessage={erroReconhecimento}
               />
             </div>
           ) : (
@@ -1145,6 +1173,7 @@ export const ConversaQuadro: React.FC = () => {
               onClick={toggleListening}
               acessibilidadeReforcada={acessibilidadeReforcada}
               tamanho={modoConversacaoVoz ? 'grande' : 'normal'}
+              permissionDenied={permissionDenied}
             />
 
             <input

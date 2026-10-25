@@ -14,6 +14,9 @@ export interface OrbeLumiLiveProps {
   isListening: boolean
   ritmoNome: string
   onCicloRitmo: () => void
+  isSupported?: boolean
+  permissionDenied?: boolean
+  errorMessage?: string | null
 }
 
 export const OrbeLumiLive: React.FC<OrbeLumiLiveProps> = ({
@@ -27,6 +30,9 @@ export const OrbeLumiLive: React.FC<OrbeLumiLiveProps> = ({
   isListening,
   ritmoNome,
   onCicloRitmo,
+  isSupported = true,
+  permissionDenied = false,
+  errorMessage = null,
 }) => {
   // Configurações visuais por estado
   const configEstado = {
@@ -270,16 +276,54 @@ export const OrbeLumiLive: React.FC<OrbeLumiLiveProps> = ({
         <button
           type="button"
           onClick={onFalarAgora}
+          title={
+            !isSupported
+              ? 'Navegador sem suporte a Web Speech API'
+              : permissionDenied
+                ? 'Clique para solicitar permissão do microfone'
+                : isListening
+                  ? 'Concluir minha fala agora'
+                  : 'Falar com a Lumi'
+          }
           className={`px-5 py-3 rounded-2xl font-black text-sm flex items-center gap-2 cursor-pointer transition-all active:scale-95 shadow-md ${
-            isListening
-              ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/30 ring-4 ring-rose-200'
-              : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/30'
+            !isSupported
+              ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
+              : permissionDenied
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/30 ring-4 ring-amber-200'
+                : isListening
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/30 ring-4 ring-rose-200'
+                  : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/30'
           }`}
         >
           <Mic className={`w-4 h-4 ${isListening ? 'animate-pulse' : ''}`} />
-          <span>{isListening ? 'Concluir minha fala ✓' : 'Falar com a Lumi 🎤'}</span>
+          <span>
+            {!isSupported
+              ? 'Microfone não suportado'
+              : permissionDenied
+                ? 'Liberar Microfone 🎤'
+                : isListening
+                  ? 'Concluir minha fala ✓'
+                  : 'Falar com a Lumi 🎤'}
+          </span>
         </button>
       </div>
+
+      {/* Alerta de permissão ou erro dentro do Orbe Live */}
+      {permissionDenied && (
+        <div className="w-full mt-3 p-3 bg-amber-100/90 border border-amber-300 rounded-xl text-center text-xs text-amber-900 font-bold z-10 animate-fade-in-up">
+          <span>
+            ⚠️ <strong>Atenção aos pais/responsáveis:</strong> Precisamos da permissão do microfone
+            para a criança falar com a Lumi. Clique no ícone de cadeado na barra de endereços do
+            navegador e permita o microfone.
+          </span>
+        </div>
+      )}
+
+      {errorMessage && !permissionDenied && (
+        <div className="w-full mt-3 p-2.5 bg-orange-100/80 border border-orange-300 rounded-xl text-center text-xs text-orange-900 font-semibold z-10 animate-fade-in-up">
+          <span>😊 {errorMessage}</span>
+        </div>
+      )}
     </div>
   )
 }
