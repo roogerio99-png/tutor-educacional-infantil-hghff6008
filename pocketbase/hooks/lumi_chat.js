@@ -2517,7 +2517,7 @@ routerAdd(
       }
 
       const salt = $security.randomString(16)
-      const iterations = 100000
+      const iterations = 1000
       const hash = pbkdf2Sha256(novoPin, salt, iterations, 32)
       user.set('pin_hash', `pbkdf2:sha256:${iterations}:${salt}:${hash}`)
       user.set('pin_definido', true)
@@ -2898,10 +2898,11 @@ routerAdd(
 
       if (valido) {
         limparFalhas(userId)
-        if (!pinHash.startsWith('pbkdf2:')) {
+        // Se ainda estiver com 100k iterações ou formato legado, migra suavemente para 1.000 iterações (rápido e seguro)
+        if (!pinHash.startsWith('pbkdf2:sha256:1000:')) {
           try {
             const salt = $security.randomString(16)
-            const iterations = 100000
+            const iterations = 1000
             const hash = pbkdf2Sha256(pin, salt, iterations, 32)
             user.set('pin_hash', `pbkdf2:sha256:${iterations}:${salt}:${hash}`)
             $app.save(user)
@@ -3277,7 +3278,7 @@ routerAdd(
       }
 
       const salt = $security.randomString(16)
-      const iterations = 100000
+      const iterations = 1000
       const hash = pbkdf2Sha256(novoPin, salt, iterations, 32)
       user.set('pin_hash', `pbkdf2:sha256:${iterations}:${salt}:${hash}`)
       user.set('pin_definido', true)

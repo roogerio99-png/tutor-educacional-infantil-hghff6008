@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 import { SimpleModal } from '@/components/SimpleModal'
-import { Lock, Delete, Clock, ShieldAlert, Sparkles, KeyRound } from 'lucide-react'
+import { Lock, Delete, Clock, ShieldAlert, Check, RefreshCw, KeyRound } from 'lucide-react'
 
 export const SairModoCriancaModal: React.FC<{
   isOpen: boolean
@@ -13,45 +13,111 @@ export const SairModoCriancaModal: React.FC<{
   const [mensagemErro, setMensagemErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(false)
   const [shake, setShake] = useState(false)
+  const isSubmittingRef = React.useRef(false)
 
-  const handleDigit = async (d: string) => {
-    if (tempoBloqueioRestante > 0 || carregando) return
+  // Submissão centralizada (evita duplicidade entre auto-submit e clique no botão OK)
+  const submeterPin = React.useCallback(
+    async (pinParaTestar: string) => {
+      if (isSubmittingRef.current || tempoBloqueioRestante > 0) return
+      if (pinParaTestar.length !== 4) return
+
+      try {
+        isSubmittingRef.current = true
+        setCarregando(true)
+        setMensagemErro(null)
+
+        const res = await tentarSairModoCrianca(pinParaTestar)
+
+        if (res.sucesso) {
+          setPinDigits([])
+          setMensagemErro(null)
+          onClose()
+        } else {
+          setShake(true)
+          setTimeout(() => setShake(false), 500)
+          setMensagemErro(
+            res.mensagem || 'PIN incorreto. Só os adultos responsáveis podem sair daqui 😊',
+          )
+          setPinDigits([])
+        }
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : 'Não foi possível validar o PIN. Tente novamente.'
+        setShake(true)
+        setTimeout(() => setShake(false), 500)
+        setMensagemErro(msg)
+        setPinDigits([])
+      } finally {
+        setCarregando(false)
+        isSubmittingRef.current = false
+      }
+    },
+    [tentarSairModoCrianca, tempoBloqueioRestante, onClose],
+  )
+
+  const handleDigit = (d: string) => {
+    if (tempoBloqueioRestante > 0 || carregando || isSubmittingRef.current) return
     if (pinDigits.length >= 4) return
 
     const novos = [...pinDigits, d]
     setPinDigits(novos)
     setMensagemErro(null)
 
+    // Auto-submit amigável ao completar o 4º dígito
     if (novos.length === 4) {
-      setCarregando(true)
-      const pinStr = novos.join('')
-      const res = await tentarSairModoCrianca(pinStr)
-
-      if (res.sucesso) {
-        setPinDigits([])
-        setMensagemErro(null)
-        onClose()
-      } else {
-        setShake(true)
-        setTimeout(() => setShake(false), 500)
-        setMensagemErro(res.mensagem || 'Só os adultos podem sair daqui 😊')
-        setPinDigits([])
-      }
-      setCarregando(false)
+      submeterPin(novos.join(''))
     }
   }
 
   const handleDelete = () => {
-    if (tempoBloqueioRestante > 0 || carregando) return
+    if (tempoBloqueioRestante > 0 || carregando || isSubmittingRef.current) return
     setPinDigits((prev) => prev.slice(0, -1))
     setMensagemErro(null)
   }
 
   const handleClear = () => {
-    if (tempoBloqueioRestante > 0 || carregando) return
+    if (tempoBloqueioRestante > 0 || carregando || isSubmittingRef.current) return
     setPinDigits([])
     setMensagemErro(null)
   }
+
+  const handleConfirmar = () => {
+    if (pinDigits.length === 4) {
+      submeterPin(pinDigits.join(''))
+    }
+  }
+
+  // Suporte a teclado físico quando o modal estiver aberto
+  React.useEffect(() => {
+    if (!isOpen) {
+      setPinDigits([])
+      setMensagemErro(null)
+      setCarregando(false)
+      isSubmittingRef.current = false
+      return
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (tempoBloqueioRestante > 0 || carregando || isSubmittingRef.current) return
+
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault()
+        handleDigit(e.key)
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        handleDelete()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        handleConfirmar()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, tempoBloqueioRestante, carregando, pinDigits, submeterPin, onClose])
 
   const handleEsqueciPin = () => {
     onClose()
@@ -116,7 +182,7 @@ export const SairModoCriancaModal: React.FC<{
               type="button"
               disabled={tempoBloqueioRestante > 0 || carregando}
               onClick={() => handleDigit(num.toString())}
-              className="h-14 rounded-2xl bg-slate-50 hover:bg-amber-50 active:bg-amber-100 border border-slate-200 hover:border-amber-300 text-slate-800 hover:text-amber-900 font-extrabold text-xl shadow-xs transition-all flex items-center justify-center disabled:opacity-40 cursor-pointer select-none"
+              className="h-14 rounded-2xl bg-slate-50 hover:bg-amber-50 active:bg-amber-100 border border-slate-200 hover:border-amber-300 text-slate-800 hover:text-amber-900 font-extrabold text-xl shadow-xs transition-all flex items-center justify-center disabled:opacity-40 cursor-pointer select-none active:scale-95"
             >
               {num}
             </button>
@@ -127,7 +193,7 @@ export const SairModoCriancaModal: React.FC<{
             type="button"
             disabled={tempoBloqueioRestante > 0 || carregando || pinDigits.length === 0}
             onClick={handleClear}
-            className="h-14 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 text-xs font-bold transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer"
+            className="h-14 rounded-2xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-500 text-xs font-bold transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer select-none"
           >
             Limpar
           </button>
@@ -137,7 +203,7 @@ export const SairModoCriancaModal: React.FC<{
             type="button"
             disabled={tempoBloqueioRestante > 0 || carregando}
             onClick={() => handleDigit('0')}
-            className="h-14 rounded-2xl bg-slate-50 hover:bg-amber-50 active:bg-amber-100 border border-slate-200 hover:border-amber-300 text-slate-800 hover:text-amber-900 font-extrabold text-xl shadow-xs transition-all flex items-center justify-center disabled:opacity-40 cursor-pointer select-none"
+            className="h-14 rounded-2xl bg-slate-50 hover:bg-amber-50 active:bg-amber-100 border border-slate-200 hover:border-amber-300 text-slate-800 hover:text-amber-900 font-extrabold text-xl shadow-xs transition-all flex items-center justify-center disabled:opacity-40 cursor-pointer select-none active:scale-95"
           >
             0
           </button>
@@ -147,10 +213,36 @@ export const SairModoCriancaModal: React.FC<{
             type="button"
             disabled={tempoBloqueioRestante > 0 || carregando || pinDigits.length === 0}
             onClick={handleDelete}
-            className="h-14 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer"
+            className="h-14 rounded-2xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 text-slate-600 transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer select-none"
             title="Apagar dígito"
           >
             <Delete className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Botão Claro de Confirmação OK / Confirmar */}
+        <div className="w-full max-w-[270px] mt-3">
+          <button
+            type="button"
+            disabled={tempoBloqueioRestante > 0 || carregando || pinDigits.length !== 4}
+            onClick={handleConfirmar}
+            className={`w-full h-12 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm select-none ${
+              pinDigits.length === 4 && !carregando && tempoBloqueioRestante <= 0
+                ? 'bg-amber-500 hover:bg-amber-600 active:scale-98 text-white shadow-amber-500/30 ring-2 ring-amber-300 animate-pulse'
+                : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+            }`}
+          >
+            {carregando ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Validando PIN...</span>
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                <span>Confirmar OK</span>
+              </>
+            )}
           </button>
         </div>
 
