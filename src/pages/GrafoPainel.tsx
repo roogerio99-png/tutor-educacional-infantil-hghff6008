@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { listarDificuldades, criarDificuldade, excluirDificuldade } from '@/services/dificuldades'
 import { listarConhecimento, criarConhecimento, excluirConhecimento } from '@/services/conhecimento'

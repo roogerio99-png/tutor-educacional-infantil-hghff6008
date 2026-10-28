@@ -68,7 +68,10 @@ export async function excluirCriancaCompleto(
         filter: pb.filter('crianca = {:c}', { c: id }),
       })
       for (const r of records) {
-        await pb.collection(col).delete(r.id).catch(() => {})
+        await pb
+          .collection(col)
+          .delete(r.id)
+          .catch(() => {})
       }
     } catch {
       // Ignora se não houver registros ou erro nessa coleção
@@ -81,7 +84,10 @@ export async function excluirCriancaCompleto(
       filter: pb.filter('crianca = {:c}', { c: id }),
     })
     for (const u of usuarios) {
-      await pb.collection('criancas_usuarios').delete(u.id).catch(() => {})
+      await pb
+        .collection('criancas_usuarios')
+        .delete(u.id)
+        .catch(() => {})
     }
   } catch {
     // Ignora se não houver

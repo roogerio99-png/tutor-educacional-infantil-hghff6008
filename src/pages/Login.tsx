@@ -284,67 +284,6 @@ export default function Login() {
             </div>
           </>
         )}
-        <div>
-          <label className="block text-xs font-bold text-[#4A3B32] mb-1.5" htmlFor="email">
-            E-mail
-          </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="seu@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className={`w-full px-4 py-3 rounded-2xl bg-[#FFF8F0]/40 border ${
-              fieldErrors.email
-                ? 'border-[#D64545] focus:ring-red-400'
-                : 'border-[#EADBCE] focus:ring-[#F28C28]'
-            } text-sm text-[#4A3B32] placeholder-[#9C8B7D] focus:outline-none focus:ring-2 transition-all`}
-          />
-          {fieldErrors.email && (
-            <p className="mt-1 text-xs text-[#D64545] font-medium">{fieldErrors.email}</p>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-xs font-bold text-[#4A3B32]" htmlFor="password">
-              Senha
-            </label>
-            <Link
-              to="/esqueci-senha"
-              className="text-xs font-semibold text-[#F28C28] hover:text-[#D97A1A] transition-colors"
-            >
-              Esqueci minha senha
-            </Link>
-          </div>
-          <div className="relative">
-            <input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="Sua senha secreta"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={`w-full px-4 py-3 pr-11 rounded-2xl bg-[#FFF8F0]/40 border ${
-                fieldErrors.password
-                  ? 'border-[#D64545] focus:ring-red-400'
-                  : 'border-[#EADBCE] focus:ring-[#F28C28]'
-              } text-sm text-[#4A3B32] placeholder-[#9C8B7D] focus:outline-none focus:ring-2 transition-all`}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9C8B7D] hover:text-[#4A3B32] p-1"
-              aria-label={showPassword ? 'Ocultar senha' : 'Ver senha'}
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          {fieldErrors.password && (
-            <p className="mt-1 text-xs text-[#D64545] font-medium">{fieldErrors.password}</p>
-          )}
-        </div>
 
         <button
           type="submit"
