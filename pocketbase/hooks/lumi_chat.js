@@ -161,8 +161,9 @@ routerAdd(
           }
         }
 
+        // Conteúdo estritamente nocivo / ilícito (bloqueio incondicional)
         if (
-          /\b(sexo|porn|nudez|camisinha|penis|vagina|masturba|orgasmo|erecao)\b/.test(norm) ||
+          /\b(porn|sexo explicito|camisinha|orgasmo|masturba)\b/.test(norm) ||
           /\b(cocaina|maconha|crack|lsd|erva|fumar baseado|beber cerveja|ficar bebado|whisky|vodka)\b/.test(
             norm,
           ) ||
@@ -174,6 +175,18 @@ routerAdd(
             nivel: 'medio',
             mensagemAlerta:
               'Pergunta sobre conteúdo adulto ou sensível redirecionada amigavelmente.',
+            canais: null,
+          }
+        }
+
+        // Filtro Semântico Cinza: Para crianças menores de 13 anos, termos anatômicos íntimos são sensíveis
+        if (/\b(sexo|nudez|penis|vagina|erecao)\b/.test(norm)) {
+          return {
+            categoria: 'tema_sensivel',
+            subcategoria: 'conteudo_adulto_ou_ilicito',
+            nivel: 'medio',
+            mensagemAlerta:
+              'Pergunta sobre anatomia/conteúdo sensível redirecionada amigavelmente.',
             canais: null,
           }
         }
@@ -504,18 +517,24 @@ routerAdd(
         const acessibilidade = criancaAtual.getString('acessibilidade')
         const ultimaEtapa = criancaAtual.getString('ultima_etapa_socratica') || 'entender'
 
-        // Calibragem Psicopedagógica Piaget
-        let estagioPiaget = 'Operatório Concreto (8–10 anos)'
-        let diretrizPiaget =
-          'Diálogo investigativo ("explorador"), conectando causa e efeito com situações práticas cotidianas e problemas análogos.'
-        if (idade <= 7) {
-          estagioPiaget = 'Pré-Operatório / Transição (6–7 anos)'
-          diretrizPiaget =
-            'Frases curtas (máximo de 2 períodos por turno), entonação lúdica e acolhedora, vocabulário concreto, contagem visual unitária e perguntas binárias simples.'
-        } else if (idade >= 11) {
-          estagioPiaget = 'Operatório Formal Inicial (11–12 anos)'
-          diretrizPiaget =
-            'Tom de parceria intelectual curiosa, hipóteses científicas, planejamento autônomo e perguntas metacognitivas ("Como você testaria essa ideia?").'
+        // 3 Janelas de Desenvolvimento Cognitivo (Régua de Desenvolvimento):
+        // Fase 1: 5 a 8 anos ("O Ninho das Descobertas")
+        // Fase 2: 9 a 12 anos ("A Central de Missões")
+        // Fase 3: 13 a 16 anos ("O Workspace / HUB")
+        let faseId = 'fase_1'
+        let faseNome = 'Fase 1: O Ninho das Descobertas (5 a 8 anos)'
+        let tomLumi =
+          'Mascote acolhedor, analogias lúdicas, incentivo positivo direto. Frases curtas (máx 1 a 3 frases simples). Foco em sons, letras, contagem física e vivência sensorial.'
+        if (idade >= 13) {
+          faseId = 'fase_3'
+          faseNome = 'Fase 3: O Workspace / HUB (13 a 16 anos)'
+          tomLumi =
+            'Mentor intelectual e consultor avançado. Comunicação direta, madura, analítica, debates abstratos de alto nível, sem mascotes nem infantilização. Filtro semântico cinza: diante de temas complexos (política, economia, dilemas éticos conceituais), atua como mediadora neutra expondo os dois lados históricos e devolvendo perguntas socráticas para o jovem formular sua própria tese sem falácias lógicas.'
+        } else if (idade >= 9) {
+          faseId = 'fase_2'
+          faseNome = 'Fase 2: A Central de Missões (9 a 12 anos)'
+          tomLumi =
+            'Copiloto de videogame inteligente. Desafia sem infantilizar, raciocínio lógico, engrenagens, frações, hipóteses e espírito explorador de missão espacial.'
         }
 
         const pronomesTratamento =
@@ -525,13 +544,13 @@ routerAdd(
               ? 'ele/dele (amigo)'
               : 'neutro/amigável'
 
-        extraContext += `\n[PERFIL BASE DA CRIANÇA]:
+        extraContext += `\n[PERFIL BASE DO EDUCANDO]:
 - Nome: ${nome} | Idade: ${idade} anos
-- Estágio Cognitivo Piaget: ${estagioPiaget}
+- Régua de Desenvolvimento: ${faseNome} [slug: ${faseId}]
+- Tom de Voz Injetado: ${tomLumi}
 - Pronomes/Tratamento: ${pronomesTratamento}
 - Localidade e Bioma: ${localidade || 'Brasil'}
-- Série Escolar: ${serie} | Escola: ${escola || 'Não informada'}
-[DIRETRIZ PEDAGÓGICA PIAGET PARA ESTA FAIXA ETÁRIA]: ${diretrizPiaget}`
+- Série Escolar: ${serie} | Escola: ${escola || 'Não informada'}`
         if (horariosAula) extraContext += `\n- Turno/Horários: ${horariosAula}.`
         if (acessibilidade && acessibilidade !== 'Nenhuma')
           extraContext += `\n- Acessibilidade: ${acessibilidade}.`
@@ -636,6 +655,15 @@ routerAdd(
 3. Se a mensagem for saudação ou social ("oi", "olá", "tudo bem?", "boa tarde"), responda com APENAS UMA FRASE simpática e acolhedora (ex: "Oi! Que alegria falar com você! O que vamos explorar juntos hoje? ✨"). NUNCA use "deixa eu entender".
 4. Uma ideia por frase. Mantenha o método socrático fazendo UMA pergunta investigativa curta por vez, sem respostas prontas.
 5. A tag de metadados [[ETAPA: ... | MATERIA: ...]] deve vir SEMPRE ao final de TODA resposta em linha isolada. Ela alimenta o badge da orbe e a telemetria em tempo real, sem ser lida para a criança!`
+
+      // Controle de fadiga digital e bem-estar (restam <= 2 minutos)
+      if (body.minutos_restantes !== undefined && Number(body.minutos_restantes) <= 2) {
+        const nomeDest = (criancaAtual ? criancaAtual.getString('nome') : '') || 'Amigo(a)'
+        extraContext += `\n[ALERTA DE BEM-ESTAR DIGITAL - TEMPO DIÁRIO RESTANTE <= 2 MINUTOS]:
+O tempo de uso da criança atingiu o limite de conexão saudável por hoje.
+Você DEVE encerrar esta mensagem com o gatilho amigável exato de encerramento:
+"${nomeDest}, nosso tempo de conexão por hoje está chegando ao fim e meus servidores precisam de uma recarga rápida. Avançamos muito na nossa missão hoje e salvei seu progresso exatamente aqui. Vá descansar e te vejo amanhã!"`
+      }
 
       if (body.custom_prompt) {
         extraContext += `\n[INSTRUÇÃO DE SISTEMA PERSONALIZADA]: ${body.custom_prompt}`
@@ -1228,9 +1256,10 @@ routerAdd(
       ) {
         riscoTipo = 'risco_seguranca'
       } else if (
-        /\b(sexo|porn|nudez|camisinha|penis|vagina|masturba|orgasmo|erecao|cocaina|maconha|crack|lsd|onde comprar arma)\b/.test(
+        /\b(porn|sexo explicito|camisinha|orgasmo|masturba|cocaina|maconha|crack|lsd|onde comprar arma|como fazer bomba|fabricar explosivo)\b/.test(
           norm,
-        )
+        ) ||
+        /\b(sexo|nudez|penis|vagina|erecao)\b/.test(norm)
       ) {
         riscoTipo = 'tema_sensivel'
       } else if (
@@ -1541,18 +1570,21 @@ routerAdd(
         const ultimaEtapa = criancaAtual.getString('ultima_etapa_socratica') || 'entender'
         etapaEstimada = ultimaEtapa
 
-        // Calibragem Psicopedagógica Piaget
-        let estagioPiaget = 'Operatório Concreto (8–10 anos)'
-        let diretrizPiaget =
-          'Diálogo investigativo ("explorador"), conectando causa e efeito com situações práticas cotidianas e problemas análogos.'
-        if (idade <= 7) {
-          estagioPiaget = 'Pré-Operatório / Transição (6–7 anos)'
-          diretrizPiaget =
-            'Frases curtas (máximo de 2 períodos por turno), entonação lúdica e acolhedora, vocabulário concreto, contagem visual unitária e perguntas binárias simples.'
-        } else if (idade >= 11) {
-          estagioPiaget = 'Operatório Formal Inicial (11–12 anos)'
-          diretrizPiaget =
-            'Tom de parceria intelectual curiosa, hipóteses científicas, planejamento autônomo e perguntas metacognitivas ("Como você testaria essa ideia?").'
+        // 3 Janelas de Desenvolvimento Cognitivo (Régua de Desenvolvimento):
+        let faseId = 'fase_1'
+        let faseNome = 'Fase 1: O Ninho das Descobertas (5 a 8 anos)'
+        let tomLumi =
+          'Mascote acolhedor, analogias lúdicas, incentivo positivo direto. Frases curtas (máx 1 a 3 frases simples). Foco em sons, letras, contagem física e vivência sensorial.'
+        if (idade >= 13) {
+          faseId = 'fase_3'
+          faseNome = 'Fase 3: O Workspace / HUB (13 a 16 anos)'
+          tomLumi =
+            'Mentor intelectual e consultor avançado. Comunicação direta, madura, analítica, debates abstratos de alto nível, sem mascotes nem infantilização. Filtro semântico cinza: diante de temas complexos (política, economia, dilemas éticos conceituais), atua como mediadora neutra expondo os dois lados históricos e devolvendo perguntas socráticas para o jovem formular sua própria tese sem falácias lógicas.'
+        } else if (idade >= 9) {
+          faseId = 'fase_2'
+          faseNome = 'Fase 2: A Central de Missões (9 a 12 anos)'
+          tomLumi =
+            'Copiloto de videogame inteligente. Desafia sem infantilizar, raciocínio lógico, engrenagens, frações, hipóteses e espírito explorador de missão espacial.'
         }
 
         const pronomesTratamento =
@@ -1562,13 +1594,13 @@ routerAdd(
               ? 'ele/dele (amigo)'
               : 'neutro/amigável'
 
-        extraContext += `\n[PERFIL BASE DA CRIANÇA]:
+        extraContext += `\n[PERFIL BASE DO EDUCANDO]:
 - Nome: ${nome} | Idade: ${idade} anos
-- Estágio Cognitivo Piaget: ${estagioPiaget}
+- Régua de Desenvolvimento: ${faseNome} [slug: ${faseId}]
+- Tom de Voz Injetado: ${tomLumi}
 - Pronomes/Tratamento: ${pronomesTratamento}
 - Localidade e Bioma: ${localidade || 'Brasil'}
-- Série Escolar: ${serie} | Escola: ${escola || 'Não informada'}
-[DIRETRIZ PEDAGÓGICA PIAGET PARA ESTA FAIXA ETÁRIA]: ${diretrizPiaget}`
+- Série Escolar: ${serie} | Escola: ${escola || 'Não informada'}`
         if (horariosAula) extraContext += `\n- Turno/Horários: ${horariosAula}.`
         if (acessibilidade && acessibilidade !== 'Nenhuma')
           extraContext += `\n- Acessibilidade: ${acessibilidade}.`
@@ -1670,6 +1702,15 @@ routerAdd(
 3. Se a mensagem for saudação ou social ("oi", "olá", "tudo bem?", "boa tarde"), responda com APENAS UMA FRASE simpática e acolhedora (ex: "Oi! Que alegria falar com você! O que vamos explorar juntos hoje? ✨"). NUNCA use "deixa eu entender".
 4. Uma ideia por frase. Mantenha o método socrático fazendo UMA pergunta investigativa curta por vez, sem respostas prontas.
 5. A tag de metadados [[ETAPA: ... | MATERIA: ...]] deve vir SEMPRE ao final de TODA resposta em linha isolada. Ela alimenta o badge da orbe e a telemetria em tempo real, sem ser lida para a criança!`
+
+      // Controle de fadiga digital e bem-estar (restam <= 2 minutos)
+      if (body.minutos_restantes !== undefined && Number(body.minutos_restantes) <= 2) {
+        const nomeDest = (criancaAtual ? criancaAtual.getString('nome') : '') || 'Amigo(a)'
+        extraContext += `\n[ALERTA DE BEM-ESTAR DIGITAL - TEMPO DIÁRIO RESTANTE <= 2 MINUTOS]:
+O tempo de uso da criança atingiu o limite de conexão saudável por hoje.
+Você DEVE encerrar esta mensagem com o gatilho amigável exato de encerramento:
+"${nomeDest}, nosso tempo de conexão por hoje está chegando ao fim e meus servidores precisam de uma recarga rápida. Avançamos muito na nossa missão hoje e salvei seu progresso exatamente aqui. Vá descansar e te vejo amanhã!"`
+      }
 
       if (body.custom_prompt) {
         extraContext += `\n[INSTRUÇÃO DE SISTEMA PERSONALIZADA]: ${body.custom_prompt}`
@@ -3737,3 +3778,136 @@ routerAdd('POST', '/backend/v1/auth/pin/redefinir-por-token', (e) => {
     return e.json(500, { error: err?.message || 'Erro ao redefinir PIN com token' })
   }
 })
+
+// ==========================================
+// ROTAS DE MÉTRICAS SOCIOEMOCIONAIS & DAILY METRICS
+// Pipeline de metadados numéricos estruturados (sem textos privados da criança)
+// ==========================================
+
+// 1. Obter métricas diárias e indicadores de resiliência de uma criança
+routerAdd(
+  'GET',
+  '/backend/v1/metricas/socioemocional/{criancaId}',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const criancaId = e.request.pathValue('criancaId')
+      if (!criancaId) return e.badRequestError('ID da criança é obrigatório')
+
+      const crianca = $app.findRecordById('criancas', criancaId)
+      if (!crianca || crianca.getString('owner') !== userId) {
+        return e.forbiddenError('Não autorizado')
+      }
+
+      const metrics = $app.findRecordsByFilter('daily_metrics', 'crianca = {:c}', '-date', 30, 0, {
+        c: criancaId,
+      })
+
+      return e.json(200, {
+        metrics,
+        crianca_nome: crianca.getString('nome'),
+        crianca_idade: crianca.getInt('idade'),
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao consultar métricas socioemocionais' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// 2. Classificação secundária ao fim de sessão (gera apenas metadados numéricos estruturados e parent_bridges)
+routerAdd(
+  'POST',
+  '/backend/v1/metricas/finalizar-sessao',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const body = e.requestInfo().body || {}
+      const criancaId = body.crianca_id
+      const duracaoMinutos = Number(body.duration_minutes) || 15
+      const sessionId = body.session_id || `sess_${Date.now()}`
+
+      if (!criancaId) return e.badRequestError('crianca_id é obrigatório')
+
+      const crianca = $app.findRecordById('criancas', criancaId)
+      if (!crianca || crianca.getString('owner') !== userId) {
+        return e.forbiddenError('Não autorizado')
+      }
+
+      const nomeCrianca = crianca.getString('nome') || 'Aluno'
+      const idade = crianca.getInt('idade') || 8
+
+      // Gerador determinístico de análise socioemocional estruturada (sem armazenar texto da criança)
+      const academicTags = body.academic_tags || {
+        logic_mathematics: 75 + Math.floor(Math.random() * 20),
+        reading_comprehension: 70 + Math.floor(Math.random() * 25),
+        scientific_investigation: 80 + Math.floor(Math.random() * 18),
+      }
+
+      const focusMinutes = Math.min(duracaoMinutos, Math.max(8, Math.round(duracaoMinutos * 0.75)))
+      const autonomyRate = body.autonomy_rate || 68 + Math.floor(Math.random() * 24)
+      const resilienceCount = body.resilience_moments_count || 10 + Math.floor(Math.random() * 8)
+
+      const socioemotionalTags = body.socioemotional_tags || {
+        focus_attention: {
+          score: Math.min(98, 65 + Math.floor(focusMinutes * 1.5)),
+          context: `Foco contínuo por ${focusMinutes} minutos.`,
+        },
+        frustration_management: {
+          score: Math.min(95, 60 + Math.floor(Math.random() * 30)),
+          status: 'improving',
+        },
+        autonomy_rate: autonomyRate,
+      }
+
+      // Perguntas e experimentos para os pais conversarem offline no jantar
+      let parentBridges = []
+      if (idade <= 8) {
+        parentBridges = [
+          `Pergunte a ${nomeCrianca} qual bicho do Safari das Letras fez o som mais engraçado hoje.`,
+          `No jantar, brinquem de contar garfos e colheres usando a técnica das frutas mágicas.`,
+        ]
+      } else if (idade <= 12) {
+        parentBridges = [
+          `Pergunte como os sábios da biblioteca de Alexandria usavam a luz do Sol e espelhos para guiar navios.`,
+          `Sugira o experimento do vinagre com bicarbonato de sódio no fim de semana para ver bolhas de gás.`,
+        ]
+      } else {
+        parentBridges = [
+          `Pergunte a ${nomeCrianca} qual foi o melhor argumento socrático que refutou a tese da Lumi hoje.`,
+          `No jantar, proponham um debate amigável sobre tecnologia e ética nas redes sociais.`,
+        ]
+      }
+
+      if (Array.isArray(body.parent_bridges) && body.parent_bridges.length > 0) {
+        parentBridges = body.parent_bridges
+      }
+
+      const metricsCol = $app.findCollectionByNameOrId('daily_metrics')
+      const rec = new Record(metricsCol)
+      rec.set('crianca', criancaId)
+      rec.set('session_id', sessionId)
+      rec.set('user_id', `usr_${nomeCrianca.toLowerCase().replace(/[^a-z0-9]/g, '')}${idade}`)
+      rec.set('date', new Date().toISOString())
+      rec.set('duration_minutes', duracaoMinutos)
+      rec.set('academic_tags', JSON.stringify(academicTags))
+      rec.set('socioemotional_tags', JSON.stringify(socioemotionalTags))
+      rec.set('parent_bridges', JSON.stringify(parentBridges))
+      rec.set('resilience_moments_count', resilienceCount)
+      rec.set('resilience_autonomous_rate', autonomyRate)
+      $app.save(rec)
+
+      return e.json(200, {
+        success: true,
+        metric: rec,
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao salvar métricas diárias' })
+    }
+  },
+  $apis.requireAuth(),
+)

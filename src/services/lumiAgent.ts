@@ -7,6 +7,7 @@ export interface EnviarMensagemLumiParams {
   conversationId?: string | null
   criancaId?: string | null
   customPrompt?: string | null
+  minutosRestantes?: number
   signal?: AbortSignal
 }
 
@@ -37,6 +38,8 @@ export async function enviarMensagemLumiSync(
       conversation_id: params.conversationId || null,
       crianca_id: params.criancaId || null,
       custom_prompt: params.customPrompt || null,
+      minutos_restantes:
+        params.minutosRestantes !== undefined ? params.minutosRestantes : undefined,
     }),
     signal: params.signal,
   })
@@ -74,6 +77,8 @@ export async function enviarMensagemLumiStream(
       conversation_id: params.conversationId || null,
       crianca_id: params.criancaId || null,
       custom_prompt: params.customPrompt || null,
+      minutos_restantes:
+        params.minutosRestantes !== undefined ? params.minutosRestantes : undefined,
     }),
     signal: params.signal,
   })

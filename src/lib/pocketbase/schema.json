@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-28T17:01:47.149Z",
+  "generatedAt": "2026-10-28T17:24:03.069Z",
   "collections": [
     {
       "name": "users",
@@ -830,6 +830,191 @@
       "indexes": [
         "CREATE INDEX idx_pin_tokens_user ON pin_reset_tokens (user)",
         "CREATE INDEX idx_pin_tokens_hash ON pin_reset_tokens (token_hash)"
+      ]
+    },
+    {
+      "name": "missoes_bncc",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\"",
+        "view": "@request.auth.id != \"\"",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.id != \"\"",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "fase",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["fase_1", "fase_2", "fase_3"]
+        },
+        {
+          "name": "faixa_etaria",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "materia",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "habilidades_bncc",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tipo_interacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "recursos_midia",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ordem",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ativo",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_missoes_bncc_fase ON missoes_bncc (fase)",
+        "CREATE INDEX idx_missoes_bncc_ordem ON missoes_bncc (ordem)"
+      ]
+    },
+    {
+      "name": "daily_metrics",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\"",
+        "view": "@request.auth.id != \"\"",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.id != \"\"",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "crianca",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "criancas"
+        },
+        {
+          "name": "session_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "user_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "date",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "duration_minutes",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "academic_tags",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "socioemotional_tags",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parent_bridges",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resilience_moments_count",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "resilience_autonomous_rate",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_daily_metrics_crianca ON daily_metrics (crianca)",
+        "CREATE INDEX idx_daily_metrics_date ON daily_metrics (date)",
+        "CREATE INDEX idx_daily_metrics_session ON daily_metrics (session_id)"
       ]
     }
   ]

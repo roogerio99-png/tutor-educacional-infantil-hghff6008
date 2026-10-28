@@ -142,6 +142,96 @@ export interface AgendaRecord extends RecordModel {
   }
 }
 
+export type FaseDesenvolvimentoId = 'fase_1' | 'fase_2' | 'fase_3'
+
+export interface FaseDesenvolvimentoConfig {
+  id: FaseDesenvolvimentoId
+  titulo: string
+  subtitulo: string
+  faixaEtaria: string
+  idadeMin: number
+  idadeMax: number
+  ttsObrigatorio: boolean
+  estilo: {
+    themeClass: string
+    primaryColor: string
+    accentColor: string
+    badgeBg: string
+    badgeText: string
+    cardClass: string
+    buttonClass: string
+    inputClass: string
+    fontClass: string
+  }
+  tomIA: string
+  diretrizTom: string
+}
+
+export interface MissaoBnccRecord extends RecordModel {
+  fase: FaseDesenvolvimentoId
+  faixa_etaria: string
+  titulo: string
+  materia: string
+  descricao: string
+  habilidades_bncc?: string
+  tipo_interacao?: string
+  recursos_midia?:
+    | {
+        icone?: string
+        cor?: string
+        som_exemplo?: string
+        foco?: string
+        [key: string]: unknown
+      }
+    | string
+  ordem?: number
+  ativo?: boolean
+}
+
+export interface AcademicTags {
+  logic_mathematics?: number
+  reading_comprehension?: number
+  scientific_investigation?: number
+  [key: string]: number | undefined
+}
+
+export interface SocioemotionalTags {
+  focus_attention?: {
+    score: number
+    context?: string
+  }
+  frustration_management?: {
+    score: number
+    status?: string
+  }
+  autonomy_rate?: number
+  [key: string]: unknown
+}
+
+export interface DailyMetricRecord extends RecordModel {
+  crianca: string
+  session_id: string
+  user_id: string
+  date: string
+  duration_minutes: number
+  academic_tags: AcademicTags | string
+  socioemotional_tags: SocioemotionalTags | string
+  parent_bridges: string[] | string
+  resilience_moments_count?: number
+  resilience_autonomous_rate?: number
+  expand?: {
+    crianca?: CriancaRecord
+  }
+}
+
+export interface MetaKanban {
+  id: string
+  titulo: string
+  materia: string
+  status: 'planejado' | 'em_progresso' | 'concluido'
+  dataLimite?: string
+}
+
 export interface SystemPromptRecord extends RecordModel {
   owner: string
   titulo: string

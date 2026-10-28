@@ -9,7 +9,13 @@ import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
 import { BotaoVozCrianca } from '@/components/BotaoVozCrianca'
 import { BotaoOuvirLumi } from '@/components/BotaoOuvirLumi'
 import { ToggleModoConversacao } from '@/components/ToggleModoConversacao'
-import type { EtapaSocratica, AcaoLumiExecutada, HumorEmocional } from '@/types'
+import type {
+  EtapaSocratica,
+  AcaoLumiExecutada,
+  HumorEmocional,
+  MissaoBnccRecord,
+  MetaKanban,
+} from '@/types'
 import { TrilhaEtapasSocraticas } from '@/components/TrilhaEtapasSocraticas'
 import { CartaoAcaoLumi } from '@/components/CartaoAcaoLumi'
 import { CheckinEmocionalCard } from '@/components/CheckinEmocionalCard'
@@ -18,6 +24,12 @@ import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 import { OrbeLumiLive, type EstadoLumiLive } from '@/components/OrbeLumiLive'
 import { BarraCenariosTeste, type CenárioTesteInfo } from '@/components/BarraCenariosTeste'
 import { TelemetriaCerebro, type EventoTelemetria } from '@/components/TelemetriaCerebro'
+import { obterFasePorIdade } from '@/services/fasesAdaptativas'
+import { listarMissoesPorFase } from '@/services/missoesBncc'
+import { MissoesBnccContainer } from '@/components/fases/MissoesBnccContainer'
+import { KanbanMetasWorkspace } from '@/components/fases/KanbanMetasWorkspace'
+import { finalizarSessaoMetricas } from '@/services/metricasSocioemocionais'
+import { obterStatusUsoHoje } from '@/services/tempoUso'
 import {
   MessageCircle,
   Palette,
@@ -118,28 +130,62 @@ export const ConversaQuadro: React.FC = () => {
     return PRESETS_RITMO.find((r) => r.id === ritmoId) || PRESETS_RITMO[0]
   }, [ritmoId])
 
+  // Fase Adaptativa (Régua de Desenvolvimento 1, 2 e 3)
+  const faseAtual = useMemo(() => {
+    return obterFasePorIdade(criancaSelecionada?.idade)
+  }, [criancaSelecionada?.idade])
+
+  // Missões BNCC da fase
+  const [missoesFase, setMissoesFase] = useState<MissaoBnccRecord[]>([])
+
+  // Kanban de metas para Fase 3 (Workspace)
+  const [metasKanban, setMetasKanban] = useState<MetaKanban[]>([
+    {
+      id: 'meta-1',
+      titulo: 'Modelar equações de cinemática vetorial',
+      materia: 'Física',
+      status: 'em_progresso',
+    },
+    {
+      id: 'meta-2',
+      titulo: 'Refutar argumentos com falácias lógicas no Tribunal Socrático',
+      materia: 'Filosofia',
+      status: 'planejado',
+    },
+    {
+      id: 'meta-3',
+      titulo: 'Redação dissertativa sobre ética e inteligência artificial',
+      materia: 'Redação',
+      status: 'concluido',
+    },
+  ])
+
+  // Controle de Fadiga Digital e Tempo Restante (<= 2 min dispara gatilho amigável e bloqueio passivo)
+  const [minutosRestantesUso, setMinutosRestantesUso] = useState<number | null>(null)
+  const [chatBloqueadoPorTempo, setChatBloqueadoPorTempo] = useState(false)
+  const [gatilhoFadigaInjetado, setGatilhoFadigaInjetado] = useState(false)
+
   // Calibragem Psicopedagógica Piaget
   const estagioPiaget = useMemo(() => {
     const idade = criancaSelecionada?.idade || 8
-    if (idade <= 7) {
+    if (idade <= 8) {
       return {
-        nome: 'Pré-Operatório / Transição',
-        faixa: '6–7 anos',
-        descricao:
-          'Frases curtas (máx. 2 períodos), vocabulário concreto, contagem visual unitária.',
+        nome: 'O Ninho das Descobertas (Fase 1)',
+        faixa: '5–8 anos',
+        descricao: 'Alfabetização, consciência fonológica, contagem concreta e TTS em voz alta.',
       }
     }
-    if (idade >= 11) {
+    if (idade >= 13) {
       return {
-        nome: 'Operatório Formal Inicial',
-        faixa: '11–12 anos',
-        descricao: 'Parceria intelectual, hipóteses científicas e perguntas metacognitivas.',
+        nome: 'O Workspace / HUB (Fase 3)',
+        faixa: '13–16 anos',
+        descricao: 'Mentor intelectual, dialética avançada, Kanban de metas e dark mode.',
       }
     }
     return {
-      nome: 'Operatório Concreto',
-      faixa: '8–10 anos',
-      descricao: 'Diálogo investigativo conectando causa e efeito, problemas análogos.',
+      nome: 'A Central de Missões (Fase 2)',
+      faixa: '9–12 anos',
+      descricao: 'Copiloto de missões, lógica, engrenagens, frações e estética futurista.',
     }
   }, [criancaSelecionada?.idade])
 
@@ -391,12 +437,17 @@ export const ConversaQuadro: React.FC = () => {
       ])
 
       try {
+        // Se minutos restantes <= 2, passa no parâmetro para o encerramento amigável
+        const minutosRestantesParam =
+          minutosRestantesUso !== null && minutosRestantesUso <= 2 ? minutosRestantesUso : undefined
+
         const res = await enviarMensagemLumiStream(
           {
             message: textoLimpo,
             conversationId,
             criancaId: criancaSelecionada?.id,
             customPrompt: customPromptText,
+            minutosRestantes: minutosRestantesParam,
           },
           {
             onChunk: (_delta, full) => {
@@ -473,20 +524,42 @@ export const ConversaQuadro: React.FC = () => {
           ),
         )
 
-        // Se síntese vocal estiver habilitada, lê a resposta em voz alta!
-        if (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe') && textoFinalLumi) {
+        // TTS Obrigatório na Fase 1 (5 a 8 anos) para apoiar crianças em alfabetização!
+        if (
+          (faseAtual.ttsObrigatorio ||
+            (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe'))) &&
+          textoFinalLumi
+        ) {
           setMensagemFalandoId(lumiMsgId)
           setLegendaFalando(textoFinalLumi)
           synthSpeak(textoFinalLumi)
         }
+
+        // Se o tempo restava <= 2 minutos ou a resposta continha a frase de encerramento amigável:
+        if (
+          (minutosRestantesUso !== null && minutosRestantesUso <= 2) ||
+          textoFinalLumi.includes('nosso tempo de conexão por hoje está chegando ao fim')
+        ) {
+          setGatilhoFadigaInjetado(true)
+          // Bloqueio passivo suave após a resposta terminar sem cortar o diálogo
+          setTimeout(() => {
+            setChatBloqueadoPorTempo(true)
+          }, 3500)
+        }
       } catch (streamErr) {
         console.warn('Streaming falhou, tentando fallback síncrono:', streamErr)
         try {
+          const minutosRestantesParamFallback =
+            minutosRestantesUso !== null && minutosRestantesUso <= 2
+              ? minutosRestantesUso
+              : undefined
+
           const syncRes = await enviarMensagemLumiSync({
             message: textoLimpo,
             conversationId,
             criancaId: criancaSelecionada?.id,
             customPrompt: customPromptText,
+            minutosRestantes: minutosRestantesParamFallback,
           })
 
           if (syncRes.conversation_id) {
@@ -523,10 +596,24 @@ export const ConversaQuadro: React.FC = () => {
             ),
           )
 
-          if (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe') && syncRes.content) {
+          if (
+            (faseAtual.ttsObrigatorio ||
+              (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe'))) &&
+            syncRes.content
+          ) {
             setMensagemFalandoId(lumiMsgId)
             setLegendaFalando(syncRes.content)
             synthSpeak(syncRes.content)
+          }
+
+          if (
+            (minutosRestantesUso !== null && minutosRestantesUso <= 2) ||
+            syncRes.content.includes('nosso tempo de conexão por hoje está chegando ao fim')
+          ) {
+            setGatilhoFadigaInjetado(true)
+            setTimeout(() => {
+              setChatBloqueadoPorTempo(true)
+            }, 3500)
           }
         } catch (err: unknown) {
           console.error('Falha geral na IA:', err)
@@ -773,15 +860,104 @@ export const ConversaQuadro: React.FC = () => {
     await enviarTexto(inputText)
   }
 
-  // Sugestões rápidas amigáveis
-  const sugestoesRapidas = [
-    'Como as plantas bebem água?',
-    'Me ajuda a entender frações?',
-    'Por que usamos a letra Ç?',
-    'Tenho lição de ciências hoje!',
-    'Terminei minha tarefinha!',
-    'Quero um desafio divertido!',
-  ]
+  // Carregar missões da fase atual
+  useEffect(() => {
+    listarMissoesPorFase(faseAtual.id).then((missoes) => {
+      setMissoesFase(missoes)
+    })
+  }, [faseAtual.id])
+
+  // Monitorar tempo restante de uso da criança para bem-estar digital (fadiga aos <= 2 minutos)
+  useEffect(() => {
+    if (!criancaSelecionada) return
+
+    let montado = true
+    const verificarTempo = async () => {
+      try {
+        const status = await obterStatusUsoHoje(criancaSelecionada.id)
+        if (!montado) return
+        if (status.limite_diario_min > 0) {
+          const rest = Math.max(0, status.tempo_restante_min)
+          setMinutosRestantesUso(rest)
+          if (rest <= 0 || status.bloqueado) {
+            setChatBloqueadoPorTempo(true)
+          }
+        } else {
+          setMinutosRestantesUso(null)
+          setChatBloqueadoPorTempo(status.bloqueado)
+        }
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+
+    verificarTempo()
+    const timer = setInterval(verificarTempo, 30000)
+    return () => {
+      montado = false
+      clearInterval(timer)
+    }
+  }, [criancaSelecionada])
+
+  // Iniciar missão ao clicar
+  const handleIniciarMissao = (missao: MissaoBnccRecord) => {
+    enviarTexto(`Quero explorar a missão "${missao.titulo}". Como começamos?`)
+  }
+
+  // Ouvir missão em TTS (obrigatório / facilitador para Fase 1)
+  const handleOuvirMissao = (texto: string) => {
+    synthStop()
+    synthSpeak(texto)
+  }
+
+  // Ações do Kanban de Metas da Fase 3
+  const handleAtualizarStatusKanban = (
+    id: string,
+    novoStatus: 'planejado' | 'em_progresso' | 'concluido',
+  ) => {
+    setMetasKanban((prev) => prev.map((m) => (m.id === id ? { ...m, status: novoStatus } : m)))
+  }
+
+  const handleAdicionarMetaKanban = () => {
+    const titulo = prompt('Título da nova meta acadêmica:')
+    if (!titulo || !titulo.trim()) return
+    const nova: MetaKanban = {
+      id: `meta-${Date.now()}`,
+      titulo: titulo.trim(),
+      materia: 'Geral',
+      status: 'planejado',
+    }
+    setMetasKanban((prev) => [...prev, nova])
+  }
+
+  // Sugestões rápidas amigáveis adaptadas por fase
+  const sugestoesRapidas = useMemo(() => {
+    if (faseAtual.id === 'fase_1') {
+      return [
+        'Qual o som da letra B?',
+        'Vamos contar maçãs coloridas?',
+        'Me conta uma historinha curta!',
+        'Como os passarinhos voam?',
+        'Quero desenhar no quadro!',
+      ]
+    }
+    if (faseAtual.id === 'fase_2') {
+      return [
+        'Como funciona a Operação Alexandria?',
+        'Como as frações dividem uma pizza?',
+        'Como os espelhos refletem a luz?',
+        'Me desafia com um enigma espacial!',
+        'Como equilibrar a teia de um bioma?',
+      ]
+    }
+    return [
+      'Proponha uma tese para o Tribunal Socrático',
+      'Como funciona a aceleração na cinemática vetorial?',
+      'Identifique falácias lógicas neste argumento',
+      'Debata os impactos éticos da automação',
+      'Como estruturar uma redação nota 1000?',
+    ]
+  }, [faseAtual.id])
 
   const handleTrocarTopicoQuadro = () => {
     const opcao = prompt(
@@ -869,14 +1045,61 @@ export const ConversaQuadro: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-8">
-      {/* 1. Trilha Socrática em linguagem infantil e discreta */}
+    <div
+      className={`space-y-4 max-w-7xl mx-auto pb-8 transition-colors duration-300 ${
+        faseAtual.id === 'fase_1'
+          ? 'fase-ninho-descobertas'
+          : faseAtual.id === 'fase_2'
+            ? 'fase-central-missoes bg-slate-950 text-slate-100 p-2 sm:p-4 rounded-3xl'
+            : 'fase-workspace-hub bg-zinc-950 text-zinc-100 p-2 sm:p-4 rounded-2xl'
+      }`}
+    >
+      {/* Banner de Bem-Estar Digital / Fadiga quando restar <= 2 minutos */}
+      {minutosRestantesUso !== null && minutosRestantesUso <= 2 && (
+        <div className="bg-amber-500/20 border-2 border-amber-400 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-amber-900 dark:text-amber-200">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl animate-pulse">⏳</span>
+            <div>
+              <p className="font-extrabold text-xs sm:text-sm">
+                Hora de desacelerar por hoje, {criancaSelecionada?.nome || 'amigo(a)'}!
+              </p>
+              <p className="text-[11px] opacity-90">
+                Restam menos de 2 minutos para descansar a mente e recarregar os servidores da Lumi.
+              </p>
+            </div>
+          </div>
+          {chatBloqueadoPorTempo && (
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500 text-white shadow-sm shrink-0">
+              Sessão Salva 🌟
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 1. Missões BNCC adaptadas à fase atual */}
+      <MissoesBnccContainer
+        missoes={missoesFase}
+        fase={faseAtual.id}
+        onIniciarMissao={handleIniciarMissao}
+        onOuvirMissao={handleOuvirMissao}
+      />
+
+      {/* 2. Para Fase 3 (Workspace): Kanban de Metas e Estudos Dirigidos */}
+      {faseAtual.id === 'fase_3' && (
+        <KanbanMetasWorkspace
+          metas={metasKanban}
+          onAtualizarStatus={handleAtualizarStatusKanban}
+          onAdicionarMeta={handleAdicionarMetaKanban}
+        />
+      )}
+
+      {/* 3. Trilha Socrática em linguagem infantil e discreta */}
       <TrilhaEtapasSocraticas
         etapaAtiva={etapaAtual}
         onSelecionarEtapa={(et) => setEtapaAtual(et)}
       />
 
-      {/* 2. Barra de Cenários Rápidos de Teste (visível apenas para o Responsável, escondida no Modo Criança) */}
+      {/* 4. Barra de Cenários Rápidos de Teste (visível apenas para o Responsável, escondida no Modo Criança) */}
       {!modoCriancaAtivo && (
         <BarraCenariosTeste onExecutarCenario={handleExecutarCenario} disabled={enviando} />
       )}
@@ -1297,49 +1520,82 @@ export const ConversaQuadro: React.FC = () => {
             </>
           )}
 
-          {/* Caixa de Entrada Amigável para Crianças */}
-          <form
-            onSubmit={handleEnviar}
-            className="p-3 sm:p-3.5 bg-white border-t border-amber-100 flex items-center gap-2.5"
-          >
-            <BotaoVozCrianca
-              isListening={isListening}
-              isSupported={recSuportado}
-              disabled={enviando}
-              onClick={toggleListening}
-              acessibilidadeReforcada={acessibilidadeReforcada}
-              tamanho={modoConversacaoVoz ? 'grande' : 'normal'}
-              permissionDenied={permissionDenied}
-            />
-
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={
-                isListening
-                  ? 'Ouvindo sua voz com carinho... 🎤'
-                  : modoConversacaoVoz
-                    ? 'Fale no microfone ou digite aqui...'
-                    : 'Escreva pra Lumi ou toque no microfone...'
-              }
-              disabled={enviando}
-              className={`flex-1 px-4 py-3 sm:py-3.5 rounded-2xl border-2 border-amber-200/80 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200 bg-amber-50/20 text-slate-800 placeholder:text-slate-400 ${
-                fonteGrande ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
+          {/* Caixa de Entrada Amigável ou Bloqueio de Bem-Estar */}
+          {chatBloqueadoPorTempo ? (
+            <div className="p-4 bg-amber-50/90 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-900/60 text-center flex flex-col items-center justify-center gap-2">
+              <span className="text-2xl">🌙</span>
+              <p className="font-extrabold text-sm text-amber-900 dark:text-amber-200">
+                Seu tempo de conexão de hoje terminou!
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-300 max-w-md">
+                A Lumi já guardou todo o seu progresso socrático com carinho. Vá descansar, brincar
+                offline ou conversar com sua família!
+              </p>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleEnviar}
+              className={`p-3 sm:p-3.5 border-t flex items-center gap-2.5 ${
+                faseAtual.id === 'fase_1'
+                  ? 'bg-amber-50/50 border-amber-200'
+                  : faseAtual.id === 'fase_2'
+                    ? 'bg-slate-900 border-purple-500/40'
+                    : 'bg-zinc-900 border-zinc-800'
               }`}
-            />
-
-            <button
-              type="submit"
-              disabled={!inputText.trim() || enviando}
-              aria-label="Enviar mensagem"
-              className="px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-extrabold text-sm sm:text-base shadow-md shadow-amber-500/30 disabled:opacity-40 transition-all flex items-center gap-2 shrink-0 cursor-pointer min-h-[48px]"
             >
-              <span>Enviar</span>
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+              <BotaoVozCrianca
+                isListening={isListening}
+                isSupported={recSuportado}
+                disabled={enviando}
+                onClick={toggleListening}
+                acessibilidadeReforcada={acessibilidadeReforcada}
+                tamanho={
+                  faseAtual.id === 'fase_1' ? 'grande' : modoConversacaoVoz ? 'grande' : 'normal'
+                }
+                permissionDenied={permissionDenied}
+              />
+
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder={
+                  isListening
+                    ? 'Ouvindo sua voz com carinho... 🎤'
+                    : faseAtual.id === 'fase_1'
+                      ? 'Diga ou digite o que descobriu...'
+                      : faseAtual.id === 'fase_2'
+                        ? 'Comando de missão ou dúvida...'
+                        : 'Escreva sua tese ou dúvida...'
+                }
+                disabled={enviando}
+                className={`flex-1 px-4 py-3 sm:py-3.5 ${
+                  faseAtual.id === 'fase_1'
+                    ? 'rounded-2xl border-2 border-amber-300 bg-white text-slate-900 text-lg'
+                    : faseAtual.id === 'fase_2'
+                      ? 'rounded-xl border border-purple-500/50 bg-slate-950 text-purple-100 placeholder:text-slate-400 text-sm'
+                      : 'rounded-lg border border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-500 text-sm'
+                }`}
+              />
+
+              <button
+                type="submit"
+                disabled={!inputText.trim() || enviando}
+                aria-label="Enviar mensagem"
+                className={`flex items-center gap-2 shrink-0 cursor-pointer ${
+                  faseAtual.id === 'fase_1'
+                    ? 'h-14 px-6 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-500 hover:to-orange-500 text-white font-black text-lg shadow-md active:scale-95'
+                    : faseAtual.id === 'fase_2'
+                      ? 'h-12 px-5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-md'
+                      : 'h-10 px-4 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium text-xs border border-zinc-700'
+                }`}
+              >
+                <span>Enviar</span>
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          )}
         </div>
 
         {/* Coluna do Quadro Visual e Apoio Socioemocional (5 colunas no desktop) */}
