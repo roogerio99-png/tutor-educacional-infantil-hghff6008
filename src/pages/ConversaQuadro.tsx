@@ -53,7 +53,7 @@ interface ChatMessage {
   acoes?: AcaoLumiExecutada[]
 }
 
-// Presets de Ritmo da Voz
+// Presets de Ritmo da Voz calibrados para ritmo natural humano
 interface RitmoPreset {
   id: string
   nome: string
@@ -62,20 +62,30 @@ interface RitmoPreset {
 }
 
 const PRESETS_RITMO: RitmoPreset[] = [
-  { id: 'rapido', nome: '⚡ Rápido (1.35x)', rate: 1.35, descricao: 'Ágil e dinâmico (padrão)' },
-  {
-    id: 'calmo',
-    nome: '🐢 Bem Calmo (0.85x)',
-    rate: 0.85,
-    descricao: 'Pausado para alfabetização',
-  },
   {
     id: 'natural',
-    nome: 'Natural Infantil (0.95x)',
-    rate: 0.95,
-    descricao: 'Cadência suave de história',
+    nome: '🌿 Natural & Viva (1.05x)',
+    rate: 1.05,
+    descricao: 'Ritmo real caloroso e entusiasmado (recomendado)',
   },
-  { id: 'dinamico', nome: 'Dinâmico (1.08x)', rate: 1.08, descricao: 'Ritmo conversacional ativo' },
+  {
+    id: 'dinamico',
+    nome: '⚡ Dinâmica (1.15x)',
+    rate: 1.15,
+    descricao: 'Mais ágil sem soar robótica',
+  },
+  {
+    id: 'calmo',
+    nome: '🐢 Bem Calmo (0.90x)',
+    rate: 0.9,
+    descricao: 'Pausado para alfabetização e foco',
+  },
+  {
+    id: 'historinha',
+    nome: '📖 Contadora (0.98x)',
+    rate: 0.98,
+    descricao: 'Cadência expressiva e acolhedora',
+  },
 ]
 
 export const ConversaQuadro: React.FC = () => {
@@ -117,12 +127,17 @@ export const ConversaQuadro: React.FC = () => {
     }
   })
 
-  // Ritmo da Voz (Presets: Padrão 1.35x)
+  // Ritmo da Voz (Presets: Padrão Natural 1.05x, migrando 'rapido' antigo se houver)
   const [ritmoId, setRitmoId] = useState<string>(() => {
     try {
-      return localStorage.getItem('lumi_ritmo_voz') || 'rapido'
+      const salvo = localStorage.getItem('lumi_ritmo_voz')
+      if (salvo === 'rapido') {
+        localStorage.setItem('lumi_ritmo_voz', 'natural')
+        return 'natural'
+      }
+      return salvo || 'natural'
     } catch {
-      return 'rapido'
+      return 'natural'
     }
   })
 
@@ -335,12 +350,13 @@ export const ConversaQuadro: React.FC = () => {
     .toLowerCase()
     .includes('fonte grande')
 
-  // Hook de Síntese de Voz (Lumi fala) com o rate selecionado
+  // Hook de Síntese de Voz (Lumi fala) com o rate selecionado e warm-up no primeiro gesto
   const {
     isSupported: synthSuportado,
     isSpeaking,
     speak: synthSpeak,
     stop: synthStop,
+    warmUp: synthWarmUp,
   } = useSpeechSynthesis({
     rate: ritmoAtual.rate,
     pitch: 1.05,
@@ -695,7 +711,8 @@ export const ConversaQuadro: React.FC = () => {
       setMensagemFalandoId(null)
       setLegendaFalando('')
     } else {
-      // Ao ativar o modo conversação, se não estiver falando nem enviando, liga o microfone
+      // Ao ativar o modo conversação, pré-aquece o sintetizador e liga o microfone
+      synthWarmUp()
       if (!isSpeaking && !enviando) {
         startListening()
       }

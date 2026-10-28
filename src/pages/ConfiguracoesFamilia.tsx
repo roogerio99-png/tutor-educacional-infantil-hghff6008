@@ -3,6 +3,7 @@ import { Users, Plus, ShieldCheck, Clock, Sparkles, Heart, Baby } from 'lucide-r
 import { useCrianca } from '@/contexts/CriancaContext'
 import { CriancaConfigCard } from '@/components/configuracoes/CriancaConfigCard'
 import { NovaCriancaModal } from '@/components/configuracoes/NovaCriancaModal'
+import { ConfiguracaoVozLumiCard } from '@/components/configuracoes/ConfiguracaoVozLumiCard'
 
 export const ConfiguracoesFamiliaPage: React.FC = () => {
   const { criancas, recarregarCriancas, carregando } = useCrianca()
@@ -74,6 +75,9 @@ export const ConfiguracoesFamiliaPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Card de Configuração da Voz da Lumi (Web Speech API) */}
+      <ConfiguracaoVozLumiCard />
 
       {/* Lista de Crianças Cadastradas */}
       <div className="space-y-6">
