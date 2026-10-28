@@ -261,6 +261,25 @@ export const GrafoPainel: React.FC = () => {
           </div>
         </div>
 
+        {/* Atalho para Central Família & Controle de Uso */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+          <div className="space-y-0.5">
+            <h4 className="text-xs font-bold text-amber-950">
+              Precisa alterar limites diários, editar dados escolares ou cadastrar mais crianças?
+            </h4>
+            <p className="text-[11px] text-amber-900/80">
+              Acesse a tela de <strong>Família & Controle de Uso</strong> para gerenciar tempo de
+              tela, janelas de horário e perfis completos.
+            </p>
+          </div>
+          <Link
+            to="/configuracoes"
+            className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-xs shrink-0 inline-flex items-center justify-center gap-1.5"
+          >
+            Abrir Central Família
+          </Link>
+        </div>
+
         {/* Gestão do Acesso Próprio da Criança (Login + Senha + Permissões) */}
         <GestaoAcessoCriancaCard crianca={criancaSelecionada} />
 

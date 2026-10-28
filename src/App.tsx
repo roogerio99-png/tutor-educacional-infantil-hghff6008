@@ -20,6 +20,7 @@ import ConversaQuadro from '@/pages/ConversaQuadro'
 import AgendaPage from '@/pages/AgendaPage'
 import GrafoPainel from '@/pages/GrafoPainel'
 import StudioPrompts from '@/pages/StudioPrompts'
+import { ConfiguracoesFamiliaPage } from '@/pages/ConfiguracoesFamilia'
 import NotFound from '@/pages/NotFound'
 
 const App = () => (
@@ -50,6 +51,7 @@ const App = () => (
                 <Route element={<ResponsavelOnlyRoute />}>
                   <Route path="/grafo-painel" element={<GrafoPainel />} />
                   <Route path="/prompts" element={<StudioPrompts />} />
+                  <Route path="/configuracoes" element={<ConfiguracoesFamiliaPage />} />
 
                   {/* Redirecionamentos de retrocompatibilidade */}
                   <Route path="/filhos" element={<Navigate to="/grafo-painel" replace />} />
