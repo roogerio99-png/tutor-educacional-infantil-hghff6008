@@ -11,6 +11,18 @@ export interface UseSpeechSynthesisOptions {
   rate?: number
   pitch?: number
   voiceName?: string | null
+  usarVozIa?: boolean
+  vozIaNome?:
+    | 'nova'
+    | 'alloy'
+    | 'ash'
+    | 'coral'
+    | 'echo'
+    | 'fable'
+    | 'onyx'
+    | 'sage'
+    | 'shimmer'
+    | 'verse'
   onStart?: () => void
   onEnd?: () => void
   onError?: (err: unknown) => void
@@ -24,6 +36,8 @@ export function useSpeechSynthesis({
   rate = 1.05, // Taxa natural de adulto falando com criança (~1.0–1.15)
   pitch = 1.05,
   voiceName,
+  usarVozIa = true,
+  vozIaNome = 'nova',
   onStart,
   onEnd,
   onError,
@@ -31,10 +45,14 @@ export function useSpeechSynthesis({
 }: UseSpeechSynthesisOptions = {}) {
   const [isSupported, setIsSupported] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [isUsingIaVoice, setIsUsingIaVoice] = useState(false)
   const [currentText, setCurrentText] = useState<string | null>(null)
   const [currentSegmentText, setCurrentSegmentText] = useState<string | null>(null)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null)
+
+  // Referência ao player de áudio HTML5 para a voz da IA
+  const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
   const callbacksRef = useRef({ onStart, onEnd, onError, onSegmentStart })
   useEffect(() => {
@@ -98,17 +116,28 @@ export function useSpeechSynthesis({
     }
   }, [])
 
-  // Parada total imediata (barge-in < 50ms)
+  // Parada total imediata (barge-in < 50ms) de qualquer som (áudio IA ou síntese local)
   const stop = useCallback(() => {
     cancelRequestedRef.current = true
     utteranceQueueRef.current = []
     activeUtteranceRef.current = null
     limparTimers()
 
+    // 1. Pausa e reseta elemento de áudio da IA imediatamente
+    if (audioElementRef.current) {
+      try {
+        audioElementRef.current.pause()
+        audioElementRef.current.currentTime = 0
+        audioElementRef.current.src = ''
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. Cancela Web Speech local
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel()
-        // Alguns navegadores (Safari/Chrome) precisam de resume para destravar a fila após cancel
         if (window.speechSynthesis.paused) {
           window.speechSynthesis.resume()
         }
@@ -118,6 +147,7 @@ export function useSpeechSynthesis({
     }
 
     setIsSpeaking(false)
+    setIsUsingIaVoice(false)
     setCurrentText(null)
     setCurrentSegmentText(null)
   }, [limparTimers])
@@ -152,33 +182,22 @@ export function useSpeechSynthesis({
     [voices],
   )
 
-  // Reproduz uma sequência de segmentos com prosódia e pausas naturais
-  const speak = useCallback(
-    (rawText: string) => {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-
-      const textoLimpo = limparTextoParaVoz(rawText)
-      if (!textoLimpo) return
-
-      // Interrompe imediatamente qualquer reprodução em andamento
-      cancelRequestedRef.current = true
-      utteranceQueueRef.current = []
-      limparTimers()
-
-      try {
-        window.speechSynthesis.cancel()
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume()
-        }
-      } catch {
-        // ignore
+  // Executa a síntese local (Web Speech API) - usado também como fallback automático
+  const executarSinteseLocal = useCallback(
+    (textoLimpo: string) => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        setIsSpeaking(false)
+        callbacksRef.current.onEnd?.()
+        return
       }
 
-      // Prepara os segmentos oracionais com prosódia calibrada
       const segmentos = dividirTextoEmSegmentos(textoLimpo, rate, pitch)
-      if (segmentos.length === 0) return
+      if (segmentos.length === 0) {
+        setIsSpeaking(false)
+        callbacksRef.current.onEnd?.()
+        return
+      }
 
-      // Prepara a voz selecionada
       const vozesAtuais = window.speechSynthesis.getVoices()
       let vozAlvo = selectedVoice
       if (!vozAlvo && vozesAtuais.length > 0) {
@@ -194,12 +213,12 @@ export function useSpeechSynthesis({
 
       cancelRequestedRef.current = false
       setIsSpeaking(true)
+      setIsUsingIaVoice(false)
       setCurrentText(textoLimpo)
 
       let indiceAtual = 0
       callbacksRef.current.onStart?.()
 
-      // Keep-alive para contornar bug do Chrome que pausa após ~15s de síntese contínua
       keepAliveIntervalRef.current = setInterval(() => {
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
           if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
@@ -210,12 +229,9 @@ export function useSpeechSynthesis({
       }, 10000)
 
       const tocarProximoSegmento = () => {
-        if (cancelRequestedRef.current) {
-          return
-        }
+        if (cancelRequestedRef.current) return
 
         if (indiceAtual >= segmentos.length) {
-          // Finalizou todos os segmentos com sucesso
           limparTimers()
           setIsSpeaking(false)
           setCurrentText(null)
@@ -229,7 +245,6 @@ export function useSpeechSynthesis({
         activeUtteranceRef.current = utterance
 
         utterance.lang = lang
-        // Aplica o pitch e rate com as variações prosódicas calculadas
         const pitchFinal = Math.max(0.7, Math.min(1.4, pitch + seg.deltaPitch))
         const rateFinal = Math.max(0.7, Math.min(1.4, rate + seg.deltaRate))
         utterance.pitch = pitchFinal
@@ -253,7 +268,6 @@ export function useSpeechSynthesis({
 
           indiceAtual++
           if (indiceAtual < segmentos.length) {
-            // Pequeno respiro natural entre segmentos antes de acionar o próximo
             timerPausaRef.current = setTimeout(() => {
               tocarProximoSegmento()
             }, seg.pausaAposMs)
@@ -263,7 +277,6 @@ export function useSpeechSynthesis({
         }
 
         utterance.onerror = (e) => {
-          // 'canceled' ou 'interrupted' acontece no barge-in normal, não é falha
           const errorType = (e as unknown as { error?: string })?.error
           if (
             errorType === 'canceled' ||
@@ -272,8 +285,7 @@ export function useSpeechSynthesis({
           ) {
             return
           }
-          console.warn('Erro em segmento da voz Lumi:', e)
-          // Se falhar num segmento intermediário, tenta avançar
+          console.warn('Erro em segmento da voz Lumi local:', e)
           indiceAtual++
           if (indiceAtual < segmentos.length) {
             tocarProximoSegmento()
@@ -289,7 +301,7 @@ export function useSpeechSynthesis({
         try {
           window.speechSynthesis.speak(utterance)
         } catch (err) {
-          console.warn('Falha ao disparar utterance:', err)
+          console.warn('Falha ao disparar utterance local:', err)
           limparTimers()
           setIsSpeaking(false)
           setCurrentText(null)
@@ -301,6 +313,150 @@ export function useSpeechSynthesis({
       tocarProximoSegmento()
     },
     [lang, rate, pitch, selectedVoice, voiceName, limparTimers],
+  )
+
+  // Reproduz uma sequência de áudio (OpenAI TTS preferencial com fallback transparente para local)
+  const speak = useCallback(
+    async (rawText: string) => {
+      const textoLimpo = limparTextoParaVoz(rawText)
+      if (!textoLimpo) return
+
+      // Interrompe imediatamente qualquer reprodução em andamento
+      cancelRequestedRef.current = true
+      limparTimers()
+
+      if (audioElementRef.current) {
+        try {
+          audioElementRef.current.pause()
+          audioElementRef.current.currentTime = 0
+        } catch {
+          // ignore
+        }
+      }
+
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel()
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume()
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      cancelRequestedRef.current = false
+
+      // Verifica se a Voz IA está habilitada globalmente e nas opções
+      let iaHabilitada = usarVozIa
+      try {
+        const valStorage = localStorage.getItem('lumi_voz_ia_habilitada')
+        if (valStorage !== null) {
+          iaHabilitada = valStorage === 'true'
+        }
+      } catch {
+        // ignore
+      }
+
+      if (iaHabilitada) {
+        try {
+          // Import dinâmico leve para evitar ciclo e permitir tree-shake
+          const { obterAudioLumiUrl, dividirEmFrasesParaAudio } =
+            await import('@/services/lumiAudioService')
+
+          const lotes = dividirEmFrasesParaAudio(textoLimpo, 2)
+          if (lotes.length > 0) {
+            setIsSpeaking(true)
+            setIsUsingIaVoice(true)
+            setCurrentText(textoLimpo)
+            callbacksRef.current.onStart?.()
+
+            let loteIdx = 0
+
+            const tocarProximoLoteIa = async () => {
+              if (cancelRequestedRef.current) return
+
+              if (loteIdx >= lotes.length) {
+                setIsSpeaking(false)
+                setIsUsingIaVoice(false)
+                setCurrentText(null)
+                setCurrentSegmentText(null)
+                callbacksRef.current.onEnd?.()
+                return
+              }
+
+              const textoDoLote = lotes[loteIdx]
+              setCurrentSegmentText(textoDoLote)
+
+              // Preload do próximo lote enquanto este toca
+              if (loteIdx + 1 < lotes.length) {
+                obterAudioLumiUrl({ text: lotes[loteIdx + 1], voice: vozIaNome }).catch(() => {})
+              }
+
+              const audioUrl = await obterAudioLumiUrl({ text: textoDoLote, voice: vozIaNome })
+
+              if (cancelRequestedRef.current) return
+
+              if (!audioUrl) {
+                console.warn(
+                  '[useSpeechSynthesis] Falha ao obter áudio TTS OpenAI, caindo para síntese local',
+                )
+                // Se falhar o lote atual, faz fallback para o restante via síntese local sem parar a experiência
+                const restante = lotes.slice(loteIdx).join(' ')
+                executarSinteseLocal(restante)
+                return
+              }
+
+              if (!audioElementRef.current) {
+                audioElementRef.current = new Audio()
+              }
+              const audio = audioElementRef.current
+              audio.src = audioUrl
+              audio.playbackRate = 1.0
+
+              audio.onended = () => {
+                if (cancelRequestedRef.current) return
+                loteIdx++
+                // Pequena pausa natural de 150ms entre frases
+                timerPausaRef.current = setTimeout(() => {
+                  tocarProximoLoteIa()
+                }, 150)
+              }
+
+              audio.onerror = (err) => {
+                console.warn('[useSpeechSynthesis] Erro no elemento Audio:', err)
+                if (cancelRequestedRef.current) return
+                // Fallback para fala local do restante
+                const restante = lotes.slice(loteIdx).join(' ')
+                executarSinteseLocal(restante)
+              }
+
+              try {
+                await audio.play()
+              } catch (playErr) {
+                console.warn('[useSpeechSynthesis] Falha ao dar play no áudio IA:', playErr)
+                if (!cancelRequestedRef.current) {
+                  executarSinteseLocal(textoLimpo)
+                }
+              }
+            }
+
+            await tocarProximoLoteIa()
+            return
+          }
+        } catch (iaErr) {
+          console.warn('[useSpeechSynthesis] Falha geral no pipeline TTS IA:', iaErr)
+          if (!cancelRequestedRef.current) {
+            executarSinteseLocal(textoLimpo)
+          }
+          return
+        }
+      }
+
+      // Se voz IA desabilitada ou não solicitada, usa local
+      executarSinteseLocal(textoLimpo)
+    },
+    [usarVozIa, vozIaNome, limparTimers, executarSinteseLocal],
   )
 
   // Ao desmontar o componente, cancela fala ativa imediatamente
@@ -321,6 +477,7 @@ export function useSpeechSynthesis({
   return {
     isSupported,
     isSpeaking,
+    isUsingIaVoice,
     currentText,
     currentSegmentText,
     voices,

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-28T17:44:08.914Z",
+  "generatedAt": "2026-10-28T18:12:00.541Z",
   "collections": [
     {
       "name": "users",
@@ -1015,6 +1015,79 @@
         "CREATE INDEX idx_daily_metrics_crianca ON daily_metrics (crianca)",
         "CREATE INDEX idx_daily_metrics_date ON daily_metrics (date)",
         "CREATE INDEX idx_daily_metrics_session ON daily_metrics (session_id)"
+      ]
+    },
+    {
+      "name": "lumi_audio_cache",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\"",
+        "view": "@request.auth.id != \"\"",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.id != \"\"",
+        "delete": "@request.auth.id != \"\""
+      },
+      "fields": [
+        {
+          "name": "text_hash",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "text_content",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "voice",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "model",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "audio_base64",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "audio_url",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "format",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_lumi_audio_hash_voice ON lumi_audio_cache (text_hash, voice, model)",
+        "CREATE INDEX idx_lumi_audio_created ON lumi_audio_cache (created)"
       ]
     }
   ]

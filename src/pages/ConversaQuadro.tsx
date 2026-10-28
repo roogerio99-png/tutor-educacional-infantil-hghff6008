@@ -479,6 +479,12 @@ export const ConversaQuadro: React.FC = () => {
               if (visaoChat === 'orbe') {
                 setLegendaFalando(full)
               }
+              // Preload antecipado em segundo plano: se já tiver pelo menos uma frase completa, inicia o TTS
+              if (full.length > 30 && /[.!?]\s*$/.test(full)) {
+                import('@/services/lumiAudioService').then(({ preloadAudioLumi }) => {
+                  preloadAudioLumi(full, 'nova')
+                })
+              }
             },
           },
         )

@@ -1,8 +1,28 @@
-import React, { useState, useEffect } from 'react'
-import { Volume2, VolumeX, Sparkles, CheckCircle2, Play, RefreshCw, Info } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import {
+  Volume2,
+  VolumeX,
+  Sparkles,
+  CheckCircle2,
+  Play,
+  RefreshCw,
+  Info,
+  Bot,
+  Mic,
+} from 'lucide-react'
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
+import {
+  isVozIaLumiHabilitada,
+  setVozIaLumiHabilitada,
+  obterAudioLumiUrl,
+} from '@/services/lumiAudioService'
 
 export const ConfiguracaoVozLumiCard: React.FC = () => {
+  const [vozIaAtiva, setVozIaAtiva] = useState<boolean>(true)
+  const [tocandoAmostraIa, setTocandoAmostraIa] = useState<boolean>(false)
+  const [carregandoAmostraIa, setCarregandoAmostraIa] = useState<boolean>(false)
+  const audioIaRef = useRef<HTMLAudioElement | null>(null)
+
   const [vozesPtBr, setVozesPtBr] = useState<SpeechSynthesisVoice[]>([])
   const [vozSelecionadaNome, setVozSelecionadaNome] = useState<string>('')
   const [taxaTeste, setTaxaTeste] = useState<number>(1.05)
@@ -10,6 +30,11 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     'Olá! Eu sou a Lumi. Adoro descobrir curiosidades com você! O que vamos explorar hoje?',
   )
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null)
+
+  // Inicializa preferência da voz da IA (OpenAI TTS)
+  useEffect(() => {
+    setVozIaAtiva(isVozIaLumiHabilitada())
+  }, [])
 
   const {
     isSupported,
@@ -23,6 +48,7 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
   } = useSpeechSynthesis({
     rate: taxaTeste,
     pitch: 1.05,
+    usarVozIa: false, // O teste do sintetizador local neste card foca nas vozes do aparelho
   })
 
   // Carrega e filtra vozes pt-BR quando a lista estiver disponível
@@ -48,12 +74,82 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     }
   }, [voices, selectedVoice])
 
+  // Alterna o toggle de Voz Verdadeira da Lumi (IA)
+  const handleToggleVozIa = (novoEstado: boolean) => {
+    setVozIaAtiva(novoEstado)
+    setVozIaLumiHabilitada(novoEstado)
+    if (audioIaRef.current) {
+      audioIaRef.current.pause()
+      setTocandoAmostraIa(false)
+    }
+    stop()
+    setMensagemSucesso(
+      novoEstado
+        ? 'Voz Verdadeira da Lumi (IA Nova) ativada com sucesso!'
+        : 'Voz local do aparelho ativada.',
+    )
+    setTimeout(() => {
+      setMensagemSucesso(null)
+    }, 3500)
+  }
+
+  // Toca amostra exclusiva da Voz Nova da OpenAI TTS
+  const handleTocarAmostraVozIa = async () => {
+    stop()
+    if (tocandoAmostraIa) {
+      if (audioIaRef.current) {
+        audioIaRef.current.pause()
+        audioIaRef.current.currentTime = 0
+      }
+      setTocandoAmostraIa(false)
+      return
+    }
+
+    setCarregandoAmostraIa(true)
+    try {
+      const audioUrl = await obterAudioLumiUrl({
+        text: textoAmostra,
+        voice: 'nova',
+        model: 'tts-1',
+      })
+
+      if (!audioUrl) {
+        setMensagemSucesso('Serviço temporariamente indisponível. Usando teste local.')
+        speak(textoAmostra)
+        return
+      }
+
+      if (!audioIaRef.current) {
+        audioIaRef.current = new Audio()
+      }
+      const audio = audioIaRef.current
+      audio.src = audioUrl
+      audio.onended = () => {
+        setTocandoAmostraIa(false)
+      }
+      audio.onerror = () => {
+        setTocandoAmostraIa(false)
+      }
+      await audio.play()
+      setTocandoAmostraIa(true)
+    } catch (err) {
+      console.warn('Erro ao tocar amostra IA:', err)
+      speak(textoAmostra)
+    } finally {
+      setCarregandoAmostraIa(false)
+    }
+  }
+
   // Trata a troca de voz
   const handleSelecionarVoz = (nome: string) => {
     stop()
+    if (audioIaRef.current) {
+      audioIaRef.current.pause()
+      setTocandoAmostraIa(false)
+    }
     setVozSelecionadaNome(nome)
     definirVozPreferida(nome)
-    setMensagemSucesso(`Voz atualizada para "${nome}"`)
+    setMensagemSucesso(`Voz de fallback atualizada para "${nome}"`)
     setTimeout(() => {
       setMensagemSucesso(null)
     }, 3000)
@@ -61,6 +157,10 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
 
   // Toca a amostra com a voz selecionada
   const handleTestarAmostra = () => {
+    if (audioIaRef.current) {
+      audioIaRef.current.pause()
+      setTocandoAmostraIa(false)
+    }
     warmUp()
     if (isSpeaking) {
       stop()
@@ -108,14 +208,98 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
         </div>
       </div>
 
+      {/* CARD DE DESTAQUE: VOZ VERDADEIRA DA LUMI (OPENAI TTS NOVA) */}
+      <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-md relative overflow-hidden space-y-4">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/30">
+              <Sparkles className="w-6 h-6 text-yellow-200" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-base font-black tracking-tight">Voz Verdadeira da Lumi (IA)</h4>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-amber-700 shadow-2xs">
+                  Recomendado para Crianças
+                </span>
+              </div>
+              <p className="text-xs text-amber-100 font-medium mt-0.5">
+                Voz feminina super acolhedora (Nova - OpenAI TTS), com ritmo natural de conversa,
+                respiração e entonação humana carinhosa.
+              </p>
+            </div>
+          </div>
+
+          {/* Toggle Switch */}
+          <div className="flex items-center gap-3 shrink-0 self-start sm:self-center">
+            <span className="text-xs font-bold text-amber-100">
+              {vozIaAtiva ? 'Ativada' : 'Desativada'}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={vozIaAtiva}
+              onClick={() => handleToggleVozIa(!vozIaAtiva)}
+              className={`w-14 h-8 rounded-full transition-colors relative cursor-pointer p-1 ${
+                vozIaAtiva ? 'bg-white' : 'bg-black/25'
+              }`}
+            >
+              <div
+                className={`w-6 h-6 rounded-full transition-transform transform shadow-md ${
+                  vozIaAtiva
+                    ? 'translate-x-6 bg-gradient-to-r from-amber-500 to-orange-500'
+                    : 'translate-x-0 bg-white/70'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Botão de Amostra da Voz Nova da OpenAI */}
+        <div className="pt-2 border-t border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
+          <div className="text-xs text-amber-100/90 flex items-center gap-1.5">
+            <Bot className="w-4 h-4 text-yellow-200" />
+            <span>Modelo tts-1 • Voz: Nova (feminina, acolhedora infantil)</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleTocarAmostraVozIa}
+            disabled={carregandoAmostraIa}
+            className={`px-4 py-2 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-95 ${
+              tocandoAmostraIa
+                ? 'bg-rose-600 text-white hover:bg-rose-700'
+                : 'bg-white text-slate-800 hover:bg-amber-50'
+            }`}
+          >
+            {carregandoAmostraIa ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Gerando Voz da Lumi...</span>
+              </>
+            ) : tocandoAmostraIa ? (
+              <>
+                <VolumeX className="w-3.5 h-3.5" />
+                <span>Pausar Voz Nova</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 fill-current text-amber-600" />
+                <span>Ouvir Amostra Voz Nova (IA) 🔊</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Explicação da tecnologia local */}
       <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 text-xs text-amber-950 flex items-start gap-3">
         <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          <strong>Como funciona:</strong> A Lumi utiliza o sintetizador de voz integrado ao seu
-          navegador ou aparelho (Web Speech API). Nenhuma gravação sai do seu dispositivo! As vozes
-          marcadas como <em>"Natural"</em>, <em>"Neural"</em>, <em>"Google"</em> ou{' '}
-          <em>"Luciana"</em> costumam oferecer a melhor entonação e clareza.
+          <strong>Voz Local de Fallback (Web Speech API):</strong> Se o dispositivo estiver offline
+          ou sem conexão com a nuvem, a Lumi usa automaticamente a voz do aparelho abaixo sem
+          interromper a aula.
         </p>
       </div>
 
