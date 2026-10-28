@@ -177,6 +177,16 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
+          {/* Acesso da Criança e Modo Criança */}
+          <Link
+            to="/grafo-painel"
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-colors"
+            title="Gerenciar usuário, senha e permissões da criança"
+          >
+            <span>🔐</span>
+            <span>Acesso Criança</span>
+          </Link>
+
           {/* Botão de Destaque: Ativar Modo Criança */}
           <button
             type="button"

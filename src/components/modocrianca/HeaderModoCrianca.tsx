@@ -1,12 +1,14 @@
 import React, { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '@/contexts/AuthContext'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 import { SairModoCriancaModal } from '@/components/modocrianca/SairModoCriancaModal'
 import { ConfigurarPinModal } from '@/components/modocrianca/ConfigurarPinModal'
-import { MessageSquare, Calendar, Lock, Sparkles, ChevronDown } from 'lucide-react'
+import { MessageSquare, Calendar, Lock, Sparkles, ChevronDown, LogOut } from 'lucide-react'
 
 export const HeaderModoCrianca: React.FC = () => {
+  const { tipoConta, criancaUsuario, permissoes, logout } = useAuth()
   const { criancaSelecionada, criancas, selecionarCrianca } = useCrianca()
   const {
     abrirModalSairModo,
@@ -46,19 +48,21 @@ export const HeaderModoCrianca: React.FC = () => {
             </Link>
           </div>
 
-          {/* Abas Infantis Exclusivas: Chat Lumi & Agenda Divertida */}
+          {/* Abas Infantis Exclusivas: Chat Lumi & Agenda Divertida (respeita permissões) */}
           <nav className="flex items-center gap-1.5 bg-black/10 p-1 rounded-2xl">
-            <Link
-              to="/conversa"
-              className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all ${
-                isConversa
-                  ? 'bg-white text-amber-900 shadow-sm'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>Conversar com a Lumi</span>
-            </Link>
+            {permissoes.conversa !== false && (
+              <Link
+                to="/conversa"
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all ${
+                  isConversa
+                    ? 'bg-white text-amber-900 shadow-sm'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Conversar com a Lumi</span>
+              </Link>
+            )}
 
             <Link
               to="/agenda"
@@ -66,82 +70,118 @@ export const HeaderModoCrianca: React.FC = () => {
                 isAgenda
                   ? 'bg-white text-amber-900 shadow-sm'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
+              } ${!permissoes.agenda ? 'opacity-70' : ''}`}
             >
-              <Calendar className="w-4 h-4" />
+              {!permissoes.agenda ? (
+                <Lock className="w-3.5 h-3.5" />
+              ) : (
+                <Calendar className="w-4 h-4" />
+              )}
               <span>Minha Agenda 📅</span>
             </Link>
           </nav>
 
-          {/* Criança Ativa + Botão Discreto de Sair (com PIN) */}
+          {/* Criança Ativa + Botão Discreto de Sair (com PIN para responsável OU logout para criança) */}
           <div className="flex items-center gap-2">
-            {/* Seletor simplificado se tiver mais de uma criança */}
-            {criancas.length > 1 ? (
-              <div className="relative">
+            {tipoConta === 'crianca' ? (
+              /* A criança logada com sua própria conta vê seu nome e botão de sair direto */
+              <>
+                <div className="flex items-center gap-1 bg-white/20 px-3 py-1 rounded-xl text-xs font-bold text-white shadow-xs">
+                  <span>🧒</span>
+                  <span className="max-w-[110px] truncate">
+                    {criancaUsuario?.nome_exibicao?.split(' ')[0] ||
+                      criancaSelecionada?.nome.split(' ')[0] ||
+                      'Eu'}
+                  </span>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setMenuTrocaAluno(!menuTrocaAluno)}
-                  className="bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-xs px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-all"
+                  onClick={logout}
+                  className="bg-black/25 hover:bg-black/40 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  title="Sair da minha conta"
                 >
-                  <span className="max-w-[100px] truncate">
-                    {criancaSelecionada?.nome.split(' ')[0] || 'Aluno'}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Sair</span>
                 </button>
+              </>
+            ) : (
+              /* Responsável no Modo Criança (com PIN) */
+              <>
+                {criancas.length > 1 ? (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setMenuTrocaAluno(!menuTrocaAluno)}
+                      className="bg-white/15 hover:bg-white/25 border border-white/20 text-white font-bold text-xs px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-all"
+                    >
+                      <span className="max-w-[100px] truncate">
+                        {criancaSelecionada?.nome.split(' ')[0] || 'Aluno'}
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                    </button>
 
-                {menuTrocaAluno && (
-                  <div className="absolute right-0 mt-1 w-44 bg-white rounded-2xl shadow-xl border border-amber-100 py-1 z-40 text-slate-800">
-                    <p className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
-                      Trocar de aluno
-                    </p>
-                    {criancas.map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => {
-                          selecionarCrianca(c)
-                          setMenuTrocaAluno(false)
-                        }}
-                        className={`w-full text-left px-3 py-2 text-xs font-bold hover:bg-amber-50 flex items-center justify-between ${
-                          c.id === criancaSelecionada?.id
-                            ? 'text-amber-600 bg-amber-50/50'
-                            : 'text-slate-700'
-                        }`}
-                      >
-                        <span className="truncate">{c.nome}</span>
-                        {c.id === criancaSelecionada?.id && <span>✓</span>}
-                      </button>
-                    ))}
+                    {menuTrocaAluno && (
+                      <div className="absolute right-0 mt-1 w-44 bg-white rounded-2xl shadow-xl border border-amber-100 py-1 z-40 text-slate-800">
+                        <p className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                          Trocar de aluno
+                        </p>
+                        {criancas.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              selecionarCrianca(c)
+                              setMenuTrocaAluno(false)
+                            }}
+                            className={`w-full text-left px-3 py-2 text-xs font-bold hover:bg-amber-50 flex items-center justify-between ${
+                              c.id === criancaSelecionada?.id
+                                ? 'text-amber-600 bg-amber-50/50'
+                                : 'text-slate-700'
+                            }`}
+                          >
+                            <span className="truncate">{c.nome}</span>
+                            {c.id === criancaSelecionada?.id && <span>✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="hidden sm:flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-xl text-xs font-bold">
+                    <span>⭐</span>
+                    <span className="max-w-[100px] truncate">
+                      {criancaSelecionada?.nome.split(' ')[0] || 'Aluno'}
+                    </span>
                   </div>
                 )}
-              </div>
-            ) : (
-              <div className="hidden sm:flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-xl text-xs font-bold">
-                <span>⭐</span>
-                <span className="max-w-[100px] truncate">
-                  {criancaSelecionada?.nome.split(' ')[0] || 'Aluno'}
-                </span>
-              </div>
-            )}
 
-            {/* Botão Discreto de Sair do Modo Criança (Exige PIN) */}
-            <button
-              type="button"
-              onClick={abrirModalSairModo}
-              className="bg-black/20 hover:bg-black/35 active:bg-black/45 text-white/90 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-inner cursor-pointer"
-              title="Sair do Modo Criança (Exige PIN do responsável)"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sair do Modo</span>
-            </button>
+                {/* Botão Discreto de Sair do Modo Criança (Exige PIN) */}
+                <button
+                  type="button"
+                  onClick={abrirModalSairModo}
+                  className="bg-black/20 hover:bg-black/35 active:bg-black/45 text-white/90 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-inner cursor-pointer"
+                  title="Sair do Modo Criança (Exige PIN do responsável)"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Sair do Modo</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Modais de Controle */}
-      <SairModoCriancaModal isOpen={modalSairModoAberto} onClose={fecharModalSairModo} />
-
-      <ConfigurarPinModal isOpen={modalConfigurarPinAberto} onClose={fecharModalConfigurarPin} />
+      {/* Modais de Controle (apenas quando não for conta direta de criança) */}
+      {tipoConta !== 'crianca' && (
+        <>
+          <SairModoCriancaModal isOpen={modalSairModoAberto} onClose={fecharModalSairModo} />
+          <ConfigurarPinModal
+            isOpen={modalConfigurarPinAberto}
+            onClose={fecharModalConfigurarPin}
+          />
+        </>
+      )}
     </>
   )
 }

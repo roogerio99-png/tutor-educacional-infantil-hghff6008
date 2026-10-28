@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { CriancaProvider } from '@/contexts/CriancaContext'
-import { ProtectedRoute, PublicOnlyRoute } from '@/components/AuthGuard'
+import { ProtectedRoute, PublicOnlyRoute, ResponsavelOnlyRoute } from '@/components/AuthGuard'
 import { ModoCriancaProvider } from '@/contexts/ModoCriancaContext'
 import Layout from '@/components/Layout'
 
@@ -45,18 +45,22 @@ const App = () => (
                 <Route path="/" element={<Navigate to="/conversa" replace />} />
                 <Route path="/conversa" element={<ConversaQuadro />} />
                 <Route path="/agenda" element={<AgendaPage />} />
-                <Route path="/grafo-painel" element={<GrafoPainel />} />
-                <Route path="/prompts" element={<StudioPrompts />} />
 
-                {/* Redirecionamentos de retrocompatibilidade */}
-                <Route path="/filhos" element={<Navigate to="/grafo-painel" replace />} />
-                <Route path="/filhos/:id" element={<Navigate to="/grafo-painel" replace />} />
-                <Route path="/dificuldades" element={<Navigate to="/grafo-painel" replace />} />
-                <Route
-                  path="/base-de-conhecimento"
-                  element={<Navigate to="/grafo-painel" replace />}
-                />
-                <Route path="/perfil" element={<Navigate to="/prompts" replace />} />
+                {/* Rotas exclusivas do Responsável */}
+                <Route element={<ResponsavelOnlyRoute />}>
+                  <Route path="/grafo-painel" element={<GrafoPainel />} />
+                  <Route path="/prompts" element={<StudioPrompts />} />
+
+                  {/* Redirecionamentos de retrocompatibilidade */}
+                  <Route path="/filhos" element={<Navigate to="/grafo-painel" replace />} />
+                  <Route path="/filhos/:id" element={<Navigate to="/grafo-painel" replace />} />
+                  <Route path="/dificuldades" element={<Navigate to="/grafo-painel" replace />} />
+                  <Route
+                    path="/base-de-conhecimento"
+                    element={<Navigate to="/grafo-painel" replace />}
+                  />
+                  <Route path="/perfil" element={<Navigate to="/prompts" replace />} />
+                </Route>
               </Route>
             </Route>
 

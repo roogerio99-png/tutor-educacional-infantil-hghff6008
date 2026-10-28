@@ -153,6 +153,30 @@ export interface SystemPromptRecord extends RecordModel {
   ativo?: boolean
 }
 
+export interface PermissoesCrianca {
+  conversa: boolean
+  agenda: boolean
+  grafo: boolean
+  conquistas: boolean
+  [key: string]: boolean
+}
+
+export interface CriancaUsuarioRecord extends RecordModel {
+  owner: string
+  crianca: string
+  username: string
+  nome_exibicao?: string
+  avatar?: string
+  ativo: boolean
+  permissoes?: PermissoesCrianca | string
+  expand?: {
+    owner?: UserRecord
+    crianca?: CriancaRecord
+  }
+}
+
+export type TipoConta = 'responsavel' | 'crianca'
+
 // Aliases para retrocompatibilidade
 export type User = UserRecord
 export type Crianca = CriancaRecord

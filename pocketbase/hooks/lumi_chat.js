@@ -856,6 +856,278 @@ Varie o repertório para soar natural, caloroso e espontâneo. A frase de anúnc
 )
 
 // ==========================================
+// ROTAS DE GESTÃO DO ACESSO DA CRIANÇA
+// Responsável define/altera login, senha, ativa/pausa e permissões
+// ==========================================
+
+// 1. Obter informações de acesso da criança para o responsável
+routerAdd(
+  'GET',
+  '/backend/v1/crianca-acesso/{criancaId}',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const criancaId = e.request.pathValue('criancaId')
+      if (!criancaId) return e.badRequestError('ID da criança é obrigatório')
+
+      const crianca = $app.findRecordById('criancas', criancaId)
+      if (!crianca || crianca.getString('owner') !== userId) {
+        return e.forbiddenError('Não autorizado a gerenciar esta criança')
+      }
+
+      const recs = $app.findRecordsByFilter(
+        'criancas_usuarios',
+        'crianca = {:c} && owner = {:o}',
+        '-created',
+        1,
+        0,
+        { c: criancaId, o: userId },
+      )
+
+      if (!recs || recs.length === 0) {
+        return e.json(200, {
+          possui_acesso: false,
+          acesso: null,
+        })
+      }
+
+      const rec = recs[0]
+      let permissoesObj = { conversa: true, agenda: true, grafo: false, conquistas: true }
+      try {
+        const pRaw = rec.getString('permissoes')
+        if (pRaw) permissoesObj = JSON.parse(pRaw)
+      } catch (_) {}
+
+      return e.json(200, {
+        possui_acesso: true,
+        acesso: {
+          id: rec.id,
+          username: rec.getString('username'),
+          nome_exibicao: rec.getString('nome_exibicao') || crianca.getString('nome'),
+          ativo: rec.getBool('ativo'),
+          permissoes: permissoesObj,
+          crianca: rec.getString('crianca'),
+          created: rec.getString('created'),
+          updated: rec.getString('updated'),
+        },
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao carregar acesso da criança' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// 2. Criar ou redefinir acesso da criança (com senha)
+routerAdd(
+  'POST',
+  '/backend/v1/crianca-acesso/salvar',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const body = e.requestInfo().body || {}
+      const criancaId = body.crianca_id
+      const usernameRaw = (body.username || '').toString().trim().toLowerCase()
+      const senha = (body.senha || '').toString().trim()
+      const nomeExibicao = (body.nome_exibicao || '').toString().trim()
+      const ativo = body.ativo !== false
+      const permissoes = body.permissoes || {
+        conversa: true,
+        agenda: true,
+        grafo: false,
+        conquistas: true,
+      }
+
+      if (!criancaId) return e.badRequestError('crianca_id é obrigatório')
+
+      const crianca = $app.findRecordById('criancas', criancaId)
+      if (!crianca || crianca.getString('owner') !== userId) {
+        return e.forbiddenError('Não autorizado a gerenciar esta criança')
+      }
+
+      const recs = $app.findRecordsByFilter(
+        'criancas_usuarios',
+        'crianca = {:c}',
+        '-created',
+        1,
+        0,
+        { c: criancaId },
+      )
+
+      const usersCriancaCol = $app.findCollectionByNameOrId('criancas_usuarios')
+      let record = recs && recs.length > 0 ? recs[0] : null
+
+      // Se for novo ou mudando username, verificar unicidade
+      if (usernameRaw) {
+        if (!/^[a-z0-9_.-]{3,30}$/.test(usernameRaw)) {
+          return e.badRequestError(
+            'Nome de usuário deve ter entre 3 e 30 caracteres (apenas letras minúsculas, números, ponto ou traço).',
+          )
+        }
+
+        const existentesUser = $app.findRecordsByFilter(
+          'criancas_usuarios',
+          'username = {:u}',
+          '',
+          1,
+          0,
+          { u: usernameRaw },
+        )
+        if (existentesUser && existentesUser.length > 0) {
+          if (!record || existentesUser[0].id !== record.id) {
+            return e.badRequestError('Este nome de usuário já está em uso. Escolha outro.')
+          }
+        }
+      }
+
+      if (!record) {
+        // Criando novo registro
+        if (!usernameRaw) return e.badRequestError('Nome de usuário é obrigatório')
+        if (!senha || senha.length < 4) {
+          return e.badRequestError('A senha inicial da criança deve ter pelo menos 4 caracteres.')
+        }
+
+        record = new Record(usersCriancaCol)
+        record.set('owner', userId)
+        record.set('crianca', criancaId)
+        record.set('username', usernameRaw)
+        record.set('nome_exibicao', nomeExibicao || crianca.getString('nome'))
+        record.set('ativo', ativo)
+        record.set('permissoes', JSON.stringify(permissoes))
+        record.setPassword(senha)
+        $app.save(record)
+      } else {
+        // Atualizando registro existente
+        if (record.getString('owner') !== userId) {
+          return e.forbiddenError('Você não é o responsável desta conta de criança.')
+        }
+
+        if (usernameRaw) record.set('username', usernameRaw)
+        if (nomeExibicao) record.set('nome_exibicao', nomeExibicao)
+        record.set('ativo', ativo)
+        record.set('permissoes', JSON.stringify(permissoes))
+        if (senha && senha.length >= 4) {
+          record.setPassword(senha)
+        }
+        $app.save(record)
+      }
+
+      return e.json(200, {
+        success: true,
+        message: 'Acesso da criança salvo com sucesso!',
+        acesso: {
+          id: record.id,
+          username: record.getString('username'),
+          nome_exibicao: record.getString('nome_exibicao'),
+          ativo: record.getBool('ativo'),
+          permissoes: permissoes,
+          crianca: criancaId,
+        },
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao salvar acesso da criança' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// 3. Pausar ou Reativar acesso
+routerAdd(
+  'POST',
+  '/backend/v1/crianca-acesso/alternar-status',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const body = e.requestInfo().body || {}
+      const criancaId = body.crianca_id
+      const ativo = body.ativo === true
+
+      if (!criancaId) return e.badRequestError('crianca_id é obrigatório')
+
+      const crianca = $app.findRecordById('criancas', criancaId)
+      if (!crianca || crianca.getString('owner') !== userId) {
+        return e.forbiddenError('Não autorizado')
+      }
+
+      const recs = $app.findRecordsByFilter(
+        'criancas_usuarios',
+        'crianca = {:c} && owner = {:o}',
+        '-created',
+        1,
+        0,
+        { c: criancaId, o: userId },
+      )
+
+      if (!recs || recs.length === 0) {
+        return e.badRequestError('Acesso ainda não configurado para esta criança.')
+      }
+
+      const rec = recs[0]
+      rec.set('ativo', ativo)
+      $app.save(rec)
+
+      return e.json(200, {
+        success: true,
+        ativo: ativo,
+        message: ativo ? 'Acesso ativado com sucesso!' : 'Acesso pausado pelo responsável.',
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao alterar status de acesso' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// 4. Excluir acesso da criança
+routerAdd(
+  'DELETE',
+  '/backend/v1/crianca-acesso/{criancaId}',
+  (e) => {
+    try {
+      const userId = e.auth?.id
+      if (!userId) return e.unauthorizedError('Autenticação necessária')
+
+      const criancaId = e.request.pathValue('criancaId')
+      if (!criancaId) return e.badRequestError('ID da criança é obrigatório')
+
+      const crianca = $app.findRecordById('criancas', criancaId)
+      if (!crianca || crianca.getString('owner') !== userId) {
+        return e.forbiddenError('Não autorizado')
+      }
+
+      const recs = $app.findRecordsByFilter(
+        'criancas_usuarios',
+        'crianca = {:c} && owner = {:o}',
+        '-created',
+        1,
+        0,
+        { c: criancaId, o: userId },
+      )
+
+      if (!recs || recs.length === 0) {
+        return e.badRequestError('Nenhum acesso encontrado.')
+      }
+
+      $app.delete(recs[0])
+
+      return e.json(200, {
+        success: true,
+        message: 'Acesso da criança removido com sucesso.',
+      })
+    } catch (err) {
+      return e.json(500, { error: err?.message || 'Erro ao excluir acesso' })
+    }
+  },
+  $apis.requireAuth(),
+)
+
+// ==========================================
 // ROTA 2: CHAT LUMI STREAMING (SSE)
 // ==========================================
 routerAdd('GET', '/backend/v1/lumi/chat-stream', (e) => {

@@ -16,6 +16,7 @@ import type {
   Impacto,
 } from '@/types'
 import { SimpleModal } from '@/components/SimpleModal'
+import { GestaoAcessoCriancaCard } from '@/components/GestaoAcessoCriancaCard'
 import { MATERIAS, IMPACTOS } from '@/types'
 import {
   AlertCircle,
@@ -259,6 +260,9 @@ export const GrafoPainel: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Gestão do Acesso Próprio da Criança (Login + Senha + Permissões) */}
+        <GestaoAcessoCriancaCard crianca={criancaSelecionada} />
 
         {/* Metadados da Camada 1: Perfil Base */}
         {criancaSelecionada && (

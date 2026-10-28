@@ -11,7 +11,12 @@ import { SimpleModal } from '@/components/SimpleModal'
 import { MATERIAS } from '@/types'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 
+import { useAuth } from '@/contexts/AuthContext'
+import { Lock } from 'lucide-react'
+import { Link } from 'react-router-dom'
+
 export const AgendaPage: React.FC = () => {
+  const { tipoConta, permissoes } = useAuth()
   const { criancaSelecionada } = useCrianca()
   const { modoCriancaAtivo } = useModoCrianca()
   const [eventos, setEventos] = useState<AgendaRecord[]>([])
@@ -153,6 +158,28 @@ export const AgendaPage: React.FC = () => {
     if (filtroTipo === 'concluidos') return ev.concluido
     return ev.tipo === filtroTipo
   })
+
+  // Se for conta de criança e a permissão de agenda estiver bloqueada:
+  if (tipoConta === 'crianca' && !permissoes.agenda) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center text-center p-6 bg-white rounded-3xl border border-[#F0E4D8] shadow-sm">
+        <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-700 flex items-center justify-center text-3xl mb-4 shadow-sm">
+          <Lock className="w-8 h-8 text-amber-600" />
+        </div>
+        <h2 className="text-lg font-extrabold text-[#4A3B32]">Agenda Guardada 💛</h2>
+        <p className="text-sm text-[#8A796C] max-w-md mt-2">
+          Esse cantinho está guardado pelo seu responsável 💛. Quando ele liberar, você poderá
+          acompanhar suas tarefas escolares por aqui!
+        </p>
+        <Link
+          to="/conversa"
+          className="mt-6 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs shadow-md shadow-orange-500/20"
+        >
+          Voltar para conversar com a Lumi ✨
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

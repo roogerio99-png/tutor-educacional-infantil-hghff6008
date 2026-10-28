@@ -24,6 +24,29 @@ export const ProtectedRoute: React.FC = () => {
   return <Outlet />
 }
 
+/**
+ * Guarda de rota exclusiva para o responsável (pais/educadores).
+ * A criança logada com sua própria conta não tem acesso a páginas parentais (grafo-painel, prompts, etc.)
+ */
+export const ResponsavelOnlyRoute: React.FC = () => {
+  const { tipoConta, isAuthenticated, isLoading } = useAuth()
+
+  if (isLoading) {
+    return null
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (tipoConta === 'crianca') {
+    // Redireciona a criança carinhosamente para o seu cantinho
+    return <Navigate to="/conversa" replace />
+  }
+
+  return <Outlet />
+}
+
 export const PublicOnlyRoute: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth()
 

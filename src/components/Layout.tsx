@@ -6,28 +6,33 @@ import { BannerInstalacaoPwa } from '@/components/BannerInstalacaoPwa'
 import { HeaderModoCrianca } from '@/components/modocrianca/HeaderModoCrianca'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 
+import { useAuth } from '@/contexts/AuthContext'
+
 export const Layout: React.FC = () => {
+  const { tipoConta } = useAuth()
   const { modoCriancaAtivo } = useModoCrianca()
   const location = useLocation()
 
   // Se o Modo Criança estiver ativo e o usuário tentar acessar páginas de adulto,
-  // redireciona silenciosamente para o chat /conversa
-  const rotasAdulto = ['/grafo-painel', '/prompts', '/agenda']
+  // redireciona silenciosamente para o chat /conversa (agenda é permitida no modo criança se tiver permissão)
+  const rotasAdulto = ['/grafo-painel', '/prompts']
   const tentandoAcessarAdulto = rotasAdulto.some((r) => location.pathname.startsWith(r))
 
-  if (modoCriancaAtivo && tentandoAcessarAdulto) {
+  if ((modoCriancaAtivo || tipoConta === 'crianca') && tentandoAcessarAdulto) {
     return <Navigate to="/conversa" replace />
   }
+
+  const exibirModoCriancaHeader = modoCriancaAtivo || tipoConta === 'crianca'
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F4F7FB] text-slate-800">
       <AlertaOfflineBanner />
-      {modoCriancaAtivo ? <HeaderModoCrianca /> : <Header />}
+      {exibirModoCriancaHeader ? <HeaderModoCrianca /> : <Header />}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
         <Outlet />
       </main>
       <BannerInstalacaoPwa />
-      {!modoCriancaAtivo && (
+      {!exibirModoCriancaHeader && (
         <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-4 text-center text-xs">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="flex items-center gap-1.5">

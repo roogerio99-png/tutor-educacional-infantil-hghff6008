@@ -48,12 +48,15 @@ const MAX_TENTATIVAS = 5
 const TEMPO_BLOQUEIO_SEGUNDOS = 30
 
 export const ModoCriancaProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user, tipoConta } = useAuth()
   const { criancaSelecionada, selecionarCrianca, criancas } = useCrianca()
 
-  const [modoCriancaAtivo, setModoCriancaAtivo] = useState<boolean>(() => {
+  const [modoCriancaAtivoStorage, setModoCriancaAtivoStorage] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_MODO_CRIANCA) === 'true'
   })
+
+  // Se a conta for de criança, o Modo Criança é SEMPRE ativo automaticamente
+  const modoCriancaAtivo = tipoConta === 'crianca' || modoCriancaAtivoStorage
 
   const [pinConfigurado, setPinConfigurado] = useState<boolean>(false)
   const [carregandoPin, setCarregandoPin] = useState<boolean>(true)
@@ -112,7 +115,7 @@ export const ModoCriancaProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Desativa automaticamente se fizer logout
   useEffect(() => {
     if (!isAuthenticated) {
-      setModoCriancaAtivo(false)
+      setModoCriancaAtivoStorage(false)
       localStorage.removeItem(STORAGE_MODO_CRIANCA)
     }
   }, [isAuthenticated])
@@ -130,12 +133,12 @@ export const ModoCriancaProvider: React.FC<{ children: React.ReactNode }> = ({ c
       selecionarCrianca(criancas[0])
     }
 
-    setModoCriancaAtivo(true)
+    setModoCriancaAtivoStorage(true)
     localStorage.setItem(STORAGE_MODO_CRIANCA, 'true')
   }
 
   const desativarModoCriancaForcado = () => {
-    setModoCriancaAtivo(false)
+    setModoCriancaAtivoStorage(false)
     localStorage.removeItem(STORAGE_MODO_CRIANCA)
     setModalSairModoAberto(false)
     setTentativasFalhas(0)

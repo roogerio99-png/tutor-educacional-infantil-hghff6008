@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { enviarMensagemLumiStream, enviarMensagemLumiSync } from '@/services/lumiAgent'
 import { obterPromptAtivo } from '@/services/prompts'
@@ -829,6 +830,8 @@ export const ConversaQuadro: React.FC = () => {
     }
   }
 
+  const { tipoConta, permissoes } = useAuth()
+
   // Estado atual da Orbe Lumi Live
   const estadoOrbe: EstadoLumiLive = isListening
     ? 'ouvindo'
@@ -837,6 +840,22 @@ export const ConversaQuadro: React.FC = () => {
       : isSpeaking
         ? 'falando'
         : 'ocioso'
+
+  // Se for conta de criança e o responsável bloqueou a conversa com a Lumi:
+  if (tipoConta === 'crianca' && !permissoes.conversa) {
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center text-center p-6 bg-white rounded-3xl border border-[#F0E4D8] shadow-sm max-w-lg mx-auto my-12">
+        <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-700 flex items-center justify-center text-3xl mb-4 shadow-sm">
+          <span className="text-3xl">🔐</span>
+        </div>
+        <h2 className="text-lg font-extrabold text-[#4A3B32]">Conversa Guardada 💛</h2>
+        <p className="text-sm text-[#8A796C] max-w-md mt-2">
+          Esse cantinho está guardado pelo seu responsável 💛. Em breve vocês conversarão juntos com
+          a Lumi!
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-8">

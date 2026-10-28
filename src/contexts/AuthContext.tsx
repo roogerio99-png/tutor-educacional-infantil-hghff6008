@@ -1,13 +1,17 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import pb from '@/lib/pocketbase/client'
-import type { UserRecord } from '@/types'
+import type { UserRecord, CriancaUsuarioRecord, TipoConta, PermissoesCrianca } from '@/types'
 
 interface AuthContextType {
   user: UserRecord | null
+  criancaUsuario: CriancaUsuarioRecord | null
+  tipoConta: TipoConta
   token: string | null
   isAuthenticated: boolean
   isLoading: boolean
+  permissoes: PermissoesCrianca
   login: (email: string, password: string) => Promise<UserRecord>
+  loginCrianca: (username: string, password: string) => Promise<CriancaUsuarioRecord>
   register: (
     name: string,
     email: string,
@@ -29,15 +33,51 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const STORAGE_TIPO_CONTA = 'lumi_tipo_conta'
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserRecord | null>(
-    (pb.authStore.record as unknown as UserRecord) || null,
-  )
+  const [tipoConta, setTipoConta] = useState<TipoConta>(() => {
+    const saved = localStorage.getItem(STORAGE_TIPO_CONTA)
+    return saved === 'crianca' ? 'crianca' : 'responsavel'
+  })
+
+  const [user, setUser] = useState<UserRecord | null>(() => {
+    const rec = pb.authStore.record
+    if (rec && (rec.collectionName === 'users' || !rec.collectionName)) {
+      return rec as unknown as UserRecord
+    }
+    return null
+  })
+
+  const [criancaUsuario, setCriancaUsuario] = useState<CriancaUsuarioRecord | null>(() => {
+    const rec = pb.authStore.record
+    if (rec && rec.collectionName === 'criancas_usuarios') {
+      return rec as unknown as CriancaUsuarioRecord
+    }
+    return null
+  })
+
   const [token, setToken] = useState<string | null>(pb.authStore.token || null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
   const syncState = useCallback(() => {
-    setUser((pb.authStore.record as unknown as UserRecord) || null)
+    const rec = pb.authStore.record
+    if (!rec) {
+      setUser(null)
+      setCriancaUsuario(null)
+      setTipoConta('responsavel')
+      localStorage.setItem(STORAGE_TIPO_CONTA, 'responsavel')
+    } else if (rec.collectionName === 'criancas_usuarios') {
+      setCriancaUsuario(rec as unknown as CriancaUsuarioRecord)
+      setUser(null)
+      setTipoConta('crianca')
+      localStorage.setItem(STORAGE_TIPO_CONTA, 'crianca')
+    } else {
+      setUser(rec as unknown as UserRecord)
+      setCriancaUsuario(null)
+      setTipoConta('responsavel')
+      localStorage.setItem(STORAGE_TIPO_CONTA, 'responsavel')
+    }
     setToken(pb.authStore.token || null)
   }, [])
 
@@ -58,8 +98,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const authData = await pb.collection('users').authWithPassword(email.trim(), password)
     const userRec = authData.record as unknown as UserRecord
     setUser(userRec)
+    setCriancaUsuario(null)
+    setTipoConta('responsavel')
+    localStorage.setItem(STORAGE_TIPO_CONTA, 'responsavel')
     setToken(authData.token)
     return userRec
+  }
+
+  const loginCrianca = async (
+    username: string,
+    password: string,
+  ): Promise<CriancaUsuarioRecord> => {
+    const authData = await pb
+      .collection('criancas_usuarios')
+      .authWithPassword(username.trim().toLowerCase(), password)
+    const criancaRec = authData.record as unknown as CriancaUsuarioRecord
+
+    if (!criancaRec.ativo) {
+      // Se não estiver ativo, desfaz login
+      pb.authStore.clear()
+      setUser(null)
+      setCriancaUsuario(null)
+      setToken(null)
+      throw new Error('CONTA_PAUSADA')
+    }
+
+    setCriancaUsuario(criancaRec)
+    setUser(null)
+    setTipoConta('crianca')
+    localStorage.setItem(STORAGE_TIPO_CONTA, 'crianca')
+    setToken(authData.token)
+    return criancaRec
   }
 
   const register = async (
@@ -88,6 +157,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     pb.authStore.clear()
     setUser(null)
+    setCriancaUsuario(null)
+    setTipoConta('responsavel')
+    localStorage.removeItem(STORAGE_TIPO_CONTA)
     setToken(null)
   }
 
@@ -146,21 +218,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async (): Promise<void> => {
     if (!pb.authStore.isValid) return
     try {
-      const refreshed = await pb.collection('users').authRefresh()
-      setUser(refreshed.record as unknown as UserRecord)
+      if (tipoConta === 'crianca' || pb.authStore.record?.collectionName === 'criancas_usuarios') {
+        const refreshed = await pb.collection('criancas_usuarios').authRefresh()
+        const rec = refreshed.record as unknown as CriancaUsuarioRecord
+        if (!rec.ativo) {
+          logout()
+          return
+        }
+        setCriancaUsuario(rec)
+      } else {
+        const refreshed = await pb.collection('users').authRefresh()
+        setUser(refreshed.record as unknown as UserRecord)
+      }
     } catch {
       logout()
     }
   }
 
+  // Permissões computadas para a criança
+  let permissoes: PermissoesCrianca = {
+    conversa: true,
+    agenda: true,
+    grafo: false,
+    conquistas: true,
+  }
+
+  if (tipoConta === 'crianca' && criancaUsuario) {
+    if (criancaUsuario.permissoes) {
+      if (typeof criancaUsuario.permissoes === 'string') {
+        try {
+          permissoes = { ...permissoes, ...JSON.parse(criancaUsuario.permissoes) }
+        } catch {
+          /* intentionally ignored */
+        }
+      } else {
+        permissoes = { ...permissoes, ...criancaUsuario.permissoes }
+      }
+    }
+  } else if (tipoConta === 'responsavel') {
+    // Responsável tem tudo liberado
+    permissoes = {
+      conversa: true,
+      agenda: true,
+      grafo: true,
+      conquistas: true,
+    }
+  }
+
+  const isAuthenticated = pb.authStore.isValid && (!!user || !!criancaUsuario)
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        criancaUsuario,
+        tipoConta,
         token,
-        isAuthenticated: !!user && pb.authStore.isValid,
+        isAuthenticated,
         isLoading,
+        permissoes,
         login,
+        loginCrianca,
         register,
         logout,
         requestPasswordReset,

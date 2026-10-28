@@ -21,6 +21,8 @@ export const CriancaProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [criancaSelecionada, setCriancaSelecionada] = useState<CriancaRecord | null>(null)
   const [carregando, setCarregando] = useState<boolean>(true)
 
+  const { tipoConta, criancaUsuario } = useAuth()
+
   const recarregarCriancas = useCallback(async () => {
     if (!isAuthenticated) {
       setCriancas([])
@@ -34,22 +36,31 @@ export const CriancaProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const list = await listarCriancas()
       setCriancas(list)
 
-      const savedId = localStorage.getItem(STORAGE_KEY)
-      if (savedId && list.some((c) => c.id === savedId)) {
-        const found = list.find((c) => c.id === savedId) || null
-        setCriancaSelecionada(found)
-      } else if (list.length > 0) {
-        setCriancaSelecionada(list[0])
-        localStorage.setItem(STORAGE_KEY, list[0].id)
+      // Se for conta de criança, focar estritamente na criança vinculada
+      if (tipoConta === 'crianca' && criancaUsuario?.crianca) {
+        const vinculada = list.find((c) => c.id === criancaUsuario.crianca) || null
+        setCriancaSelecionada(vinculada)
+        if (vinculada) {
+          localStorage.setItem(STORAGE_KEY, vinculada.id)
+        }
       } else {
-        setCriancaSelecionada(null)
+        const savedId = localStorage.getItem(STORAGE_KEY)
+        if (savedId && list.some((c) => c.id === savedId)) {
+          const found = list.find((c) => c.id === savedId) || null
+          setCriancaSelecionada(found)
+        } else if (list.length > 0) {
+          setCriancaSelecionada(list[0])
+          localStorage.setItem(STORAGE_KEY, list[0].id)
+        } else {
+          setCriancaSelecionada(null)
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar crianças:', err)
     } finally {
       setCarregando(false)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, tipoConta, criancaUsuario?.crianca])
 
   useEffect(() => {
     recarregarCriancas()
