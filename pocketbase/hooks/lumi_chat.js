@@ -3296,3 +3296,448 @@ routerAdd(
   },
   $apis.requireAuth(),
 )
+
+// 5. Solicitar link por e-mail para redefinir PIN do responsável
+routerAdd('POST', '/backend/v1/auth/pin/solicitar-reset-email', (e) => {
+  try {
+    const body = e.requestInfo().body || {}
+    let emailAlvo = (body.email || '').toString().trim().toLowerCase()
+    let userRecord = null
+
+    // Se tiver sessão ativa do responsável
+    if (e.auth && e.auth.id) {
+      try {
+        const authUser = $app.findRecordById('users', e.auth.id)
+        if (authUser) {
+          userRecord = authUser
+          emailAlvo = (authUser.getString('email') || '').toLowerCase()
+        }
+      } catch (_) {}
+    }
+
+    // Se não autenticado ou para confirmar email informado
+    if (!userRecord && emailAlvo) {
+      try {
+        userRecord = $app.findAuthRecordByEmail('_pb_users_auth_', emailAlvo)
+      } catch (_) {}
+    }
+
+    if (!userRecord) {
+      // Resposta genérica para evitar enumeração de contas
+      return e.json(200, {
+        success: true,
+        message: 'Se o e-mail estiver cadastrado como responsável, enviamos as instruções.',
+      })
+    }
+
+    // Gerar token aleatório seguro (32 bytes hex) e hash sha256 para busca
+    const rawToken = $security.randomString(40)
+    const tokenHash = $security.sha256('pin_token_' + rawToken)
+    const expiraMs = Date.now() + 30 * 60 * 1000 // 30 minutos
+    const expiresAt = new Date(expiraMs).toISOString()
+
+    // Salvar na coleção pin_reset_tokens
+    const colTokens = $app.findCollectionByNameOrId('pin_reset_tokens')
+    const tokenRec = new Record(colTokens)
+    tokenRec.set('user', userRecord.id)
+    tokenRec.set('token_hash', tokenHash)
+    tokenRec.set('expires_at', expiresAt)
+    tokenRec.set('used', false)
+    $app.save(tokenRec)
+
+    // Determinar a URL do frontend para compor o link
+    const reqHeaders = e.requestInfo().headers || {}
+    let origin = reqHeaders['origin'] || reqHeaders['referer'] || ''
+    if (origin.endsWith('/')) origin = origin.slice(0, -1)
+    if (!origin || origin.indexOf('http') !== 0) {
+      const siteEnv = $os.getenv('SITE_URL') || ''
+      origin = siteEnv ? siteEnv.replace(/\/$/, '') : 'http://localhost:5173'
+    }
+
+    const resetUrl = `${origin}/redefinir-pin?token=${encodeURIComponent(rawToken)}`
+
+    const senderEmail = $app.settings().meta.senderAddress || 'suporte@aprendiz.app'
+    const senderName = $app.settings().meta.senderName || 'Aprendiz'
+    const nomeDestinatario = userRecord.getString('name') || 'Responsável'
+
+    const htmlBody = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #4A3B32; background-color: #FFFDF9; border: 1px solid #F1E5D8; border-radius: 16px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <div style="display: inline-block; width: 48px; height: 48px; line-height: 48px; border-radius: 24px; background-color: #FEF3C7; font-size: 24px;">🔑</div>
+            <h2 style="color: #4A3B32; margin: 12px 0 4px; font-size: 20px;">Redefinição de PIN do Responsável</h2>
+            <p style="color: #9C8B7D; font-size: 13px; margin: 0;">Aplicativo Aprendiz</p>
+          </div>
+          <p style="font-size: 14px; line-height: 1.6;">Olá, <strong>${nomeDestinatario}</strong>!</p>
+          <p style="font-size: 14px; line-height: 1.6;">Recebemos um pedido para redefinir o seu <strong>PIN de 4 dígitos</strong> (usado para sair do Modo Criança e proteger as configurações de adulto).</p>
+          <p style="font-size: 14px; line-height: 1.6;">Clique no botão abaixo para definir um novo PIN com carinho e segurança:</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <a href="${resetUrl}" style="background-color: #F28C28; color: #FFFFFF; font-weight: bold; font-size: 15px; text-decoration: none; padding: 12px 28px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 12px rgba(242, 140, 40, 0.25);">
+              Redefinir meu PIN agora
+            </a>
+          </div>
+          <p style="font-size: 12px; color: #9C8B7D; line-height: 1.5; margin-top: 24px; border-top: 1px solid #F1E5D8; padding-top: 16px;">
+            Este link é seguro, válido por <strong>30 minutos</strong> e só pode ser utilizado uma vez.<br />
+            Se você não solicitou a alteração, pode ignorar este e-mail com segurança. Seu PIN atual não será alterado.
+          </p>
+          <p style="font-size: 11px; color: #BDB3A8; word-break: break-all;">
+            Se o botão não funcionar, copie este link no seu navegador: ${resetUrl}
+          </p>
+        </div>
+      `
+
+    const message = new MailerMessage({
+      from: {
+        address: senderEmail,
+        name: senderName,
+      },
+      to: [{ address: emailAlvo }],
+      subject: 'Redefinição do seu PIN do Responsável - Aprendiz',
+      html: htmlBody,
+    })
+
+    $app.newMailClient().send(message)
+
+    return e.json(200, {
+      success: true,
+      message: 'Enviamos um link para o seu e-mail cadastrado. Verifique sua caixa de entrada.',
+    })
+  } catch (err) {
+    return e.json(500, {
+      error: err?.message || 'Não foi possível enviar o e-mail de recuperação de PIN.',
+    })
+  }
+})
+
+// 6. Validar token e redefinir PIN por link de e-mail (público)
+routerAdd('POST', '/backend/v1/auth/pin/redefinir-por-token', (e) => {
+  try {
+    const body = e.requestInfo().body || {}
+    const rawToken = (body.token || '').toString().trim()
+    const novoPin = (body.novo_pin || '').toString().trim()
+    const confirmacao = (body.confirmacao || '').toString().trim()
+
+    if (!rawToken) {
+      return e.badRequestError('Token de recuperação inválido ou ausente.')
+    }
+
+    if (!/^\d{4}$/.test(novoPin)) {
+      return e.badRequestError('O novo PIN deve conter exatamente 4 dígitos numéricos.')
+    }
+
+    if (novoPin !== confirmacao) {
+      return e.badRequestError('A confirmação do PIN não confere com o novo PIN.')
+    }
+
+    const tokenHash = $security.sha256('pin_token_' + rawToken)
+
+    let tokenRec
+    try {
+      tokenRec = $app.findFirstRecordByData('pin_reset_tokens', 'token_hash', tokenHash)
+    } catch (_) {
+      return e.badRequestError(
+        'Link de recuperação inválido ou expirado. Por favor, solicite um novo.',
+      )
+    }
+
+    if (tokenRec.getBool('used')) {
+      return e.badRequestError(
+        'Este link de recuperação já foi utilizado. Solicite um novo link se precisar.',
+      )
+    }
+
+    const expiresAtStr = tokenRec.getString('expires_at')
+    if (expiresAtStr && new Date(expiresAtStr).getTime() < Date.now()) {
+      return e.badRequestError(
+        'Este link expirou (validade de 30 minutos). Por favor, solicite um novo.',
+      )
+    }
+
+    const userId = tokenRec.getString('user')
+    if (!userId) {
+      return e.badRequestError('Usuário não localizado para este link.')
+    }
+
+    const user = $app.findRecordById('users', userId)
+
+    // Motor PBKDF2 inline
+    const K_CONST = new Uint32Array([
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+      0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+      0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+      0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+      0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+      0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+      0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+      0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+      0xc67178f2,
+    ])
+
+    const hashBlocks = (w, v, p, pos, len) => {
+      let a, b, c, d, e, f, g, h, u, i, j, t1, t2
+      while (len >= 64) {
+        a = v[0]
+        b = v[1]
+        c = v[2]
+        d = v[3]
+        e = v[4]
+        f = v[5]
+        g = v[6]
+        h = v[7]
+        for (i = 0; i < 16; i++) {
+          j = pos + i * 4
+          w[i] =
+            ((p[j] & 0xff) << 24) |
+            ((p[j + 1] & 0xff) << 16) |
+            ((p[j + 2] & 0xff) << 8) |
+            (p[j + 3] & 0xff)
+        }
+        for (i = 16; i < 64; i++) {
+          u = w[i - 2]
+          t1 = ((u >>> 17) | (u << (32 - 17))) ^ ((u >>> 19) | (u << (32 - 19))) ^ (u >>> 10)
+          u = w[i - 15]
+          t2 = ((u >>> 7) | (u << (32 - 7))) ^ ((u >>> 18) | (u << (32 - 18))) ^ (u >>> 3)
+          w[i] = ((t1 + w[i - 7]) | 0) + ((t2 + w[i - 16]) | 0)
+        }
+        for (i = 0; i < 64; i++) {
+          t1 =
+            ((((((e >>> 6) | (e << (32 - 6))) ^
+              ((e >>> 11) | (e << (32 - 11))) ^
+              ((e >>> 25) | (e << (32 - 25)))) +
+              ((e & f) ^ (~e & g))) |
+              0) +
+              ((h + ((K_CONST[i] + w[i]) | 0)) | 0)) |
+            0
+          t2 =
+            ((((a >>> 2) | (a << (32 - 2))) ^
+              ((a >>> 13) | (a << (32 - 13))) ^
+              ((a >>> 22) | (a << (32 - 22)))) +
+              ((a & b) ^ (a & c) ^ (b & c))) |
+            0
+          h = g
+          g = f
+          f = e
+          e = (d + t1) | 0
+          d = c
+          c = b
+          b = a
+          a = (t1 + t2) | 0
+        }
+        v[0] += a
+        v[1] += b
+        v[2] += c
+        v[3] += d
+        v[4] += e
+        v[5] += f
+        v[6] += g
+        v[7] += h
+        pos += 64
+        len -= 64
+      }
+      return pos
+    }
+
+    function Sha256Class() {
+      this.state = new Int32Array(8)
+      this.temp = new Int32Array(64)
+      this.buffer = new Uint8Array(128)
+      this.bufferLength = 0
+      this.bytesHashed = 0
+      this.finished = false
+      this.reset = function () {
+        this.state[0] = 0x6a09e667
+        this.state[1] = 0xbb67ae85
+        this.state[2] = 0x3c6ef372
+        this.state[3] = 0xa54ff53a
+        this.state[4] = 0x510e527f
+        this.state[5] = 0x9b05688c
+        this.state[6] = 0x1f83d9ab
+        this.state[7] = 0x5be0cd19
+        this.bufferLength = 0
+        this.bytesHashed = 0
+        this.finished = false
+        return this
+      }
+      this.update = function (data, dataLength) {
+        if (dataLength === undefined) dataLength = data.length
+        let dataPos = 0
+        this.bytesHashed += dataLength
+        if (this.bufferLength > 0) {
+          while (this.bufferLength < 64 && dataLength > 0) {
+            this.buffer[this.bufferLength++] = data[dataPos++]
+            dataLength--
+          }
+          if (this.bufferLength === 64) {
+            hashBlocks(this.temp, this.state, this.buffer, 0, 64)
+            this.bufferLength = 0
+          }
+        }
+        if (dataLength >= 64) {
+          dataPos = hashBlocks(this.temp, this.state, data, dataPos, dataLength)
+          dataLength %= 64
+        }
+        while (dataLength > 0) {
+          this.buffer[this.bufferLength++] = data[dataPos++]
+          dataLength--
+        }
+        return this
+      }
+      this.finish = function (out) {
+        if (!this.finished) {
+          const bytesHashed = this.bytesHashed
+          const left = this.bufferLength
+          const bitLenHi = (bytesHashed / 0x20000000) | 0
+          const bitLenLo = bytesHashed << 3
+          const padLength = bytesHashed % 64 < 56 ? 64 : 128
+          this.buffer[left] = 0x80
+          for (let i = left + 1; i < padLength - 8; i++) {
+            this.buffer[i] = 0
+          }
+          this.buffer[padLength - 8] = (bitLenHi >>> 24) & 0xff
+          this.buffer[padLength - 7] = (bitLenHi >>> 16) & 0xff
+          this.buffer[padLength - 6] = (bitLenHi >>> 8) & 0xff
+          this.buffer[padLength - 5] = (bitLenHi >>> 0) & 0xff
+          this.buffer[padLength - 4] = (bitLenLo >>> 24) & 0xff
+          this.buffer[padLength - 3] = (bitLenLo >>> 16) & 0xff
+          this.buffer[padLength - 2] = (bitLenLo >>> 8) & 0xff
+          this.buffer[padLength - 1] = (bitLenLo >>> 0) & 0xff
+          hashBlocks(this.temp, this.state, this.buffer, 0, padLength)
+          this.finished = true
+        }
+        for (let i = 0; i < 8; i++) {
+          out[i * 4 + 0] = (this.state[i] >>> 24) & 0xff
+          out[i * 4 + 1] = (this.state[i] >>> 16) & 0xff
+          out[i * 4 + 2] = (this.state[i] >>> 8) & 0xff
+          out[i * 4 + 3] = (this.state[i] >>> 0) & 0xff
+        }
+        return this
+      }
+      this.reset()
+    }
+
+    function HmacSha256Class(key) {
+      const pad = new Uint8Array(64)
+      if (key.length > 64) {
+        new Sha256Class().update(key).finish(pad)
+      } else {
+        for (let i = 0; i < key.length; i++) pad[i] = key[i]
+      }
+      for (let i = 0; i < 64; i++) pad[i] ^= 0x36
+      this.inner = new Sha256Class()
+      this.inner.update(pad)
+
+      for (let i = 0; i < 64; i++) pad[i] ^= 0x36 ^ 0x5c
+      this.outer = new Sha256Class()
+      this.outer.update(pad)
+
+      this.istate = new Int32Array(8)
+      this.ostate = new Int32Array(8)
+      for (let i = 0; i < 8; i++) {
+        this.istate[i] = this.inner.state[i]
+        this.ostate[i] = this.outer.state[i]
+      }
+
+      this.reset = function () {
+        for (let i = 0; i < 8; i++) {
+          this.inner.state[i] = this.istate[i]
+          this.outer.state[i] = this.ostate[i]
+        }
+        this.inner.bytesHashed = 64
+        this.inner.finished = false
+        this.inner.bufferLength = 0
+        this.outer.bytesHashed = 64
+        this.outer.finished = false
+        this.outer.bufferLength = 0
+        return this
+      }
+      this.update = function (data, len) {
+        this.inner.update(data, len)
+        return this
+      }
+      this.finish = function (out) {
+        if (this.outer.finished) {
+          this.outer.finish(out)
+        } else {
+          this.inner.finish(out)
+          this.outer.update(out, 32).finish(out)
+        }
+        return this
+      }
+    }
+
+    const pbkdf2Sha256 = (passwordStr, saltStr, iterations, dkLen) => {
+      const pwBytes = new Uint8Array(passwordStr.length)
+      for (let i = 0; i < passwordStr.length; i++) pwBytes[i] = passwordStr.charCodeAt(i) & 0xff
+      const saltBytes = new Uint8Array(saltStr.length)
+      for (let i = 0; i < saltStr.length; i++) saltBytes[i] = saltStr.charCodeAt(i) & 0xff
+
+      const prf = new HmacSha256Class(pwBytes)
+      const len = 32
+      const ctr = new Uint8Array(4)
+      const t = new Uint8Array(len)
+      const u = new Uint8Array(len)
+      const dk = new Uint8Array(dkLen)
+
+      for (let i = 0; i * len < dkLen; i++) {
+        const c = i + 1
+        ctr[0] = (c >>> 24) & 0xff
+        ctr[1] = (c >>> 16) & 0xff
+        ctr[2] = (c >>> 8) & 0xff
+        ctr[3] = (c >>> 0) & 0xff
+        prf.reset()
+        prf.update(saltBytes)
+        prf.update(ctr)
+        prf.finish(u)
+        for (let j = 0; j < len; j++) t[j] = u[j]
+        for (let j = 2; j <= iterations; j++) {
+          prf.reset()
+          prf.update(u, len)
+          prf.finish(u)
+          for (let k = 0; k < len; k++) t[k] ^= u[k]
+        }
+        for (let j = 0; j < len && i * len + j < dkLen; j++) {
+          dk[i * len + j] = t[j]
+        }
+      }
+      let hex = ''
+      for (let i = 0; i < dk.length; i++) {
+        const h = dk[i].toString(16)
+        hex += h.length === 1 ? '0' + h : h
+      }
+      return hex
+    }
+
+    const salt = $security.randomString(16)
+    const iterations = 1000
+    const hash = pbkdf2Sha256(novoPin, salt, iterations, 32)
+    user.set('pin_hash', `pbkdf2:sha256:${iterations}:${salt}:${hash}`)
+    user.set('pin_definido', true)
+    $app.save(user)
+
+    // Marcar token como utilizado
+    tokenRec.set('used', true)
+    $app.save(tokenRec)
+
+    // Limpar falhas de PIN anteriores do usuário
+    try {
+      const recs = $app.findRecordsByFilter(
+        'alertas',
+        'tipo = "aviso_geral" && mensagem ~ {:prefix}',
+        '-created',
+        50,
+        0,
+        { prefix: `[PIN_FALHA:${userId}]` },
+      )
+      for (let i = 0; i < recs.length; i++) {
+        $app.delete(recs[i])
+      }
+    } catch (_) {}
+
+    return e.json(200, {
+      success: true,
+      message: 'Novo PIN definido com sucesso! Você já pode utilizá-lo.',
+    })
+  } catch (err) {
+    return e.json(500, { error: err?.message || 'Erro ao redefinir PIN com token' })
+  }
+})

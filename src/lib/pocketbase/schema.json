@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-28T15:21:50.746Z",
+  "generatedAt": "2026-10-28T16:24:24.805Z",
   "collections": [
     {
       "name": "users",
@@ -774,6 +774,62 @@
       "indexes": [
         "CREATE UNIQUE INDEX idx_registro_uso_crianca_data ON registro_uso (crianca, data)",
         "CREATE INDEX idx_registro_uso_data ON registro_uso (data)"
+      ]
+    },
+    {
+      "name": "pin_reset_tokens",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "token_hash",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "expires_at",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "used",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_pin_tokens_user ON pin_reset_tokens (user)",
+        "CREATE INDEX idx_pin_tokens_hash ON pin_reset_tokens (token_hash)"
       ]
     }
   ]

@@ -14,6 +14,7 @@ import EsqueciSenha from '@/pages/EsqueciSenha'
 import ResetPassword from '@/pages/ResetPassword'
 import VerifyEmail from '@/pages/VerifyEmail'
 import ConfirmarEmail from '@/pages/ConfirmarEmail'
+import RedefinirPinPage from '@/pages/RedefinirPin'
 
 // 4 Abas do Protótipo Lumi IA
 import ConversaQuadro from '@/pages/ConversaQuadro'
@@ -39,6 +40,9 @@ const App = () => (
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/confirmar-email" element={<ConfirmarEmail />} />
             </Route>
+
+            {/* Rota Pública de Redefinição de PIN por Link Seguro */}
+            <Route path="/redefinir-pin" element={<RedefinirPinPage />} />
 
             {/* Rotas Protegidas - 4 Abas do Protótipo Lumi IA */}
             <Route element={<ProtectedRoute />}>

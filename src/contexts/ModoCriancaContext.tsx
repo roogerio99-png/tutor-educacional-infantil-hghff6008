@@ -6,6 +6,7 @@ import {
   verificarPinResponsavel,
   definirPinResponsavel,
   redefinirPinComSenha,
+  solicitarResetPinPorEmail,
 } from '@/services/pinResponsavel'
 import type { CriancaRecord } from '@/types'
 
@@ -36,6 +37,7 @@ interface ModoCriancaContextType {
     senhaConta?: string,
   ) => Promise<void>
   redefinirPinSenha: (senhaConta: string, novoPin: string, confirmacao: string) => Promise<void>
+  solicitarEmailResetPin: (email?: string) => Promise<{ success: boolean; message: string }>
   // Bloqueio temporário por tentativas incorretas
   tentativasFalhas: number
   tempoBloqueioRestante: number
@@ -221,6 +223,10 @@ export const ModoCriancaProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setModalConfigurarPinAberto(false)
   }
 
+  const solicitarEmailResetPin = async (email?: string) => {
+    return await solicitarResetPinPorEmail({ email })
+  }
+
   return (
     <ModoCriancaContext.Provider
       value={{
@@ -240,6 +246,7 @@ export const ModoCriancaProvider: React.FC<{ children: React.ReactNode }> = ({ c
         atualizarStatusPin,
         salvarNovoPin,
         redefinirPinSenha,
+        solicitarEmailResetPin,
         tentativasFalhas,
         tempoBloqueioRestante,
       }}

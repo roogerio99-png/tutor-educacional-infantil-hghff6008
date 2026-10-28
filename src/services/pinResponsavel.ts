@@ -17,6 +17,16 @@ export interface RedefinirPinSenhaParams {
   confirmacao: string
 }
 
+export interface SolicitarResetPinEmailParams {
+  email?: string
+}
+
+export interface RedefinirPinPorTokenParams {
+  token: string
+  novo_pin: string
+  confirmacao: string
+}
+
 export interface VerificarPinResponse {
   valido: boolean
   aviso?: string
@@ -75,6 +85,57 @@ export async function definirPinResponsavel(
   const data = await res.json()
   if (!res.ok) {
     throw new Error(data.error || 'Não foi possível configurar o PIN.')
+  }
+
+  return data
+}
+
+/**
+ * Solicita o envio de um e-mail com link temporário para redefinir o PIN.
+ * Funciona com usuário autenticado (responsável) ou informando o e-mail cadastrado.
+ */
+export async function solicitarResetPinPorEmail(
+  params?: SolicitarResetPinEmailParams,
+): Promise<{ success: boolean; message: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+
+  if (pb.authStore.isValid && pb.authStore.token) {
+    headers['Authorization'] = pb.authStore.token
+  }
+
+  const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/solicitar-reset-email`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(params || {}),
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.error || 'Não foi possível enviar o e-mail de recuperação.')
+  }
+
+  return data
+}
+
+/**
+ * Redefine o PIN a partir do token seguro recebido por e-mail (rota pública).
+ */
+export async function redefinirPinPorToken(
+  params: RedefinirPinPorTokenParams,
+): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/redefinir-por-token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params),
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.error || 'Não foi possível redefinir o PIN com este link.')
   }
 
   return data
