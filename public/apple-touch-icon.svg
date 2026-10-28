@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <defs>
+    <linearGradient id="appleWarmBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9E43"/>
+      <stop offset="45%" stop-color="#F28C28"/>
+      <stop offset="100%" stop-color="#D95C08"/>
+    </linearGradient>
+    <linearGradient id="appleLeafLeft" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2E9E44"/>
+      <stop offset="100%" stop-color="#5CD66E"/>
+    </linearGradient>
+    <linearGradient id="appleLeafRight" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34A853"/>
+      <stop offset="100%" stop-color="#7BE288"/>
+    </linearGradient>
+    <linearGradient id="appleLeafSprout" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#60C850"/>
+      <stop offset="100%" stop-color="#A6F076"/>
+    </linearGradient>
+    <filter id="appleShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="3.5" flood-color="#4A3B32" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- Apple touch icon does not have pre-clipped border-radius; iOS clips it automatically -->
+  <rect width="180" height="180" fill="url(#appleWarmBg)"/>
+
+  <circle cx="90" cy="90" r="66" fill="#FFF8F0" fill-opacity="0.16"/>
+  <circle cx="90" cy="90" r="56" fill="#FFFFFF" fill-opacity="0.12"/>
+
+  <g transform="translate(0, 0)" filter="url(#appleShadow)">
+    <!-- Livro -->
+    <path d="M 45 122 C 56 117, 75 117, 88 125 C 88 105, 88 84, 88 84 C 75 78, 56 78, 45 82 Z" fill="#FFFFFF"/>
+    <path d="M 135 122 C 124 117, 105 117, 92 125 C 92 105, 92 84, 92 84 C 105 78, 124 78, 135 82 Z" fill="#FFF4E6"/>
+    <path d="M 45 122 C 56 117, 75 117, 90 127 C 105 117, 124 117, 135 122 C 129 128, 112 129, 90 132 C 68 129, 51 128, 45 122 Z" fill="#FFE2C2"/>
+
+    <!-- Caule -->
+    <path d="M 90 122 C 90 94, 89 75, 90 56" stroke="#2E9E44" stroke-width="4.2" stroke-linecap="round" fill="none"/>
+
+    <!-- Folhas -->
+    <path d="M 89 82 C 71 82, 53 68, 60 48 C 77 48, 89 66, 89 82 Z" fill="url(#appleLeafLeft)"/>
+    <path d="M 91 73 C 109 73, 128 57, 118 36 C 100 36, 90 56, 91 73 Z" fill="url(#appleLeafRight)"/>
+    <path d="M 90 56 C 87 49, 88 40, 90 36 C 92 40, 93 49, 90 56 Z" fill="url(#appleLeafSprout)"/>
+
+    <path d="M 122 31 C 122 31, 125 33, 126 35 C 128 33, 130 31, 130 31 C 130 31, 128 29, 126 27 C 125 29, 122 31, 122 31 Z" fill="#FFE28A"/>
+  </g>
+</svg>

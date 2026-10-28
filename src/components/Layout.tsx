@@ -1,6 +1,8 @@
 import React from 'react'
 import { Outlet, useLocation, Navigate } from 'react-router-dom'
 import { Header } from '@/components/Header'
+import { AlertaOfflineBanner } from '@/components/AlertaOfflineBanner'
+import { BannerInstalacaoPwa } from '@/components/BannerInstalacaoPwa'
 import { HeaderModoCrianca } from '@/components/modocrianca/HeaderModoCrianca'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 
@@ -19,10 +21,12 @@ export const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F4F7FB] text-slate-800">
+      <AlertaOfflineBanner />
       {modoCriancaAtivo ? <HeaderModoCrianca /> : <Header />}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
         <Outlet />
       </main>
+      <BannerInstalacaoPwa />
       {!modoCriancaAtivo && (
         <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-4 text-center text-xs">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">

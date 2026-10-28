@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Aprendiz — Tutor Educacional</title>
+    <meta name="theme-color" content="#F28C28" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          'Nunito',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background-color: #fff8f0;
+        color: #4a3b32;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 28px;
+        padding: 36px 28px;
+        max-width: 420px;
+        width: 100%;
+        box-shadow: 0 12px 40px rgba(74, 59, 50, 0.08);
+        border: 1px solid #eadbce;
+      }
+      .icon-badge {
+        width: 80px;
+        height: 80px;
+        border-radius: 22px;
+        background: #fff0e0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        font-size: 38px;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 800;
+        color: #4a3b32;
+        margin-bottom: 10px;
+      }
+      p {
+        font-size: 15px;
+        color: #7a695c;
+        line-height: 1.5;
+        margin-bottom: 24px;
+      }
+      .actions {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      button {
+        background: #f28c28;
+        color: #ffffff;
+        border: none;
+        padding: 14px 24px;
+        border-radius: 16px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        transition:
+          transform 0.1s ease,
+          background 0.15s ease;
+        box-shadow: 0 4px 14px rgba(242, 140, 40, 0.35);
+      }
+      button:hover {
+        background: #e06a10;
+      }
+      button:active {
+        transform: scale(0.98);
+      }
+      .secondary-btn {
+        background: #f5ebe1;
+        color: #4a3b32;
+        box-shadow: none;
+      }
+      .secondary-btn:hover {
+        background: #eadbce;
+      }
+      .tip {
+        margin-top: 24px;
+        font-size: 13px;
+        color: #9c8b7d;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon-badge">☁️🌱</div>
+      <h1>Sem internet agora</h1>
+      <p>
+        O <strong>Aprendiz</strong> não conseguiu se conectar à internet. A tutora Lumi e os
+        recursos online precisam de rede para funcionar.
+      </p>
+      <div class="actions">
+        <button onclick="window.location.reload()">Tentar novamente agora</button>
+        <button class="secondary-btn" onclick="window.history.back()">
+          Voltar à tela anterior
+        </button>
+      </div>
+      <div class="tip">Verifique sua conexão Wi-Fi ou dados móveis e tente em instantes.</div>
+    </div>
+  </body>
+</html>

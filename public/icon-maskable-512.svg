@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Gradiente de fundo quente contínuo até a borda (sem cantos arredondados para safe zone do Android) -->
+    <linearGradient id="maskWarmBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9E43"/>
+      <stop offset="45%" stop-color="#F28C28"/>
+      <stop offset="100%" stop-color="#D95C08"/>
+    </linearGradient>
+
+    <!-- Gradiente da folha esquerda (verde vivo) -->
+    <linearGradient id="maskLeafLeft" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2E9E44"/>
+      <stop offset="100%" stop-color="#5CD66E"/>
+    </linearGradient>
+
+    <!-- Gradiente da folha direita (verde broto claro) -->
+    <linearGradient id="maskLeafRight" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34A853"/>
+      <stop offset="100%" stop-color="#7BE288"/>
+    </linearGradient>
+
+    <!-- Gradiente da terceira folhinha nascente -->
+    <linearGradient id="maskLeafSprout" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#60C850"/>
+      <stop offset="100%" stop-color="#A6F076"/>
+    </linearGradient>
+
+    <!-- Sombra suave para os elementos internos -->
+    <filter id="maskSoftShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#4A3B32" flood-opacity="0.22"/>
+    </filter>
+    <filter id="maskLeafShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#144A18" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Fundo 100% preenchido sem radius para maskable -->
+  <rect width="512" height="512" fill="url(#maskWarmBg)"/>
+
+  <!-- Todo o conteúdo central contido na zona segura (80% central, ~410px raio ~165px) -->
+  <g transform="translate(51.2, 51.2) scale(0.8)">
+    <!-- Círculo interior creme/acrílico decorativo que acolhe o símbolo -->
+    <circle cx="256" cy="256" r="190" fill="#FFF8F0" fill-opacity="0.16"/>
+    <circle cx="256" cy="256" r="162" fill="#FFFFFF" fill-opacity="0.12"/>
+
+    <!-- Grupo central com sombra -->
+    <g filter="url(#maskSoftShadow)">
+      <!-- Base: Livro Aberto Estilizado -->
+      <path d="M 126 348 C 160 336, 215 336, 252 356 C 252 300, 252 238, 252 238 C 215 220, 160 220, 126 230 Z"
+            fill="#FFFFFF" />
+      <path d="M 386 348 C 352 336, 297 336, 260 356 C 260 300, 260 238, 260 238 C 297 220, 352 220, 386 230 Z"
+            fill="#FFF4E6" />
+
+      <!-- Lombada / Base do Livro curvada -->
+      <path d="M 126 348 C 160 336, 215 336, 256 360 C 297 336, 352 336, 386 348 C 372 366, 318 368, 256 376 C 194 368, 140 366, 126 348 Z"
+            fill="#FFE2C2" />
+
+      <!-- Linhas sutis das páginas -->
+      <path d="M 152 265 C 182 258, 218 259, 238 270" stroke="#F28C28" stroke-width="4.5" stroke-linecap="round" fill="none" opacity="0.45"/>
+      <path d="M 152 292 C 182 285, 218 286, 238 297" stroke="#F28C28" stroke-width="4.5" stroke-linecap="round" fill="none" opacity="0.45"/>
+      <path d="M 360 265 C 330 258, 294 259, 274 270" stroke="#F28C28" stroke-width="4.5" stroke-linecap="round" fill="none" opacity="0.45"/>
+      <path d="M 360 292 C 330 285, 294 286, 274 297" stroke="#F28C28" stroke-width="4.5" stroke-linecap="round" fill="none" opacity="0.45"/>
+    </g>
+
+    <!-- O Broto / Plantinha do Aprendiz -->
+    <g filter="url(#maskLeafShadow)">
+      <path d="M 256 345 C 256 265, 254 210, 256 160"
+            stroke="#2E9E44" stroke-width="12" stroke-linecap="round" fill="none"/>
+
+      <path d="M 254 235 C 205 235, 150 195, 172 135 C 220 135, 254 185, 254 235 Z"
+            fill="url(#maskLeafLeft)"/>
+      <path d="M 250 220 C 230 195, 195 168, 182 148"
+            stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.4"/>
+
+      <path d="M 258 205 C 310 205, 362 160, 336 100 C 285 100, 256 155, 258 205 Z"
+            fill="url(#maskLeafRight)"/>
+      <path d="M 262 192 C 285 168, 318 138, 328 116"
+            stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" fill="none" opacity="0.4"/>
+
+      <path d="M 256 160 C 248 138, 250 115, 256 102 C 262 115, 264 138, 256 160 Z"
+            fill="url(#maskLeafSprout)"/>
+
+      <path d="M 345 88 C 345 88, 352 92, 356 99 C 360 92, 367 88, 367 88 C 367 88, 360 84, 356 77 C 352 84, 345 88, 345 88 Z"
+            fill="#FFE28A"/>
+      <circle cx="160" cy="120" r="5" fill="#FFE28A" opacity="0.9"/>
+      <circle cx="372" cy="115" r="4" fill="#FFE28A" opacity="0.8"/>
+    </g>
+  </g>
+</svg>

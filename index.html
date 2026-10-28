@@ -1,19 +1,119 @@
 <!-- HTML template for the frontend react app: https://developer.mozilla.org/en-US/docs/Web/HTML -->
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Aprende+ Tutor — Educação Personalizada para Crianças</title>
-    <meta name="description" content="O Aprende+ Tutor acompanha as atividades escolares, identifica dificuldades e constrói uma base de conhecimento sobre cada criança." />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Aprendiz — Tutor Educacional</title>
+    <meta name="description" content="O Aprendiz acompanha as atividades escolares, identifica dificuldades com acolhimento socrático e constrói o saber de cada criança." />
+    
+    <!-- PWA & Mobile Web App Manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#F28C28" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#F28C28" />
+    <meta name="background-color" content="#FFF8F0" />
+
+    <!-- iOS Meta Tags & Apple Touch Icons -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Aprendiz" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.svg" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.svg" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.svg" />
+
+    <!-- Windows / Android PWA Icons & Metas -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Aprendiz" />
+    <meta name="msapplication-TileColor" content="#F28C28" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Aprendiz — Tutor Educacional" />
+    <meta property="og:description" content="Tutor educacional inteligente e socrático para crianças, com acompanhamento de rotina e atividades." />
+    <meta property="og:image" content="/icon-512.svg" />
+    <meta property="og:type" content="website" />
     <meta name="author" content="Skip (https://goskip.dev)" />
-    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Inline Standalone Splash Pre-paint Styles -->
+    <style>
+      #pwa-splash {
+        position: fixed;
+        inset: 0;
+        background: #FFF8F0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
+        font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+      }
+      #pwa-splash.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .splash-logo-box {
+        width: 88px;
+        height: 88px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, #FF9E43 0%, #F28C28 50%, #D95C08 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 12px 32px rgba(242, 140, 40, 0.3);
+        margin-bottom: 16px;
+        animation: splash-pulse 2s infinite ease-in-out;
+      }
+      .splash-title {
+        font-size: 26px;
+        font-weight: 800;
+        color: #4A3B32;
+        letter-spacing: -0.5px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .splash-subtitle {
+        font-size: 14px;
+        font-weight: 600;
+        color: #9C8B7D;
+        margin-top: 4px;
+      }
+      @keyframes splash-pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+    </style>
   </head>
 
   <body>
+    <!-- Splash screen instantâneo para primeiro paint standalone no mobile -->
+    <div id="pwa-splash" aria-hidden="true">
+      <div class="splash-logo-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="46" height="46">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+          <path d="M6 6h10" />
+          <path d="M12 9.5 C12 8.5 13 8 13.7 8.7 C14.5 9.5 14.5 10.5 12 12.5 C9.5 10.5 9.5 9.5 10.3 8.7 C11 8 12 8.5 12 9.5 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" />
+        </svg>
+      </div>
+      <div class="splash-title">
+        <span>Aprendiz</span>
+        <span style="color: #F28C28;">✦</span>
+      </div>
+      <div class="splash-subtitle">Tutor Educacional Infantil</div>
+    </div>
+
     <div id="root"></div>
     <!-- @skip-protected: Do not remove. Required for app features. -->
     <script src="https://goskip.dev/skip.js"></script>
