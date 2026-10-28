@@ -159,6 +159,92 @@ export const ConversaQuadro: React.FC = () => {
   const [materiaDetectada, setMateriaDetectada] = useState<string>('ciencias')
   const [topicoQuadroCustom, setTopicoQuadroCustom] = useState<string>('')
 
+  // Rótulo amigável e espontâneo da etapa em curso para a Orbe Live
+  const passoAtualAmigavel = useMemo(() => {
+    switch (etapaAtual) {
+      case 'entender':
+        return 'explorando o que você sabe 🔍'
+      case 'contextualizar':
+        return 'imaginando no seu dia a dia 💭'
+      case 'guiar':
+        return 'descobrindo pistas com você ✏️'
+      case 'praticar':
+        return 'hora de tentar um pedacinho 🧩'
+      case 'consolidar':
+        return 'celebrando sua conquista 🌟'
+      default:
+        return 'conversando com carinho ✨'
+    }
+  }, [etapaAtual])
+
+  // Função utilitária para detectar e sincronizar etapa a partir da fala da Lumi em tempo real
+  const detectarEtapaDoTexto = useCallback((texto: string): EtapaSocratica | null => {
+    if (!texto) return null
+    const norm = texto
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+
+    // Match explícito por tag [[ETAPA: ...]]
+    const matchTag = norm.match(/\[\[etapa:\s*(entender|contextualizar|guiar|praticar|consolidar)/i)
+    if (matchTag && matchTag[1]) {
+      return matchTag[1] as EtapaSocratica
+    }
+
+    // Match espontâneo pelas fórmulas de abertura
+    if (
+      norm.includes('entender o que voce ja sabe') ||
+      norm.includes('me conta onde essa duvida') ||
+      norm.includes('descobrir junto com voce') ||
+      norm.includes('do comecinho o que voce') ||
+      norm.includes('o que voce ja sabe') ||
+      norm.includes('o que voce acha')
+    ) {
+      return 'entender'
+    }
+    if (
+      norm.includes('outro jeito de pensar') ||
+      norm.includes('no seu dia a dia') ||
+      norm.includes('parecido com o que') ||
+      norm.includes('imaginar isso') ||
+      norm.includes('numa historinha') ||
+      norm.includes('no recreio')
+    ) {
+      return 'contextualizar'
+    }
+    if (
+      norm.includes('te dar uma pistinha') ||
+      norm.includes('primeiro passinho') ||
+      norm.includes('olha bem para esse detalhe') ||
+      norm.includes('por esse caminho') ||
+      norm.includes('passo a passo') ||
+      norm.includes('uma dica')
+    ) {
+      return 'guiar'
+    }
+    if (
+      norm.includes('sua vez de tentar') ||
+      norm.includes('vamos praticar') ||
+      norm.includes('desafio rapido') ||
+      norm.includes('mao na massa') ||
+      norm.includes('desafio bem divertido') ||
+      norm.includes('tenta fazer')
+    ) {
+      return 'praticar'
+    }
+    if (
+      norm.includes('voce conseguiu') ||
+      norm.includes('como voce pensou') ||
+      norm.includes('ensinar para um amigo') ||
+      norm.includes('me ensina o caminho') ||
+      norm.includes('com suas palavras como') ||
+      norm.includes('voce arrasou')
+    ) {
+      return 'consolidar'
+    }
+    return null
+  }, [])
+
   // Respiração Guiada (Momento Calma & Foco)
   const [modoRespiracao, setModoRespiracao] = useState(false)
   const [anotacaoLivre, setAnotacaoLivre] = useState(
@@ -308,6 +394,11 @@ export const ConversaQuadro: React.FC = () => {
               setMessages((prev) =>
                 prev.map((m) => (m.id === lumiMsgId ? { ...m, text: full } : m)),
               )
+              // Detecta dinamicamente a etapa socrática no texto transmitido
+              const etapaDetectada = detectarEtapaDoTexto(full)
+              if (etapaDetectada) {
+                setEtapaAtual(etapaDetectada)
+              }
               if (visaoChat === 'orbe') {
                 setLegendaFalando(full)
               }
@@ -352,13 +443,20 @@ export const ConversaQuadro: React.FC = () => {
 
         const textoFinalLumi = res.content || currentAssistantText
 
+        // Confirma ou refina a etapa detectada a partir da fala final
+        const etapaDaFala = detectarEtapaDoTexto(textoFinalLumi)
+        const etapaFinal = res.etapa || etapaDaFala || etapaAtual
+        if (etapaFinal) {
+          setEtapaAtual(etapaFinal)
+        }
+
         setMessages((prev) =>
           prev.map((m) =>
             m.id === lumiMsgId
               ? {
                   ...m,
                   text: textoFinalLumi,
-                  etapa: res.etapa,
+                  etapa: etapaFinal,
                   acoes: res.acoes,
                 }
               : m,
@@ -396,13 +494,19 @@ export const ConversaQuadro: React.FC = () => {
             setAcoesRecentes(syncRes.acoes)
           }
 
+          const etapaDaFalaSync = detectarEtapaDoTexto(syncRes.content)
+          const etapaFinalSync = syncRes.etapa || etapaDaFalaSync || etapaAtual
+          if (etapaFinalSync) {
+            setEtapaAtual(etapaFinalSync)
+          }
+
           setMessages((prev) =>
             prev.map((m) =>
               m.id === lumiMsgId
                 ? {
                     ...m,
                     text: syncRes.content,
-                    etapa: syncRes.etapa,
+                    etapa: etapaFinalSync,
                     acoes: syncRes.acoes,
                   }
                 : m,
@@ -997,6 +1101,8 @@ export const ConversaQuadro: React.FC = () => {
                 isSupported={recSuportado}
                 permissionDenied={permissionDenied}
                 errorMessage={erroReconhecimento}
+                etapaAtual={etapaAtual}
+                passoDetectadoNome={passoAtualAmigavel}
               />
             </div>
           ) : (

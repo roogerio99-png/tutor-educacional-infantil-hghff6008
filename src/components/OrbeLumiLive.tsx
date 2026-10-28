@@ -17,6 +17,8 @@ export interface OrbeLumiLiveProps {
   isSupported?: boolean
   permissionDenied?: boolean
   errorMessage?: string | null
+  etapaAtual?: string
+  passoDetectadoNome?: string
 }
 
 export const OrbeLumiLive: React.FC<OrbeLumiLiveProps> = ({
@@ -33,6 +35,8 @@ export const OrbeLumiLive: React.FC<OrbeLumiLiveProps> = ({
   isSupported = true,
   permissionDenied = false,
   errorMessage = null,
+  etapaAtual,
+  passoDetectadoNome,
 }) => {
   // Configurações visuais por estado
   const configEstado = {
@@ -237,10 +241,18 @@ export const OrbeLumiLive: React.FC<OrbeLumiLiveProps> = ({
 
         {estado === 'falando' && (
           <div>
-            <span className="text-[11px] font-black uppercase text-amber-600 tracking-wider flex items-center justify-center gap-1">
-              <Volume2 className="w-3.5 h-3.5 text-amber-500" />
-              Lumi explicando:
-            </span>
+            <div className="flex items-center justify-center gap-2 flex-wrap mb-1">
+              <span className="text-[11px] font-black uppercase text-amber-600 tracking-wider flex items-center justify-center gap-1">
+                <Volume2 className="w-3.5 h-3.5 text-amber-500" />
+                Lumi falando:
+              </span>
+              {passoDetectadoNome && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100/90 border border-amber-300 px-2.5 py-0.5 rounded-full shadow-2xs animate-fade-in">
+                  <span>✨</span>
+                  <span>Agora: {passoDetectadoNome}</span>
+                </span>
+              )}
+            </div>
             <p className="text-base sm:text-lg font-bold text-slate-900 mt-1 leading-snug">
               {legendaFalando || '...'}
             </p>

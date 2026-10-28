@@ -70,13 +70,23 @@ export const TelemetriaCerebro: React.FC<TelemetriaCerebroProps> = ({
         {/* Etapa Socrática */}
         <div className="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Protocolo</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400">Passo em Curso</span>
             <Eye className="w-3.5 h-3.5 text-amber-400" />
           </div>
           <div className="text-xs font-black text-amber-300 capitalize mt-1">
-            Etapa: {etapaAtual}
+            {etapaAtual === 'entender' && '🔍 Entender'}
+            {etapaAtual === 'contextualizar' && '💭 Contextualizar'}
+            {etapaAtual === 'guiar' && '✏️ Guiar'}
+            {etapaAtual === 'praticar' && '🧩 Praticar'}
+            {etapaAtual === 'consolidar' && '🌟 Consolidar'}
           </div>
-          <span className="text-[10px] text-slate-400">Matéria: {materiaAtual}</span>
+          <span className="text-[10px] text-slate-400">
+            {etapaAtual === 'entender' && 'Explorando o que sabe'}
+            {etapaAtual === 'contextualizar' && 'Ligando ao dia a dia'}
+            {etapaAtual === 'guiar' && 'Dando pistas passo a passo'}
+            {etapaAtual === 'praticar' && 'Desafio prático rápido'}
+            {etapaAtual === 'consolidar' && 'Comemoração & explicação'}
+          </span>
         </div>
 
         {/* Quadro Visual / Co-Speech */}
