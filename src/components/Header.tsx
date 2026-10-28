@@ -93,7 +93,7 @@ const TABS = [
   },
 ]
 export const Header: React.FC = () => {
-  const { user, logout } = useAuth()
+  const { user, logout, tipoConta } = useAuth()
   const { criancas, criancaSelecionada, selecionarCrianca, recarregarCriancas } = useCrianca()
   const {
     pinConfigurado,

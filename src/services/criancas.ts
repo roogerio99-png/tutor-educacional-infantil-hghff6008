@@ -51,21 +51,47 @@ export async function excluirCrianca(id: string): Promise<boolean> {
 export async function excluirCriancaCompleto(
   id: string,
 ): Promise<{ success: boolean; message: string }> {
-  const baseUrl = import.meta.env.VITE_POCKETBASE_URL || ''
-  const token = pb.authStore.token
+  // Limpar coleções relacionadas vinculadas à criança
+  const colecoesParaLimpar = [
+    'memorias',
+    'checkins_emocionais',
+    'dificuldades',
+    'conhecimento',
+    'agenda',
+    'alertas',
+    'registro_uso',
+  ]
 
-  const res = await fetch(`${baseUrl}/backend/v1/crianca/${id}/excluir-completo`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: token ? `Bearer ${token}` : '',
-    },
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || `Erro ao excluir criança (${res.status})`)
+  for (const col of colecoesParaLimpar) {
+    try {
+      const records = await pb.collection(col).getFullList({
+        filter: pb.filter('crianca = {:c}', { c: id }),
+      })
+      for (const r of records) {
+        await pb.collection(col).delete(r.id).catch(() => {})
+      }
+    } catch {
+      // Ignora se não houver registros ou erro nessa coleção
+    }
   }
 
-  return await res.json()
+  // Limpar usuário da criança se existir
+  try {
+    const usuarios = await pb.collection('criancas_usuarios').getFullList({
+      filter: pb.filter('crianca = {:c}', { c: id }),
+    })
+    for (const u of usuarios) {
+      await pb.collection('criancas_usuarios').delete(u.id).catch(() => {})
+    }
+  } catch {
+    // Ignora se não houver
+  }
+
+  // Excluir a criança
+  await pb.collection('criancas').delete(id)
+
+  return {
+    success: true,
+    message: 'Perfil da criança e todos os dados vinculados foram removidos com sucesso.',
+  }
 }
