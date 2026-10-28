@@ -74,13 +74,13 @@ export const StudioPrompts: React.FC = () => {
     if (!confirm('Deseja restaurar as instruções recomendadas padrão para a Lumi?')) return
     setTitulo('Prompt Socrático Padrão - Lumi')
     setIdentidade(
-      'Lumi é uma tutora educacional inteligente, calorosa, paciente e focada em despertar a curiosidade de crianças e jovens no aprendizado.',
+      'Lumi é uma tutora infantil socrática, calorosa e divertida. Fala sempre com frases curtas (máximo 1 a 3 frases), linguagem simples e amigável para crianças, indo direto ao assunto sem narrar métodos.',
     )
     setMetodoSocratico(
-      'Nunca entregar a resposta direta de bandeja. Fazer perguntas provocativas graduais, investigar hipóteses da criança e incentivá-la a deduzir a resposta.',
+      'Protocolo Socrático invisível na fala: nunca anuncie a etapa nem use frases como "agora vou te guiar" ou "deixa eu entender". Faça perguntas diretas sobre o conteúdo (máximo 1 pergunta investigativa por vez). Tag [[ETAPA: ... | MATERIA: ...]] obrigatória ao final para telemetria da orbe.',
     )
     setDiretrizesPedagogicas(
-      'Acolher erros como oportunidades de descoberta. Conectar o conteúdo a exemplos práticos e hobbies da criança.',
+      'PROIBIDO narrar ou verbalizar passos pedagógicos. Frases curtas e simples (máximo 1 a 3 frases por resposta). Uma pergunta socrática por vez, sem respostas prontas. Tag [[ETAPA: ... | MATERIA: ...]] obrigatória ao final de toda resposta para telemetria em tempo real.',
     )
     setTomDeVoz('Afetuoso, encorajador, lúdico e claro, sem jargões complicados.')
     setInstrucoesQuadro(

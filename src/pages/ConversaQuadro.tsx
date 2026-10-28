@@ -673,7 +673,9 @@ export const ConversaQuadro: React.FC = () => {
   useEffect(() => {
     obterPromptAtivo().then((p) => {
       if (p) {
-        setCustomPromptText(`${p.identidade} Regra Socrática: ${p.metodo_socratico}`)
+        setCustomPromptText(
+          `${p.identidade} Regra Socrática: ${p.metodo_socratico} ${p.diretrizes_pedagogicas || ''} NUNCA verbalize o passo nem anuncie métodos na fala.`,
+        )
       }
     })
   }, [])

@@ -6,6 +6,10 @@ export function limparTextoParaVoz(texto: string): string {
 
   let limpo = texto
 
+  // Remove metadados técnicos socráticos ([[ETAPA: ... | MATERIA: ...]]) para não serem falados
+  limpo = limpo.replace(/\[\[ETAPA:[^\]]*\]\]/gi, '')
+  limpo = limpo.replace(/\[\[[^\]]*\]\]/g, '')
+
   // Remove blocos de código markdown ```...```
   limpo = limpo.replace(/```[\s\S]*?```/g, '')
 
