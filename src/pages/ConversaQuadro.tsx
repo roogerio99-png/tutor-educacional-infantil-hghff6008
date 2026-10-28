@@ -186,20 +186,22 @@ export const ConversaQuadro: React.FC = () => {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
 
-    // Match explícito por tag [[ETAPA: ...]]
+    // 1. Match explícito por tag [[ETAPA: ...]] (fonte mais precisa e presente em toda resposta)
     const matchTag = norm.match(/\[\[etapa:\s*(entender|contextualizar|guiar|praticar|consolidar)/i)
     if (matchTag && matchTag[1]) {
       return matchTag[1] as EtapaSocratica
     }
 
-    // Match espontâneo pelas fórmulas de abertura
+    // 2. Match semântico e por fórmulas ocasionais de abertura/transição
     if (
       norm.includes('entender o que voce ja sabe') ||
       norm.includes('me conta onde essa duvida') ||
       norm.includes('descobrir junto com voce') ||
       norm.includes('do comecinho o que voce') ||
       norm.includes('o que voce ja sabe') ||
-      norm.includes('o que voce acha')
+      norm.includes('o que voce acha') ||
+      norm.includes('o que voce já pensou') ||
+      norm.includes('o que você já sabe')
     ) {
       return 'entender'
     }
@@ -209,7 +211,8 @@ export const ConversaQuadro: React.FC = () => {
       norm.includes('parecido com o que') ||
       norm.includes('imaginar isso') ||
       norm.includes('numa historinha') ||
-      norm.includes('no recreio')
+      norm.includes('no recreio') ||
+      norm.includes('no dia a dia')
     ) {
       return 'contextualizar'
     }
@@ -219,7 +222,9 @@ export const ConversaQuadro: React.FC = () => {
       norm.includes('olha bem para esse detalhe') ||
       norm.includes('por esse caminho') ||
       norm.includes('passo a passo') ||
-      norm.includes('uma dica')
+      norm.includes('uma dica') ||
+      norm.includes('pistinha para voce') ||
+      norm.includes('pistinha para você')
     ) {
       return 'guiar'
     }
@@ -229,7 +234,9 @@ export const ConversaQuadro: React.FC = () => {
       norm.includes('desafio rapido') ||
       norm.includes('mao na massa') ||
       norm.includes('desafio bem divertido') ||
-      norm.includes('tenta fazer')
+      norm.includes('tenta fazer') ||
+      norm.includes('desafio rápido') ||
+      norm.includes('mão na massa')
     ) {
       return 'praticar'
     }
@@ -239,7 +246,9 @@ export const ConversaQuadro: React.FC = () => {
       norm.includes('ensinar para um amigo') ||
       norm.includes('me ensina o caminho') ||
       norm.includes('com suas palavras como') ||
-      norm.includes('voce arrasou')
+      norm.includes('voce arrasou') ||
+      norm.includes('você conseguiu') ||
+      norm.includes('você arrasou')
     ) {
       return 'consolidar'
     }
