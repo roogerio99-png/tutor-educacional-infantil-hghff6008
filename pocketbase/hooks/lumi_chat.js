@@ -995,6 +995,7 @@ routerAdd(
         record.set('owner', userId)
         record.set('crianca', criancaId)
         record.set('username', usernameRaw)
+        record.setEmail(usernameRaw + '@lumi.local')
         record.set('nome_exibicao', nomeExibicao || crianca.getString('nome'))
         record.set('ativo', ativo)
         record.set('permissoes', JSON.stringify(permissoes))
