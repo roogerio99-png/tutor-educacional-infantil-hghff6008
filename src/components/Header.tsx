@@ -240,26 +240,24 @@ export const Header: React.FC = () => {
             </button>
           )}
 
-          {/* Acesso da Criança e Modo Criança */}
-          <Link
-            to="/grafo-painel"
-            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 transition-colors"
-            title="Gerenciar usuário, senha e permissões da criança"
-          >
-            <span>🔐</span>
-            <span>Acesso Criança</span>
-          </Link>
+          {/* Governança Comercial: Alternador Rápido "Acessar como Responsável" vs "Acessar como Criança" */}
+          <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl border border-slate-700">
+            <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+              <span>👨‍👩‍👧</span>
+              <span className="hidden lg:inline">Acessar como</span>
+              <span>Responsável</span>
+            </span>
 
-          {/* Botão de Destaque: Ativar Modo Criança */}
-          <button
-            type="button"
-            onClick={() => setModalAtivarModoCrianca(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-extrabold text-xs sm:text-sm px-3.5 py-1.5 rounded-xl shadow-md shadow-orange-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-            title="Ativar experiência protegida para a criança usar no celular"
-          >
-            <span>🧒</span>
-            <span>Modo Criança</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setModalAtivarModoCrianca(true)}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-extrabold text-xs px-3 py-1.5 rounded-lg shadow-sm transition-all hover:scale-102 active:scale-95 cursor-pointer"
+              title="Alternar imediatamente para o acesso protegido da criança (sem pedir senha toda vez)"
+            >
+              <span>🧒</span>
+              <span>Acessar como Criança</span>
+            </button>
+          </div>
 
           {/* Usuário e Logout */}
           <div className="flex items-center gap-3">

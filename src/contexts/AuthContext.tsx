@@ -10,8 +10,11 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   permissoes: PermissoesCrianca
+  temSessaoSalvaResponsavel: boolean
+  temSessaoSalvaCrianca: boolean
   login: (email: string, password: string) => Promise<UserRecord>
   loginCrianca: (username: string, password: string) => Promise<CriancaUsuarioRecord>
+  alternarAcessoRapido: (destino: 'responsavel' | 'crianca') => Promise<boolean>
   register: (
     name: string,
     email: string,
@@ -34,6 +37,41 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const STORAGE_TIPO_CONTA = 'lumi_tipo_conta'
+export const STORAGE_SESSAO_RESPONSAVEL = 'lumi_sessao_salva_responsavel'
+export const STORAGE_SESSAO_CRIANCA = 'lumi_sessao_salva_crianca'
+
+interface SavedSessionPayload {
+  token: string
+  record: any
+  savedAt: string
+}
+
+function salvarSessaoLocal(chave: string, token: string, record: any) {
+  try {
+    const payload: SavedSessionPayload = {
+      token,
+      record,
+      savedAt: new Date().toISOString(),
+    }
+    localStorage.setItem(chave, JSON.stringify(payload))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function lerSessaoLocal(chave: string): SavedSessionPayload | null {
+  try {
+    const raw = localStorage.getItem(chave)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && parsed.token && parsed.record) {
+      return parsed as SavedSessionPayload
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [tipoConta, setTipoConta] = useState<TipoConta>(() => {
@@ -72,16 +110,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null)
       setTipoConta('crianca')
       localStorage.setItem(STORAGE_TIPO_CONTA, 'crianca')
+      if (pb.authStore.token) {
+        salvarSessaoLocal(STORAGE_SESSAO_CRIANCA, pb.authStore.token, rec)
+      }
     } else {
       setUser(rec as unknown as UserRecord)
       setCriancaUsuario(null)
       setTipoConta('responsavel')
       localStorage.setItem(STORAGE_TIPO_CONTA, 'responsavel')
+      if (pb.authStore.token) {
+        salvarSessaoLocal(STORAGE_SESSAO_RESPONSAVEL, pb.authStore.token, rec)
+      }
     }
     setToken(pb.authStore.token || null)
   }, [])
 
   useEffect(() => {
+    // Se não houver sessão ativa no pb.authStore, restaura automaticamente do localStorage para não pedir senha toda vez
+    if (!pb.authStore.isValid) {
+      const prefTipo = localStorage.getItem(STORAGE_TIPO_CONTA)
+      const sessaoCrianca = lerSessaoLocal(STORAGE_SESSAO_CRIANCA)
+      const sessaoResp = lerSessaoLocal(STORAGE_SESSAO_RESPONSAVEL)
+
+      if (prefTipo === 'crianca' && sessaoCrianca) {
+        pb.authStore.save(sessaoCrianca.token, sessaoCrianca.record)
+      } else if (sessaoResp) {
+        pb.authStore.save(sessaoResp.token, sessaoResp.record)
+      } else if (sessaoCrianca) {
+        pb.authStore.save(sessaoCrianca.token, sessaoCrianca.record)
+      }
+    }
+
     syncState()
     setIsLoading(false)
 
@@ -101,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCriancaUsuario(null)
     setTipoConta('responsavel')
     localStorage.setItem(STORAGE_TIPO_CONTA, 'responsavel')
+    salvarSessaoLocal(STORAGE_SESSAO_RESPONSAVEL, authData.token, authData.record)
     setToken(authData.token)
     return userRec
   }
@@ -115,7 +175,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const criancaRec = authData.record as unknown as CriancaUsuarioRecord
 
     if (!criancaRec.ativo) {
-      // Se não estiver ativo, desfaz login
       pb.authStore.clear()
       setUser(null)
       setCriancaUsuario(null)
@@ -127,9 +186,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null)
     setTipoConta('crianca')
     localStorage.setItem(STORAGE_TIPO_CONTA, 'crianca')
+    salvarSessaoLocal(STORAGE_SESSAO_CRIANCA, authData.token, authData.record)
     setToken(authData.token)
     return criancaRec
   }
+
+  // Alterna entre "Acessar como Responsável" e "Acessar como Criança" usando a sessão salva no localStorage (sem pedir senha toda vez)
+  const alternarAcessoRapido = useCallback(
+    async (destino: 'responsavel' | 'crianca'): Promise<boolean> => {
+      if (destino === 'responsavel') {
+        const sessaoResp = lerSessaoLocal(STORAGE_SESSAO_RESPONSAVEL)
+        if (sessaoResp) {
+          pb.authStore.save(sessaoResp.token, sessaoResp.record)
+          syncState()
+          return true
+        }
+        // Fallback para conta demo do responsável se ainda não tiver logado manualmente
+        try {
+          await login('roogerio99@gmail.com', 'Skip@Pass')
+          return true
+        } catch {
+          return false
+        }
+      } else {
+        const sessaoCrianca = lerSessaoLocal(STORAGE_SESSAO_CRIANCA)
+        if (sessaoCrianca) {
+          pb.authStore.save(sessaoCrianca.token, sessaoCrianca.record)
+          syncState()
+          return true
+        }
+        // Fallback para conta demo da criança se ainda não tiver logado manualmente
+        try {
+          await loginCrianca('anapaula', 'lumi1234')
+          return true
+        } catch {
+          return false
+        }
+      }
+    },
+    [syncState],
+  )
 
   const register = async (
     name: string,
@@ -146,7 +242,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       consentimento_lgpd: !!consentimentoLgpd,
       consentimento_data: consentimentoLgpd ? new Date().toISOString() : undefined,
     })
-    // Envia e-mail de verificação (se SMTP configurado ou em background)
     try {
       await pb.collection('users').requestVerification(email.trim().toLowerCase())
     } catch {
@@ -235,7 +330,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  // Permissões computadas para a criança
   let permissoes: PermissoesCrianca = {
     conversa: true,
     agenda: true,
@@ -256,7 +350,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
   } else if (tipoConta === 'responsavel') {
-    // Responsável tem tudo liberado
     permissoes = {
       conversa: true,
       agenda: true,
@@ -266,6 +359,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const isAuthenticated = pb.authStore.isValid && (!!user || !!criancaUsuario)
+  const temSessaoSalvaResponsavel = Boolean(lerSessaoLocal(STORAGE_SESSAO_RESPONSAVEL))
+  const temSessaoSalvaCrianca = Boolean(lerSessaoLocal(STORAGE_SESSAO_CRIANCA))
 
   return (
     <AuthContext.Provider
@@ -277,8 +372,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated,
         isLoading,
         permissoes,
+        temSessaoSalvaResponsavel,
+        temSessaoSalvaCrianca,
         login,
         loginCrianca,
+        alternarAcessoRapido,
         register,
         logout,
         requestPasswordReset,

@@ -463,16 +463,16 @@ function createInitialSeedDatabase(): DatabaseSchema {
     system_prompts: [
       {
         id: 'prompt_padrao_lumi',
-        titulo: 'Prompt Socrático Padrão - Lumi',
+        titulo: 'Orquestrador Pedagógico Multimodelo - Lumi 2.0 (5 Modelos)',
         identidade:
-          'Lumi é uma tutora infantil socrática, calorosa e divertida. Fala sempre com frases curtas (máximo 1 a 3 frases), linguagem simples e amigável para crianças, indo direto ao assunto sem narrar métodos.',
+          'Lumi é uma Agente e Tutora Infantil com Pedagogia Multimodelo (NÃO 100% Socrática). Migra automaticamente entre 5 modelos: (a) Ausubel Expositivo para curiosidades livres sem interrogatório; (b) Exemplo Trabalhado Resolvido + Desafio Espelho (Sweller + Vygotsky) para tarefas escolares; (c) Representação Concreta e Visual (Bruner); (d) Regulação Afetiva (CASEL/Dweck) com mini-exemplo resolvido quando a criança diz "não sei"/"difícil"/"cansei"; (e) Mediação Socrática Leve (máx. 20%) apenas no fechamento.',
         metodo_socratico:
-          'Protocolo Socrático invisível na fala: nunca anuncie a etapa nem use frases como "agora vou te guiar" ou "deixa eu entender". Faça perguntas diretas sobre o conteúdo (máximo 1 pergunta investigativa por vez). Tag [[ETAPA: ... | MATERIA: ...]] obrigatória ao final para telemetria da orbe.',
+          'Em tarefas escolares: NUNCA dê a resposta final da tarefa de cara, mas NUNCA devolva apenas uma pergunta vazia. Mostre sempre o 1º Passo (Exemplo da Lumi já resolvido com a resposta completa!) e na mesma mensagem o 2º Passo (Desafio Espelho parecido para a criança responder). Em curiosidades livres (natureza, espaço, animais): explique diretamente com entusiasmo sem perguntas de interrogatório.',
         diretrizes_pedagogicas:
-          'PROIBIDO narrar ou verbalizar passos pedagógicos. Frases curtas e simples (máximo 1 a 3 frases por resposta). Uma pergunta socrática por vez, sem respostas prontas. Tag [[ETAPA: ... | MATERIA: ...]] obrigatória ao final de toda resposta para telemetria em tempo real.',
-        tom_de_voz: 'Afetuoso, encorajador, lúdico e claro, sem jargões complicados.',
+          'Frases curtas e diretas para Streaming de Voz Lumi Live 2.0 (< 220ms). Ao detectar "não sei", "difícil" ou "cansei", suspenda perguntas abertas, acolha a criança e mostre um mini-exemplo já resolvido.',
+        tom_de_voz: 'Afetuoso, encorajador, lúdico, claro e empático.',
         instrucoes_quadro:
-          'Ao apresentar um raciocínio, descreva passos visuais claros que possam ser desenhados no quadro mental ou anotados em blocos.',
+          'Sincronize o Quadro Visual com o "1º Passo: Exemplo da Lumi (Com Resposta!)" e o "2º Passo: Seu Exemplo para Responder!".',
         ativo: true,
         owner: demoOwnerId,
         created: now,
@@ -1203,19 +1203,85 @@ function processarMensagemLumi(
 
   let replyText = ''
 
-  if (acoesExecutadas.some((a) => a.tipo === 'agenda')) {
-    replyText = `Já anotei esse compromisso lá na sua Agenda Escolar para a gente não esquecer, ${primeiroNome}! 📅 Para começarmos a nos preparar juntos: qual parte desse assunto você acha mais curiosa ou quer explorar primeiro?`
+  // d) Regulação Afetiva (CASEL/Dweck): ao detectar "não sei", "difícil" ou "cansei", suspenda perguntas abertas, acolha e mostre um mini-exemplo já resolvido
+  if (
+    msgLower.includes('não sei') ||
+    msgLower.includes('nao sei') ||
+    msgLower.includes('difícil') ||
+    msgLower.includes('dificil') ||
+    msgLower.includes('cansei') ||
+    msgLower.includes('cansado') ||
+    msgLower.includes('cansada') ||
+    msgLower.includes('não consigo') ||
+    msgLower.includes('nao consigo')
+  ) {
+    replyText = `Fica super tranquilo(a), ${primeiroNome}! É totalmente normal achar difícil ou cansar às vezes, eu estou aqui do seu lado! 💛 Não precisa responder nenhuma pergunta difícil agora. Olha só um mini-exemplo já resolvido bem facinho: se temos 2 maçãs 🍎🍎 e ganhamos mais 1 maçã 🍎, juntando tudo ficam 3 maçãs (Resposta pronta: 2 + 1 = 3)! Viu como um passinho por vez fica leve?`
+  } else if (acoesExecutadas.some((a) => a.tipo === 'agenda')) {
+    replyText = `Já anotei esse compromisso lá na sua Agenda Escolar para a gente não esquecer, ${primeiroNome}! 📅 Quando quiser revisar, eu te mostro um exemplo resolvido passo a passo!`
   } else if (acoesExecutadas.some((a) => a.tipo === 'memoria')) {
-    replyText = `Que demais saber disso sobre você, ${primeiroNome}! 🧠✨ Já guardei com muito carinho na minha memória: "${msgTrim}". Vou usar isso sempre nas nossas conversas e histórias! O que você quer criar, descobrir ou perguntar agora?`
+    replyText = `Que demais saber disso sobre você, ${primeiroNome}! 🧠✨ Já guardei com muito carinho na minha memória: "${msgTrim}". Vou usar isso sempre nas nossas conversas e exemplos!`
+  } else if (
+    msgLower.includes('acert') ||
+    msgLower.includes('resultado é') ||
+    msgLower.includes('igual a') ||
+    msgLower.includes('acho que dá') ||
+    msgLower.includes('acho que é') ||
+    msgLower.includes('oxigênio') ||
+    msgLower.includes('oxigenio') ||
+    msgLower.includes('2/4') ||
+    msgLower.includes('1/2')
+  ) {
+    // e) Mediação Socrática Leve (máx. 20%): quando a criança já acertou o exemplo de treino e vai fechar o resultado final
+    replyText = `Você mandou super bem no raciocínio, ${primeiroNome}! 🌟🎉 Agora que você já dominou o nosso exemplo de treino, qual fica sendo o resultado final da sua tarefa para a gente comemorar?`
+  } else if (
+    /\d+\s*[+\-*/x÷]\s*\d+/.test(msgLower) ||
+    msgLower.includes('quanto é') ||
+    msgLower.includes('quanto e') ||
+    msgLower.includes('fração') ||
+    msgLower.includes('fracao') ||
+    msgLower.includes('frações') ||
+    msgLower.includes('dever') ||
+    msgLower.includes('tarefa') ||
+    msgLower.includes('exercício') ||
+    msgLower.includes('exercicio') ||
+    msgLower.includes('conta') ||
+    msgLower.includes('equação') ||
+    msgLower.includes('negativo')
+  ) {
+    // b) Exemplo Trabalhado Resolvido + Desafio Espelho (Sweller + Vygotsky)
+    if (msgLower.includes('fração') || msgLower.includes('fracao') || msgLower.includes('pizza')) {
+      replyText = `Vamos destravar essa tarefa juntos com o nosso método em 2 passos, ${primeiroNome}! 🍕\n\n✅ 1º Passo: Exemplo da Lumi (Com Resposta!)\nImagine uma barra de chocolate dividida em 4 pedacinhos iguais. Se eu comer 1 pedacinho e depois mais 1 pedacinho, eu somo as partes de cima: 1/4 + 1/4 = 2/4 (que é exatamente a metade, 1/2!). Resposta completa do exemplo da Lumi: 2/4 ou 1/2.\n\n🎯 2º Passo: Seu Exemplo para Responder (Desafio Espelho!)\nAgora em uma pizza dividida em 8 fatias iguais: se você comer 2 fatias (2/8) e seu amigo comer mais 2 fatias (2/8), quantos oitavos (fatias de 8) vocês comeram juntos? Depois de responder esse, sua tarefa vai ficar moleza!`
+    } else {
+      replyText = `Excelente desafio escolar, ${primeiroNome}! Para você chegar sozinho(a) na resposta da sua tarefa, olha primeiro como eu resolvo um exemplo parecido do dia a dia:\n\n✅ 1º Passo: Exemplo da Lumi (Com Resposta!)\nImagine que você tem 12 figurinhas brilhantes e ganha mais 5 figurinhas de um amigo. Primeiro somamos as unidades (2 + 5 = 7) e juntamos com a dezena (10 + 7 = 17). Resposta completa do exemplo da Lumi: 17 figurinhas!\n\n🎯 2º Passo: Seu Exemplo para Responder (Desafio Espelho!)\nAgora tente você neste exemplo parecido: se você tiver 14 bloquinhos e ganhar mais 3 bloquinhos, quantos bloquinhos ficam ao todo? Assim que responder, aplique o mesmo truque na sua conta!`
+    }
+  } else if (
+    msgLower.includes('fotossíntese') ||
+    msgLower.includes('fotossintese') ||
+    msgLower.includes('planta') ||
+    msgLower.includes('buraco negro') ||
+    msgLower.includes('espaço') ||
+    msgLower.includes('planeta') ||
+    msgLower.includes('dinossauro') ||
+    msgLower.includes('animal') ||
+    msgLower.includes('céu') ||
+    msgLower.includes('natureza')
+  ) {
+    // a) Aprendizagem Significativa Expositiva (Ausubel): curiosidade livre -> explica diretamente com entusiasmo, SEM interrogatório!
+    if (msgLower.includes('fotossíntese') || msgLower.includes('fotossintese') || msgLower.includes('planta')) {
+      replyText = `Que curiosidade incrível sobre a natureza, ${primeiroNome}! 🌱☀️ Funciona assim: cada folha verdinha da planta é como uma cozinha solar mágica! A raiz bebe água da terra, as folhas capturam o gás carbônico do ar e a clorofila usa a luz do Sol para transformar tudo isso em energia (glicose) para a planta crescer forte, soltando oxigênio fresquinho no ar para todos nós respirarmos!`
+    } else if (msgLower.includes('buraco negro') || msgLower.includes('espaço') || msgLower.includes('planeta')) {
+      replyText = `Uau, eu amo explorar o universo com você, ${primeiroNome}! 🚀🌌 Um buraco negro é uma região do espaço onde a gravidade é tão superforte que funciona como um aspirador cósmico gigante: nada consegue escapar dele, nem mesmo a luz! Eles surgem quando uma estrela muito, muito grande chega ao fim da sua vida e se concentra num pontinho superdenso.`
+    } else {
+      replyText = `Adorei a sua curiosidade sobre a natureza, ${primeiroNome}! 🌿✨${dicaMemoria} Na ciência, os seres vivos e os fenômenos naturais estão todos conectados: o Sol aquece a Terra, evapora a água formando as nuvens, e espalha a luz azul pelo ar da atmosfera. É por isso que o nosso planeta é cheio de cores e vida!`
+    }
   } else if (
     msgLower.includes('história') ||
     msgLower.includes('historia') ||
     msgLower.includes('conte um conto') ||
     msgLower.includes('invente uma')
   ) {
-    replyText = `Era uma vez um(a) jovem explorador(a) chamado(a) ${primeiroNome}${dicaMemoria}! 🌟 Em uma manhã cheia de estrelas cadentes, ${primeiroNome} encontrou uma bússola dourada que apontava para a Biblioteca das Nuvens. Ao abrir a primeira porta mágica, havia dois caminhos: a Ponte dos Dragões Luminosos ou o Jardim dos Robôs Musicais. Qual caminho você escolhe seguir para continuarmos a história?`
-  } else if (msgLower.includes('piada') || msgLower.includes('charada') || msgLower.includes('adivinha')) {
-    replyText = `Hora de dar boas risadas, ${primeiroNome}! 😄 Lá vai um desafio rápido: O que é, o que é que cai em pé e corre deitado, e deixa todas as plantinhas felizes?`
+    // a) Ausubel Expositivo / Criativo direto
+    replyText = `Era uma vez um(a) jovem explorador(a) chamado(a) ${primeiroNome}${dicaMemoria}! 🌟 Em uma manhã cheia de estrelas cadentes, ${primeiroNome} encontrou uma bússola dourada que apontava para a Biblioteca das Nuvens, onde os livros ganhavam vida e contavam segredos do universo com músicas brilhantes!`
   } else if (
     msgLower.includes('programar') ||
     msgLower.includes('código') ||
@@ -1223,36 +1289,10 @@ function processarMensagemLumi(
     msgLower.includes('python') ||
     msgLower.includes('jogo')
   ) {
-    replyText = `Programar é como ensinar superpoderes para o computador, ${primeiroNome}! 💻🚀 Em Python, por exemplo, se você escrever \`print("Olá, mundo da ${primeiroNome}!")\`, o computador mostra essa frase na tela! Que tipo de jogo ou aplicativo você sonha em criar?`
-  } else if (msgLower.includes('fotossíntese') || msgLower.includes('fotossintese') || msgLower.includes('planta')) {
-    if (msgLower.includes('sol') || msgLower.includes('luz') || msgLower.includes('água') || msgLower.includes('agua')) {
-      replyText = `Na mosca, ${primeiroNome}! ☀️🌱 A folha usa a luz do Sol como energia para misturar a água que subiu pela raiz com o gás carbônico do ar. Quando ela termina essa "receita", o que você acha que a plantinha libera no ar para nós respirarmos?`
-    } else {
-      replyText = `Adoro esse mistério da natureza, ${primeiroNome}! 🌱 Imagine que cada folha verde é uma "cozinha solar": quais ingredientes da natureza você acha que a plantinha precisa pegar do chão e do céu para preparar a comida dela?`
-    }
-  } else if (msgLower.includes('fração') || msgLower.includes('fracao') || msgLower.includes('frações') || msgLower.includes('pizza')) {
-    if (msgLower.includes('metade') || msgLower.includes('igual') || msgLower.includes('2/4') || msgLower.includes('1/2')) {
-      replyText = `Isso mesmo, ${primeiroNome}! 🍕 Cortar uma pizza em 2 pedaços e pegar 1 é igualzinho a cortar em 4 pedaços e pegar 2! E se a gente cortasse essa mesma pizza em 8 fatias iguais, quantas fatias formariam a metade?`
-    } else {
-      replyText = `Pensar em pizza deixa qualquer fração mais gostosa, ${primeiroNome}! 🍕 Imagine uma pizza inteira dividida em 4 fatias iguais: se você comer 2 dessas fatias, que parte da pizza inteira ainda vai sobrar na bandeja?`
-    }
-  } else if (/\d+\s*[+\-*/x÷]\s*\d+/.test(msgLower) || msgLower.includes('quanto é') || msgLower.includes('quanto e')) {
-    replyText = `Boa pergunta matemática, ${primeiroNome}! 🧩 Em vez de eu te contar o resultado direto, vamos pensar juntos: se você imaginar esses números como bloquinhos de montar ou figurinhas, como você daria o primeiro passo para juntar ou separar essas partes?`
-  } else if (msgLower.includes('negativo') || msgLower.includes('abaixo de zero') || msgLower.includes('equação')) {
-    replyText = `Vamos pensar como exploradores, ${primeiroNome}! 🌡️ Imagine um termômetro num dia bem frio marcando -3 graus: se a temperatura cair mais 2 graus durante a noite, o marcador vai descer para qual número?`
-  } else if (
-    msgLower.includes('oi') ||
-    msgLower.includes('olá') ||
-    msgLower.includes('ola') ||
-    msgLower.includes('tudo bem') ||
-    msgLower.includes('bom dia') ||
-    msgLower.includes('boa tarde')
-  ) {
-    replyText = `Oi, ${primeiroNome}! Que alegria conversar com você hoje! ✨${dicaMemoria} Você pode me pedir qualquer coisa — histórias, curiosidades, ajuda na escola, ideias de jogos, desenhos ou músicas! O que vamos explorar agora?`
-  } else if (msgLower.includes('não sei') || msgLower.includes('nao sei') || msgLower.includes('difícil') || msgLower.includes('dificil')) {
-    replyText = `Fica tranquilo(a), ${primeiroNome}, toda grande descoberta começa com uma dúvida! 💛 Vamos dividir em um pedacinho bem fácil: se você pudesse chutar uma pista ou lembrar de algo parecido que viu no seu dia a dia, o que viria à sua cabeça primeiro?`
+    replyText = `Programar é como ensinar superpoderes para o computador, ${primeiroNome}! 💻🚀 Em Python, por exemplo, quando você escreve \`print("Olá, mundo da ${primeiroNome}!")\`, o computador mostra essa mensagem imediatamente na tela, e com variáveis como \`pontos = 10\` você já consegue guardar o placar do seu próprio jogo!`
   } else {
-    replyText = `Adorei a sua pergunta, ${primeiroNome}! 🌟${dicaMemoria} Pensando sobre "${msgTrim}", isso envolve muita curiosidade! Quer que eu te explique com uma aventura divertida, com um exemplo prático do dia a dia ou passo a passo?`
+    // a) Aprendizagem Significativa Expositiva (Ausubel) para conversa do dia a dia
+    replyText = `Oi, ${primeiroNome}! Que alegria conversar com você! ✨${dicaMemoria}Quando for uma curiosidade sobre animais, espaço ou natureza, eu te explico tudo direto com entusiasmo; e quando for tarefa da escola, eu te mostro primeiro um Exemplo Resolvido completo com um Desafio Espelho para você brilhar!`
   }
 
   return {

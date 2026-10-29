@@ -15,6 +15,13 @@ import { obterPromptAtivo } from '@/services/prompts'
 import { verificarCheckinHoje, registrarCheckinEmocional } from '@/services/checkinEmocional'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
+import { extrairMicroSentencasStream } from '@/lib/speechUtils'
+import {
+  detectarModeloPedagogicoIdeal,
+  CATALOGO_MODELOS_PEDAGOGICOS,
+  obterExemploTrabalhadoPorMateria,
+  type ModeloPedagogico,
+} from '@/lib/orquestradorPedagogico'
 import { useGeminiLiveVoice, type VozGeminiLive } from '@/hooks/useGeminiLiveVoice'
 import { getVozIaLumiPreferida, setVozIaLumiPreferida } from '@/services/lumiAudioService'
 import { BotaoVozCrianca } from '@/components/BotaoVozCrianca'
@@ -152,6 +159,11 @@ export const ConversaQuadro: React.FC = () => {
       return 'agente_geral'
     }
   })
+
+  // Orquestrador de Aprendizagem Infantil (5 Modelos Pedagógicos — Não 100% Socrático)
+  const [modeloPedagogicoAtivo, setModeloPedagogicoAtivo] =
+    useState<ModeloPedagogico>('ausubel_expositivo')
+  const streamSpeechOffsetRef = useRef<number>(0)
 
   // Modelo Gemini selecionado: 'gemini-3.8-flash' | 'gemini-4-argon' | 'gemini-3.1-flash-lite'
   const [modeloGemini, setModeloGemini] = useState<ModeloGeminiAgente>(() => {
@@ -603,6 +615,9 @@ export const ConversaQuadro: React.FC = () => {
     isSupported: synthSuportado,
     isSpeaking,
     speak: synthSpeak,
+    startStreamingSession,
+    enqueueStreamingSentence,
+    finishStreamingSession,
     stop: synthStop,
     warmUp: synthWarmUp,
   } = useSpeechSynthesis({
@@ -919,6 +934,33 @@ export const ConversaQuadro: React.FC = () => {
 
       let currentAssistantText = ''
 
+      // 1. Detecta automaticamente qual dos 5 modelos pedagógicos aplicar nesta mensagem
+      const jaAcertouTreino = messages.some(
+        (m) =>
+          m.sender === 'lumi' &&
+          (m.text.includes('2º Passo') || m.text.includes('Desafio Espelho')),
+      )
+      const modeloDetectado = detectarModeloPedagogicoIdeal(textoLimpo, jaAcertouTreino)
+      setModeloPedagogicoAtivo(modeloDetectado)
+
+      const infoModelo = CATALOGO_MODELOS_PEDAGOGICOS[modeloDetectado]
+      adicionarEventoTelemetria({
+        tipo: 'socratica',
+        titulo: `Orquestrador: ${infoModelo.nomeCurto} (${infoModelo.autorReferencia})`,
+        detalhe: infoModelo.descricaoCrianca,
+        status: 'ativo',
+      })
+
+      // 2. Inicia fila de Streaming de Voz Frase a Frase (< 220ms) se voz estiver ativa
+      const usarStreamingVoz =
+        faseAtual.ttsObrigatorio ||
+        (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe'))
+      streamSpeechOffsetRef.current = 0
+      if (usarStreamingVoz) {
+        setMensagemFalandoId(lumiMsgId)
+        startStreamingSession()
+      }
+
       setMessages((prev) => [
         ...prev,
         {
@@ -956,6 +998,17 @@ export const ConversaQuadro: React.FC = () => {
               }
               if (visaoChat === 'orbe') {
                 setLegendaFalando(full)
+              }
+              // Modo Lumi Live 2.0: Fatiamento em micro-sentenças e reprodução imediata (< 220ms) da 1ª frase!
+              if (usarStreamingVoz) {
+                const { sentencasProntas, novoOffset } = extrairMicroSentencasStream(
+                  full,
+                  streamSpeechOffsetRef.current,
+                )
+                if (sentencasProntas.length > 0) {
+                  streamSpeechOffsetRef.current = novoOffset
+                  sentencasProntas.forEach((sent) => enqueueStreamingSentence(sent))
+                }
               }
             },
           },
@@ -1018,14 +1071,11 @@ export const ConversaQuadro: React.FC = () => {
           ),
         )
 
-        if (
-          (faseAtual.ttsObrigatorio ||
-            (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe'))) &&
-          textoFinalLumi
-        ) {
+        if (usarStreamingVoz && textoFinalLumi) {
           setMensagemFalandoId(lumiMsgId)
           setLegendaFalando(textoFinalLumi)
-          synthSpeak(textoFinalLumi)
+          const restanteFinal = textoFinalLumi.slice(streamSpeechOffsetRef.current).trim()
+          finishStreamingSession(restanteFinal || undefined)
         }
 
         if (
@@ -1131,6 +1181,9 @@ export const ConversaQuadro: React.FC = () => {
       setMateriaDetectada,
       recarregarMemorias,
       synthSpeak,
+      startStreamingSession,
+      enqueueStreamingSentence,
+      finishStreamingSession,
       synthStop,
       adicionarEventoTelemetria,
     ],
@@ -1147,7 +1200,7 @@ export const ConversaQuadro: React.FC = () => {
     stopListening,
   } = useSpeechRecognition({
     lang: 'pt-BR',
-    silenceDurationMs: 1200,
+    silenceDurationMs: 1050,
     onSpeechStarted: () => {
       executarBargeIn('Início da fala da criança')
     },
@@ -1718,6 +1771,116 @@ export const ConversaQuadro: React.FC = () => {
             </div>
           </div>
 
+          {/* ORQUESTRADOR DE APRENDIZAGEM INFANTIL — 5 MODELOS PEDAGÓGICOS (NÃO 100% SOCRÁTICO) */}
+          <div className="bg-white rounded-3xl p-3.5 shadow-xs border border-indigo-200/80 space-y-2.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-base">
+                  {CATALOGO_MODELOS_PEDAGOGICOS[modeloPedagogicoAtivo].icone}
+                </span>
+                <div>
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide">
+                    Orquestrador Pedagógico Multimodelo (Não 100% Socrático):
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    {CATALOGO_MODELOS_PEDAGOGICOS[modeloPedagogicoAtivo].descricaoCrianca}
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`text-[11px] font-extrabold px-2.5 py-1 rounded-full border ${CATALOGO_MODELOS_PEDAGOGICOS[modeloPedagogicoAtivo].corBadge}`}
+              >
+                Ativo: {CATALOGO_MODELOS_PEDAGOGICOS[modeloPedagogicoAtivo].nomeCurto} (
+                {CATALOGO_MODELOS_PEDAGOGICOS[modeloPedagogicoAtivo].autorReferencia})
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto custom-scroll pb-0.5">
+              {(Object.keys(CATALOGO_MODELOS_PEDAGOGICOS) as ModeloPedagogico[]).map((modKey) => {
+                const info = CATALOGO_MODELOS_PEDAGOGICOS[modKey]
+                const isSelected = modeloPedagogicoAtivo === modKey
+                return (
+                  <button
+                    key={modKey}
+                    type="button"
+                    onClick={() => setModeloPedagogicoAtivo(modKey)}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? `${info.corBadge} shadow-2xs scale-[1.01]`
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>{info.icone}</span>
+                    <span>{info.nomeCurto}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Quando for Tarefa Escolar (Sweller + Vygotsky) ou Concreto Visual (Bruner), mostra o 1º Passo (Exemplo da Lumi com Resposta) + 2º Passo (Desafio Espelho) */}
+            {(modeloPedagogicoAtivo === 'sweller_exemplo_trabalhado' ||
+              modeloPedagogicoAtivo === 'bruner_concreto_visual') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                <div className="p-3 rounded-2xl bg-emerald-50/90 border border-emerald-200 space-y-1">
+                  <span className="inline-block text-[10px] font-black uppercase bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                    ✅{' '}
+                    {obterExemploTrabalhadoPorMateria(materiaDetectada).passo1ExemploLumi.titulo}
+                  </span>
+                  <p className="text-xs font-bold text-emerald-950">
+                    {obterExemploTrabalhadoPorMateria(materiaDetectada).passo1ExemploLumi.enunciado}
+                  </p>
+                  <p className="text-[11px] text-emerald-900">
+                    {
+                      obterExemploTrabalhadoPorMateria(materiaDetectada).passo1ExemploLumi
+                        .resolucaoPassoAPasso
+                    }
+                  </p>
+                  <p className="text-xs font-black text-emerald-800 pt-0.5">
+                    🌟{' '}
+                    {
+                      obterExemploTrabalhadoPorMateria(materiaDetectada).passo1ExemploLumi
+                        .respostaCompleta
+                    }
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-amber-50/90 border border-amber-300 space-y-1 flex flex-col justify-between">
+                  <div>
+                    <span className="inline-block text-[10px] font-black uppercase bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                      🎯{' '}
+                      {
+                        obterExemploTrabalhadoPorMateria(materiaDetectada).passo2DesafioCrianca
+                          .titulo
+                      }
+                    </span>
+                    <p className="text-xs font-bold text-amber-950 mt-1">
+                      {
+                        obterExemploTrabalhadoPorMateria(materiaDetectada).passo2DesafioCrianca
+                          .enunciado
+                      }
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      {
+                        obterExemploTrabalhadoPorMateria(materiaDetectada).passo2DesafioCrianca
+                          .dicaRapida
+                      }
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInputText('Minha resposta do 2º Passo (Desafio Espelho) é: ')
+                      inputRef.current?.focus()
+                    }}
+                    className="mt-1.5 self-start px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-black cursor-pointer"
+                  >
+                    Responder 2º Passo no Chat ✨
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Trilha Socrática aparece quando está no modo Tutor Socrático */}
           {modoAgente === 'tutor_socratico' && (
             <TrilhaEtapasSocraticas
@@ -2275,6 +2438,12 @@ export const ConversaQuadro: React.FC = () => {
                   const ordem = ['ciencias', 'matematica', 'portugues', 'historia', 'geografia']
                   const prox = ordem[(ordem.indexOf(materiaDetectada) + 1) % ordem.length]
                   setMateriaDetectada(prox)
+                }}
+                onResponderDesafioEspelho={(resposta) => {
+                  navigate('/conversa')
+                  setTimeout(() => {
+                    enviarTexto(`No 2º Passo do Quadro Visual (${materiaDetectada}), minha resposta é: ${resposta}`)
+                  }, 120)
                 }}
               />
             </div>

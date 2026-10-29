@@ -60,19 +60,60 @@ const REGEX_ELOGIO =
   /\b(parabéns|parabens|muito bem|arrasou|mandou bem|excelente|que legal|uau|sensacional|certíssimo|certissimo|incrível|incrivel|orgulho)\b/i
 
 /**
+ * Fatiador em tempo real para Lumi Live 2.0 (< 220ms):
+ * Extrai micro-sentenças prontas do buffer de streaming assim que encontra pontuação (. ! ? : ; \n)
+ * ou cláusulas longas com vírgula (> 48 caracteres), permitindo iniciar a 1ª frase imediatamente.
+ */
+export function extrairMicroSentencasStream(
+  textoAcumulado: string,
+  offsetProcessado: number,
+): { novasSentencas: string[]; novoOffset: number } {
+  if (!textoAcumulado || offsetProcessado >= textoAcumulado.length) {
+    return { novasSentencas: [], novoOffset: offsetProcessado }
+  }
+
+  const fatia = textoAcumulado.slice(offsetProcessado)
+  const novasSentencas: string[] = []
+  let consumidoNaFatia = 0
+
+  // Procura delimitadores de frase (. ! ? ; : \n) seguidos de espaço ou fim, ou vírgula após 48+ chars
+  const regexMicroSentenca =
+    /([^.!?;:\n]{4,}[.!?;:\n]+(?:\s+|$)|[^,]{48,},\s+)/g
+
+  let match: RegExpExecArray | null
+  while ((match = regexMicroSentenca.exec(fatia)) !== null) {
+    if (match.index > consumidoNaFatia) {
+      // Havia texto antes do match atual
+      const anterior = fatia.slice(consumidoNaFatia, match.index).trim()
+      if (anterior) {
+        novasSentencas.push(anterior)
+      }
+    }
+    const sentencaBruta = match[0]
+    const limpa = limparTextoParaVoz(sentencaBruta)
+    if (limpa) {
+      novasSentencas.push(limpa)
+    }
+    consumidoNaFatia = match.index + sentencaBruta.length
+  }
+
+  return {
+    novasSentencas,
+    novoOffset: offsetProcessado + consumidoNaFatia,
+  }
+}
+
+/**
  * Divide o texto limpo em segmentos oracionais naturais com prosódia calibrada.
- * Permite musicalidade e entonação viva (pitch/rate dinâmico) dentro da Web Speech API.
  */
 export function dividirTextoEmSegmentos(
   texto: string,
-  baseRate = 1.05,
-  basePitch = 1.05,
+  _baseRate = 1.05,
+  _basePitch = 1.05,
 ): SegmentoFala[] {
   const limpo = limparTextoParaVoz(texto)
   if (!limpo) return []
 
-  // Divide por pontuação delimitadora de frases (. ! ? ; e quebras) mantendo o pontuador
-  // Exemplo: "Olá, Bia! Você sabia disso? Vamos testar." -> ["Olá, Bia!", "Você sabia disso?", "Vamos testar."]
   const regexFrases = /[^.!?;\n]+[.!?;\n]*/g
   const matches = limpo.match(regexFrases) || [limpo]
 
@@ -81,14 +122,13 @@ export function dividirTextoEmSegmentos(
     const trimmed = match.trim()
     if (!trimmed) continue
 
-    // Se uma frase for muito longa (> 140 caracteres), subdivide em vírgulas para evitar travamentos do Web Speech API
-    if (trimmed.length > 140 && /[,:]/.test(trimmed)) {
+    if (trimmed.length > 95 && /[,:]/.test(trimmed)) {
       const subpartes = trimmed.split(/([,:]\s+)/)
       let buffer = ''
       for (const sp of subpartes) {
         if (!sp) continue
         buffer += sp
-        if (buffer.length >= 70 || buffer.endsWith(',') || buffer.endsWith(':')) {
+        if (buffer.length >= 45 || buffer.endsWith(',') || buffer.endsWith(':')) {
           if (buffer.trim()) partesBrutas.push(buffer.trim())
           buffer = ''
         }
@@ -111,31 +151,27 @@ export function dividirTextoEmSegmentos(
     let tipo: SegmentoFala['tipo'] = 'padrao'
     let deltaPitch = 0
     let deltaRate = 0
-    let pausaAposMs = 80 // Pequena respiração natural entre frases
+    let pausaAposMs = 55
 
     if (ehAbertura || ehElogio) {
       tipo = 'abertura'
-      // Frase de abertura ou celebração: tom mais alegre e entusiasmado (+0.08 a +0.12 pitch)
       deltaPitch = 0.1
-      deltaRate = 0.02
-      pausaAposMs = 120
+      deltaRate = 0.03
+      pausaAposMs = 70
     } else if (terminaComPergunta) {
       tipo = 'pergunta'
-      // Pergunta socrática: pitch ascendente (+0.09) convidando a criança a pensar
       deltaPitch = 0.08
-      deltaRate = -0.02 // Levemente mais pausado para dar clareza à dúvida
-      pausaAposMs = 150
+      deltaRate = -0.01
+      pausaAposMs = 95
     } else if (terminaComExclamacao) {
       tipo = 'exclamacao'
-      // Exclamação vibrante: tom animado e entusiasmado
       deltaPitch = 0.08
       deltaRate = 0.04
-      pausaAposMs = 100
+      pausaAposMs = 65
     } else {
-      // Corpo explicativo da Lumi: cadência calma e acolhedora
       deltaPitch = 0
       deltaRate = 0
-      pausaAposMs = 90
+      pausaAposMs = 55
     }
 
     return {
@@ -148,35 +184,26 @@ export function dividirTextoEmSegmentos(
   })
 }
 
-/**
- * Lista prioritária de vozes pt-BR conhecidas por alta qualidade e naturalidade
- */
 export const PADROES_VOZES_NATURAIS_PT = [
-  // Vozes neurais / online da Microsoft (Edge / Windows 11)
   /Francisca.*Natural/i,
   /Ana.*Natural/i,
-  /Antonio.*Natural/i,
+  /Luciana/i,
+  /Letícia|Leticia/i,
+  /Vitória|Vitoria/i,
+  /Maria/i,
+  /Heloisa/i,
+  /Google português do Brasil/i,
+  /Google.*pt-BR/i,
   /Natural.*pt-BR/i,
   /pt-BR.*Natural/i,
   /Neural.*pt-BR/i,
-  /pt-BR.*Neural/i,
   /Microsoft Francisca/i,
   /Microsoft Ana/i,
-  // Google TTS pt-BR (Chrome Android/Desktop)
-  /Google português do Brasil/i,
-  /Google.*pt-BR/i,
-  // Vozes iOS / macOS de alta qualidade
-  /Luciana/i,
-  /Letícia|Leticia/i,
-  /Maria/i,
-  /Heloisa/i,
-  /Vitória|Vitoria/i,
-  /Enhanced/i,
-  /Premium/i,
 ]
 
 /**
- * Seleciona a melhor voz pt-BR disponível com base em qualidade neural/natural e preferências do usuário
+ * Seleciona a melhor voz pt-BR disponível priorizando `localService === true`
+ * para latência ultra-baixa (< 220ms) no Lumi Live 2.0.
  */
 export function selecionarMelhorVozPt(
   vozes: SpeechSynthesisVoice[],
@@ -184,32 +211,41 @@ export function selecionarMelhorVozPt(
 ): SpeechSynthesisVoice | null {
   if (!vozes || vozes.length === 0) return null
 
-  // 1. Se o usuário salvou uma voz específica e ela existe
   if (vozPreferidaNome) {
     const encontrada = vozes.find((v) => v.name === vozPreferidaNome)
     if (encontrada) return encontrada
   }
 
-  // 2. Filtra vozes brasileiras
-  const vozesPtBr = vozes.filter((v) => v.lang === 'pt-BR' || v.lang === 'pt_BR')
+  const vozesPtBr = vozes.filter(
+    (v) => v.lang === 'pt-BR' || v.lang === 'pt_BR' || v.lang.toLowerCase() === 'pt-br',
+  )
   const vozesQualquerPt =
-    vozesPtBr.length > 0 ? vozesPtBr : vozes.filter((v) => v.lang.startsWith('pt'))
+    vozesPtBr.length > 0 ? vozesPtBr : vozes.filter((v) => v.lang.toLowerCase().startsWith('pt'))
 
   if (vozesQualquerPt.length === 0) {
-    // Fallback absoluto se nenhuma pt existir
     return vozes[0] || null
   }
 
-  // 3. Procura na ordem de prioridade de vozes naturais/neurais
+  // 1. Prioriza vozes pt-BR com localService === true E que batam com padrões naturais/femininos (< 220ms)
+  const vozesLocaisPtBr = vozesQualquerPt.filter((v) => v.localService === true)
+  if (vozesLocaisPtBr.length > 0) {
+    for (const regex of PADROES_VOZES_NATURAIS_PT) {
+      const matchLocal = vozesLocaisPtBr.find((v) => regex.test(v.name))
+      if (matchLocal) return matchLocal
+    }
+    const localFeminina = vozesLocaisPtBr.find((v) => /female|mulher|feminino|luciana|maria|francisca|ana/i.test(v.name))
+    if (localFeminina) return localFeminina
+    return vozesLocaisPtBr[0]
+  }
+
+  // 2. Caso o navegador só exponha vozes de rede, escolhe a melhor neural pt-BR
   for (const regex of PADROES_VOZES_NATURAIS_PT) {
     const vozMatch = vozesQualquerPt.find((v) => regex.test(v.name))
     if (vozMatch) return vozMatch
   }
 
-  // 4. Procura por voz feminina ou pt-BR local
   const vozFeminina = vozesQualquerPt.find((v) => /female|mulher|feminino/i.test(v.name))
   if (vozFeminina) return vozFeminina
 
-  // 5. Primeira voz pt-BR encontrada
   return vozesPtBr[0] || vozesQualquerPt[0] || null
 }

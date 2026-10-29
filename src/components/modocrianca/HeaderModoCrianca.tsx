@@ -1,14 +1,15 @@
 import React, { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 import { SairModoCriancaModal } from '@/components/modocrianca/SairModoCriancaModal'
 import { ConfigurarPinModal } from '@/components/modocrianca/ConfigurarPinModal'
-import { MessageSquare, Calendar, Lock, Sparkles, ChevronDown, LogOut } from 'lucide-react'
+import { verificarPinResponsavel } from '@/services/pinResponsavel'
+import { MessageSquare, Calendar, Lock, ChevronDown, LogOut, ShieldAlert } from 'lucide-react'
 
 export const HeaderModoCrianca: React.FC = () => {
-  const { tipoConta, criancaUsuario, permissoes, logout } = useAuth()
+  const { tipoConta, criancaUsuario, permissoes, logout, alternarAcessoRapido } = useAuth()
   const { criancaSelecionada, criancas, selecionarCrianca } = useCrianca()
   const {
     abrirModalSairModo,
@@ -19,16 +20,45 @@ export const HeaderModoCrianca: React.FC = () => {
   } = useModoCrianca()
 
   const location = useLocation()
+  const navigate = useNavigate()
   const [menuTrocaAluno, setMenuTrocaAluno] = useState(false)
+
+  // Parental Gate Modal quando a criança tenta clicar em "Acessar como Responsável" ou Configurações de Segurança
+  const [parentalGateAberto, setParentalGateAberto] = useState(false)
+  const [pinDigitado, setPinDigitado] = useState('')
+  const [erroPinGate, setErroPinGate] = useState<string | null>(null)
+  const [verificandoPinGate, setVerificandoPinGate] = useState(false)
 
   const isConversa = location.pathname.startsWith('/conversa')
   const isQuadro = location.pathname.startsWith('/quadro')
   const isAgenda = location.pathname.startsWith('/agenda')
 
+  const handleConfirmarParentalGate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (pinDigitado.length !== 4 || verificandoPinGate) return
+    setVerificandoPinGate(true)
+    setErroPinGate(null)
+    try {
+      const valido = await verificarPinResponsavel(pinDigitado)
+      if (valido) {
+        setParentalGateAberto(false)
+        setPinDigitado('')
+        await alternarAcessoRapido('responsavel')
+        navigate('/conversa')
+      } else {
+        setErroPinGate('PIN do Responsável incorreto. (Demo: 1234)')
+      }
+    } catch {
+      setErroPinGate('Não foi possível validar o PIN agora.')
+    } finally {
+      setVerificandoPinGate(false)
+    }
+  }
+
   return (
     <>
       <header className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none">
-        <div className="max-w-6xl mx-auto px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2">
+        <div className="max-w-6xl mx-auto px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 flex-wrap">
           {/* Logo infantil fofo com Lumi */}
           <div className="flex items-center gap-2.5">
             <Link
@@ -43,7 +73,7 @@ export const HeaderModoCrianca: React.FC = () => {
                   Lumi
                 </span>
                 <span className="text-[10px] text-amber-100 font-bold leading-none">
-                  Modo Criança 🧒
+                  Acesso Criança Protegido 🧒
                 </span>
               </div>
             </Link>
@@ -96,28 +126,41 @@ export const HeaderModoCrianca: React.FC = () => {
             </Link>
           </nav>
 
-          {/* Criança Ativa + Botão Discreto de Sair (com PIN para responsável OU logout para criança) */}
+          {/* Governança Parental: Criança Ativa + Botão "Acessar como Responsável" protegido por PIN */}
           <div className="flex items-center gap-2">
             {tipoConta === 'crianca' ? (
-              /* A criança logada com sua própria conta vê seu nome e botão de sair direto */
               <>
                 <div className="flex items-center gap-1 bg-white/20 px-3 py-1 rounded-xl text-xs font-bold text-white shadow-xs">
                   <span>🧒</span>
                   <span className="max-w-[110px] truncate">
                     {criancaUsuario?.nome_exibicao?.split(' ')[0] ||
                       criancaSelecionada?.nome.split(' ')[0] ||
-                      'Eu'}
+                      'Criança'}
                   </span>
                 </div>
+
+                {/* Botão "Acessar como Responsável" que exige o PIN Parental */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinDigitado('')
+                    setErroPinGate(null)
+                    setParentalGateAberto(true)
+                  }}
+                  className="bg-black/25 hover:bg-black/40 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  title="Acessar como Responsável ou alterar configurações de segurança (Exige PIN do Responsável)"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Acessar como Responsável</span>
+                </button>
 
                 <button
                   type="button"
                   onClick={logout}
-                  className="bg-black/25 hover:bg-black/40 text-white font-bold px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-                  title="Sair da minha conta"
+                  className="bg-white/15 hover:bg-white/25 text-white font-bold p-1.5 rounded-xl text-xs transition-all flex items-center justify-center cursor-pointer"
+                  title="Sair"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden xs:inline">Sair</span>
                 </button>
               </>
             ) : (
@@ -171,15 +214,15 @@ export const HeaderModoCrianca: React.FC = () => {
                   </div>
                 )}
 
-                {/* Botão Discreto de Sair do Modo Criança (Exige PIN) */}
+                {/* Botão "Acessar como Responsável" que exige o PIN Parental */}
                 <button
                   type="button"
                   onClick={abrirModalSairModo}
-                  className="bg-black/20 hover:bg-black/35 active:bg-black/45 text-white/90 hover:text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-inner cursor-pointer"
-                  title="Sair do Modo Criança (Exige PIN do responsável)"
+                  className="bg-black/25 hover:bg-black/40 active:bg-black/50 text-white px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-inner cursor-pointer"
+                  title="Acessar como Responsável (Exige PIN Parental)"
                 >
                   <Lock className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Sair do Modo</span>
+                  <span>Acessar como Responsável</span>
                 </button>
               </>
             )}
@@ -187,7 +230,73 @@ export const HeaderModoCrianca: React.FC = () => {
         </div>
       </header>
 
-      {/* Modais de Controle (apenas quando não for conta direta de criança) */}
+      {/* Modal Parental Gate para conta direta de criança tentando acessar painel do responsável ou configurações de segurança */}
+      {parentalGateAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-6 shadow-2xl max-w-sm w-full border border-amber-200 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-800">
+                  Parental Gate — PIN do Responsável
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Configurações de segurança e painel do responsável são bloqueados no acesso da
+                  criança.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmarParentalGate} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Digite o PIN de 4 dígitos do Responsável:
+                </label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  autoFocus
+                  value={pinDigitado}
+                  onChange={(e) => setPinDigitado(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="••••"
+                  className="w-full px-4 py-3 rounded-2xl border-2 border-amber-300 text-center text-xl font-black tracking-[0.4em] text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1 text-center">
+                  Dica da conta de demonstração: <strong>1234</strong>
+                </p>
+              </div>
+
+              {erroPinGate && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700 text-center">
+                  {erroPinGate}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setParentalGateAberto(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  Continuar como Criança
+                </button>
+                <button
+                  type="submit"
+                  disabled={pinDigitado.length !== 4 || verificandoPinGate}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white text-xs font-black shadow-sm cursor-pointer"
+                >
+                  {verificandoPinGate ? 'Validando...' : 'Desbloquear Painel 🔓'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modais de Controle (quando responsável ativou Modo Criança) */}
       {tipoConta !== 'crianca' && (
         <>
           <SairModoCriancaModal isOpen={modalSairModoAberto} onClose={fecharModalSairModo} />

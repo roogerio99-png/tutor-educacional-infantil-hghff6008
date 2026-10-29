@@ -38,7 +38,7 @@ const STORAGE_VOZ_KEY = 'lumi_voz_nome_preferida'
 
 export function useSpeechSynthesis({
   lang = 'pt-BR',
-  rate = 1.05, // Taxa natural de adulto falando com criança (~1.0–1.15)
+  rate = 1.05,
   pitch = 1.05,
   voiceName,
   usarVozIa = true,
@@ -56,7 +56,6 @@ export function useSpeechSynthesis({
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null)
 
-  // Referência ao player de áudio HTML5 para a voz da IA
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
   const callbacksRef = useRef({ onStart, onEnd, onError, onSegmentStart })
@@ -64,14 +63,17 @@ export function useSpeechSynthesis({
     callbacksRef.current = { onStart, onEnd, onError, onSegmentStart }
   }, [onStart, onEnd, onError, onSegmentStart])
 
-  // Controle de fila de execução de segmentos para prosódia fluida
   const cancelRequestedRef = useRef(false)
-  const utteranceQueueRef = useRef<SpeechSynthesisUtterance[]>([])
   const timerPausaRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const watchdogIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Carrega e atualiza vozes do sistema
+  // Fila de Streaming Frase a Frase (Lumi Live 2.0 < 220ms)
+  const streamingQueueRef = useRef<SegmentoFala[]>([])
+  const isStreamingSessionActiveRef = useRef(false)
+  const isStreamingPumpRunningRef = useRef(false)
+  const hasStartedStreamingCallbackRef = useRef(false)
+
+  // Carrega e atualiza vozes do sistema priorizando pt-BR com localService === true
   const atualizarVozes = useCallback(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     try {
@@ -109,26 +111,65 @@ export function useSpeechSynthesis({
     }
   }, [atualizarVozes])
 
-  // Limpa timer de respiro e keep-alive
   const limparTimers = useCallback(() => {
     if (timerPausaRef.current) {
       clearTimeout(timerPausaRef.current)
       timerPausaRef.current = null
     }
-    if (keepAliveIntervalRef.current) {
-      clearInterval(keepAliveIntervalRef.current)
-      keepAliveIntervalRef.current = null
+    if (watchdogIntervalRef.current) {
+      clearInterval(watchdogIntervalRef.current)
+      watchdogIntervalRef.current = null
     }
   }, [])
 
-  // Parada total imediata (barge-in < 50ms) de qualquer som (áudio IA ou síntese local)
+  // Watchdog com speechSynthesis.resume() para evitar congelamento do motor de voz em frases seguidas
+  const iniciarWatchdogResume = useCallback(() => {
+    if (watchdogIntervalRef.current) {
+      clearInterval(watchdogIntervalRef.current)
+    }
+    watchdogIntervalRef.current = setInterval(() => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          if (window.speechSynthesis.paused || window.speechSynthesis.speaking) {
+            window.speechSynthesis.resume()
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }, 1800)
+  }, [])
+
+  const obterMelhorVozAtual = useCallback((): SpeechSynthesisVoice | null => {
+    if (selectedVoice && selectedVoice.localService) return selectedVoice
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const lista = window.speechSynthesis.getVoices()
+      if (lista && lista.length > 0) {
+        let vozSalva: string | null = null
+        try {
+          vozSalva = localStorage.getItem(STORAGE_VOZ_KEY)
+        } catch {
+          // ignore
+        }
+        const melhor = selecionarMelhorVozPt(lista, voiceName || vozSalva)
+        if (melhor) {
+          setSelectedVoice(melhor)
+          return melhor
+        }
+      }
+    }
+    return selectedVoice
+  }, [selectedVoice, voiceName])
+
+  // Parada total imediata (barge-in < 50ms)
   const stop = useCallback(() => {
     cancelRequestedRef.current = true
-    utteranceQueueRef.current = []
-    activeUtteranceRef.current = null
+    streamingQueueRef.current = []
+    isStreamingSessionActiveRef.current = false
+    isStreamingPumpRunningRef.current = false
+    hasStartedStreamingCallbackRef.current = false
     limparTimers()
 
-    // 1. Pausa e reseta elemento de áudio da IA imediatamente
     if (audioElementRef.current) {
       try {
         audioElementRef.current.pause()
@@ -139,7 +180,6 @@ export function useSpeechSynthesis({
       }
     }
 
-    // 2. Cancela Web Speech local
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel()
@@ -157,11 +197,9 @@ export function useSpeechSynthesis({
     setCurrentSegmentText(null)
   }, [limparTimers])
 
-  // Warm-up do sintetizador para contornar restrições de autoplay e inicialização atrasada (ex: iOS Safari)
   const warmUp = useCallback(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
     try {
-      // Dispara uma utterance inaudível e rápida apenas para liberar o motor de áudio
       const u = new SpeechSynthesisUtterance(' ')
       u.volume = 0.01
       u.rate = 2
@@ -171,7 +209,6 @@ export function useSpeechSynthesis({
     }
   }, [])
 
-  // Troca a voz preferida e salva localmente
   const definirVozPreferida = useCallback(
     (nomeVoz: string) => {
       try {
@@ -187,172 +224,176 @@ export function useSpeechSynthesis({
     [voices],
   )
 
-  // Executa a síntese local (Web Speech API) - usado também como fallback automático
-  const executarSinteseLocal = useCallback(
-    (textoLimpo: string) => {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+  // ===========================================================================
+  // FILA DE STREAMING DE VOZ FRASE A FRASE (< 220ms) — MODO LUMI LIVE 2.0
+  // ===========================================================================
+  const processarFilaStreaming = useCallback(() => {
+    if (cancelRequestedRef.current) {
+      isStreamingPumpRunningRef.current = false
+      return
+    }
+
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      isStreamingPumpRunningRef.current = false
+      setIsSpeaking(false)
+      callbacksRef.current.onEnd?.()
+      return
+    }
+
+    const proximoSegmento = streamingQueueRef.current.shift()
+
+    if (!proximoSegmento) {
+      isStreamingPumpRunningRef.current = false
+      // Se o stream de texto já terminou e a fila esvaziou, conclui a sessão de fala!
+      if (!isStreamingSessionActiveRef.current) {
+        limparTimers()
         setIsSpeaking(false)
+        setCurrentText(null)
+        setCurrentSegmentText(null)
         callbacksRef.current.onEnd?.()
-        return
       }
+      return
+    }
 
-      const segmentos = dividirTextoEmSegmentos(textoLimpo, rate, pitch)
-      if (segmentos.length === 0) {
-        setIsSpeaking(false)
-        callbacksRef.current.onEnd?.()
-        return
-      }
+    isStreamingPumpRunningRef.current = true
+    setIsSpeaking(true)
+    setIsUsingIaVoice(false)
 
-      const vozesAtuais = window.speechSynthesis.getVoices()
-      let vozAlvo = selectedVoice
-      if (!vozAlvo && vozesAtuais.length > 0) {
-        let vozSalva: string | null = null
-        try {
-          vozSalva = localStorage.getItem(STORAGE_VOZ_KEY)
-        } catch {
-          // ignore
-        }
-        vozAlvo = selecionarMelhorVozPt(vozesAtuais, voiceName || vozSalva)
-        if (vozAlvo) setSelectedVoice(vozAlvo)
-      }
-
-      cancelRequestedRef.current = false
-      setIsSpeaking(true)
-      setIsUsingIaVoice(false)
-      setCurrentText(textoLimpo)
-
-      let indiceAtual = 0
+    if (!hasStartedStreamingCallbackRef.current) {
+      hasStartedStreamingCallbackRef.current = true
+      iniciarWatchdogResume()
       callbacksRef.current.onStart?.()
+    }
 
-      keepAliveIntervalRef.current = setInterval(() => {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-          if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-            window.speechSynthesis.pause()
-            window.speechSynthesis.resume()
-          }
-        }
-      }, 10000)
+    const vozAlvo = obterMelhorVozAtual()
+    const utterance = new SpeechSynthesisUtterance(proximoSegmento.texto)
+    utterance.lang = lang
+    utterance.pitch = Math.max(0.75, Math.min(1.35, pitch + proximoSegmento.deltaPitch))
+    utterance.rate = Math.max(0.75, Math.min(1.35, rate + proximoSegmento.deltaRate))
+    if (vozAlvo) {
+      utterance.voice = vozAlvo
+    }
 
-      const tocarProximoSegmento = () => {
-        if (cancelRequestedRef.current) return
-
-        if (indiceAtual >= segmentos.length) {
-          limparTimers()
-          setIsSpeaking(false)
-          setCurrentText(null)
-          setCurrentSegmentText(null)
-          callbacksRef.current.onEnd?.()
-          return
-        }
-
-        const seg = segmentos[indiceAtual]
-        const utterance = new SpeechSynthesisUtterance(seg.texto)
-        activeUtteranceRef.current = utterance
-
-        utterance.lang = lang
-        const pitchFinal = Math.max(0.7, Math.min(1.4, pitch + seg.deltaPitch))
-        const rateFinal = Math.max(0.7, Math.min(1.4, rate + seg.deltaRate))
-        utterance.pitch = pitchFinal
-        utterance.rate = rateFinal
-
-        if (vozAlvo) {
-          utterance.voice = vozAlvo
-        }
-
-        utterance.onstart = () => {
-          if (cancelRequestedRef.current) {
-            window.speechSynthesis.cancel()
-            return
-          }
-          setCurrentSegmentText(seg.texto)
-          callbacksRef.current.onSegmentStart?.(seg, indiceAtual, segmentos.length)
-        }
-
-        utterance.onend = () => {
-          if (cancelRequestedRef.current) return
-
-          indiceAtual++
-          if (indiceAtual < segmentos.length) {
-            timerPausaRef.current = setTimeout(() => {
-              tocarProximoSegmento()
-            }, seg.pausaAposMs)
-          } else {
-            tocarProximoSegmento()
-          }
-        }
-
-        utterance.onerror = (e) => {
-          const errorType = (e as unknown as { error?: string })?.error
-          if (
-            errorType === 'canceled' ||
-            errorType === 'interrupted' ||
-            cancelRequestedRef.current
-          ) {
-            return
-          }
-          console.warn('Erro em segmento da voz Lumi local:', e)
-          indiceAtual++
-          if (indiceAtual < segmentos.length) {
-            tocarProximoSegmento()
-          } else {
-            limparTimers()
-            setIsSpeaking(false)
-            setCurrentText(null)
-            setCurrentSegmentText(null)
-            callbacksRef.current.onError?.(e)
-          }
-        }
-
-        try {
-          window.speechSynthesis.speak(utterance)
-        } catch (err) {
-          console.warn('Falha ao disparar utterance local:', err)
-          limparTimers()
-          setIsSpeaking(false)
-          setCurrentText(null)
-          setCurrentSegmentText(null)
-          callbacksRef.current.onError?.(err)
-        }
+    utterance.onstart = () => {
+      if (cancelRequestedRef.current) {
+        window.speechSynthesis.cancel()
+        return
       }
+      setCurrentSegmentText(proximoSegmento.texto)
+    }
 
-      tocarProximoSegmento()
+    utterance.onend = () => {
+      if (cancelRequestedRef.current) {
+        isStreamingPumpRunningRef.current = false
+        return
+      }
+      const pausa = Math.min(45, proximoSegmento.pausaAposMs)
+      if (pausa > 0 && streamingQueueRef.current.length > 0) {
+        timerPausaRef.current = setTimeout(() => {
+          processarFilaStreaming()
+        }, pausa)
+      } else {
+        processarFilaStreaming()
+      }
+    }
+
+    utterance.onerror = () => {
+      if (cancelRequestedRef.current) {
+        isStreamingPumpRunningRef.current = false
+        return
+      }
+      processarFilaStreaming()
+    }
+
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
+      }
+      window.speechSynthesis.speak(utterance)
+    } catch {
+      processarFilaStreaming()
+    }
+  }, [lang, pitch, rate, limparTimers, iniciarWatchdogResume, obterMelhorVozAtual])
+
+  /**
+   * 1. Inicia uma sessão de Streaming de Voz Frase a Frase (< 220ms)
+   */
+  const startStreamingSession = useCallback(() => {
+    stop()
+    cancelRequestedRef.current = false
+    streamingQueueRef.current = []
+    isStreamingSessionActiveRef.current = true
+    isStreamingPumpRunningRef.current = false
+    hasStartedStreamingCallbackRef.current = false
+    iniciarWatchdogResume()
+  }, [stop, iniciarWatchdogResume])
+
+  /**
+   * 2. Enfileira uma micro-sentença assim que ela fica pronta no stream e inicia a reprodução imediata
+   */
+  const enqueueStreamingSentence = useCallback(
+    (sentence: string) => {
+      if (cancelRequestedRef.current) return
+      const microSegmentos = dividirTextoEmSegmentos(sentence, rate, pitch)
+      if (microSegmentos.length === 0) return
+
+      streamingQueueRef.current.push(...microSegmentos)
+      setCurrentText((prev) => (prev ? `${prev} ${sentence}` : sentence))
+
+      if (!isStreamingPumpRunningRef.current) {
+        processarFilaStreaming()
+      }
     },
-    [lang, rate, pitch, selectedVoice, voiceName, limparTimers],
+    [rate, pitch, processarFilaStreaming],
   )
 
-  // Reproduz uma sequência de áudio (OpenAI TTS preferencial com fallback transparente para local)
+  /**
+   * 3. Finaliza a sessão de streaming enfileirando eventual resíduo final
+   */
+  const finishStreamingSession = useCallback(
+    (remainingSentence?: string) => {
+      if (remainingSentence && remainingSentence.trim()) {
+        const finais = dividirTextoEmSegmentos(remainingSentence, rate, pitch)
+        if (finais.length > 0) {
+          streamingQueueRef.current.push(...finais)
+        }
+      }
+      isStreamingSessionActiveRef.current = false
+
+      if (!isStreamingPumpRunningRef.current) {
+        if (streamingQueueRef.current.length > 0) {
+          processarFilaStreaming()
+        } else {
+          limparTimers()
+          setIsSpeaking(false)
+          setCurrentText(null)
+          setCurrentSegmentText(null)
+          if (hasStartedStreamingCallbackRef.current) {
+            callbacksRef.current.onEnd?.()
+          }
+        }
+      }
+    },
+    [rate, pitch, processarFilaStreaming, limparTimers],
+  )
+
+  // Executa a síntese local completa (também com watchdog resume e localService === true)
+  const executarSinteseLocal = useCallback(
+    (textoLimpo: string) => {
+      startStreamingSession()
+      enqueueStreamingSentence(textoLimpo)
+      finishStreamingSession()
+    },
+    [startStreamingSession, enqueueStreamingSentence, finishStreamingSession],
+  )
+
+  // Reproduz um texto completo (usado no botão "Ouvir Lumi" ou mensagens curtas)
   const speak = useCallback(
     async (rawText: string) => {
       const textoLimpo = limparTextoParaVoz(rawText)
       if (!textoLimpo) return
 
-      // Interrompe imediatamente qualquer reprodução em andamento
-      cancelRequestedRef.current = true
-      limparTimers()
-
-      if (audioElementRef.current) {
-        try {
-          audioElementRef.current.pause()
-          audioElementRef.current.currentTime = 0
-        } catch {
-          // ignore
-        }
-      }
-
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          window.speechSynthesis.cancel()
-          if (window.speechSynthesis.paused) {
-            window.speechSynthesis.resume()
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      cancelRequestedRef.current = false
-
-      // Verifica se a Voz IA está habilitada globalmente e nas opções
+      // Para garantir resposta instantânea (< 220ms), prioriza a fila de micro-sentenças localService
       let iaHabilitada = usarVozIa
       try {
         const valStorage = localStorage.getItem('lumi_voz_ia_habilitada')
@@ -363,46 +404,28 @@ export function useSpeechSynthesis({
         // ignore
       }
 
+      // Verifica se já está em cache instantâneo da IA; se não estiver, usa síntese local imediata (< 220ms)
       if (iaHabilitada) {
         try {
-          // Import dinâmico leve para evitar ciclo e permitir tree-shake
           const { obterAudioLumiUrl, dividirEmFrasesParaAudio } =
             await import('@/services/lumiAudioService')
 
           const lotes = dividirEmFrasesParaAudio(textoLimpo, 8)
           if (lotes.length > 0) {
-            setIsSpeaking(true)
-            setIsUsingIaVoice(true)
-            setCurrentText(textoLimpo)
-            callbacksRef.current.onStart?.()
+            // Dispara com timeout curto de 650ms para nunca atrasar a resposta se o servidor demorar
+            const audioUrl = await Promise.race([
+              obterAudioLumiUrl({ text: lotes[0], voice: vozIaNome }),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 650)),
+            ])
 
-            let loteIdx = 0
-
-            const tocarProximoLoteIa = async () => {
-              if (cancelRequestedRef.current) return
-
-              if (loteIdx >= lotes.length) {
-                setIsSpeaking(false)
-                setIsUsingIaVoice(false)
-                setCurrentText(null)
-                setCurrentSegmentText(null)
-                callbacksRef.current.onEnd?.()
-                return
-              }
-
-              const textoDoLote = lotes[loteIdx]
-              setCurrentSegmentText(textoDoLote)
-
-              const audioUrl = await obterAudioLumiUrl({ text: textoDoLote, voice: vozIaNome })
-
-              if (cancelRequestedRef.current) return
-
-              if (!audioUrl) {
-                // Faz fallback transparente para o restante via síntese local sem parar a experiência
-                const restante = lotes.slice(loteIdx).join(' ')
-                executarSinteseLocal(restante)
-                return
-              }
+            if (audioUrl && !cancelRequestedRef.current) {
+              stop()
+              cancelRequestedRef.current = false
+              setIsSpeaking(true)
+              setIsUsingIaVoice(true)
+              setCurrentText(textoLimpo)
+              setCurrentSegmentText(lotes[0])
+              callbacksRef.current.onStart?.()
 
               if (!audioElementRef.current) {
                 audioElementRef.current = new Audio()
@@ -410,53 +433,33 @@ export function useSpeechSynthesis({
               const audio = audioElementRef.current
               audio.src = audioUrl
               audio.playbackRate = Math.max(0.85, Math.min(1.25, rate || 1.0))
-
               audio.onended = () => {
                 if (cancelRequestedRef.current) return
-                loteIdx++
-                // Pequena pausa natural de 150ms entre frases
-                timerPausaRef.current = setTimeout(() => {
-                  tocarProximoLoteIa()
-                }, 150)
+                setIsSpeaking(false)
+                setIsUsingIaVoice(false)
+                setCurrentText(null)
+                setCurrentSegmentText(null)
+                callbacksRef.current.onEnd?.()
               }
-
-              audio.onerror = (err) => {
-                console.warn('[useSpeechSynthesis] Erro no elemento Audio:', err)
-                if (cancelRequestedRef.current) return
-                // Fallback para fala local do restante
-                const restante = lotes.slice(loteIdx).join(' ')
-                executarSinteseLocal(restante)
-              }
-
-              try {
-                await audio.play()
-              } catch (playErr) {
-                console.warn('[useSpeechSynthesis] Falha ao dar play no áudio IA:', playErr)
+              audio.onerror = () => {
                 if (!cancelRequestedRef.current) {
                   executarSinteseLocal(textoLimpo)
                 }
               }
+              await audio.play()
+              return
             }
-
-            await tocarProximoLoteIa()
-            return
           }
-        } catch (iaErr) {
-          console.warn('[useSpeechSynthesis] Falha geral no pipeline TTS IA:', iaErr)
-          if (!cancelRequestedRef.current) {
-            executarSinteseLocal(textoLimpo)
-          }
-          return
+        } catch {
+          // Fallback imediato (< 220ms) para fila local
         }
       }
 
-      // Se voz IA desabilitada ou não solicitada, usa local
       executarSinteseLocal(textoLimpo)
     },
-    [usarVozIa, vozIaNome, limparTimers, executarSinteseLocal],
+    [usarVozIa, vozIaNome, rate, stop, executarSinteseLocal],
   )
 
-  // Ao desmontar o componente, cancela fala ativa imediatamente
   useEffect(() => {
     return () => {
       cancelRequestedRef.current = true
@@ -483,5 +486,8 @@ export function useSpeechSynthesis({
     warmUp,
     speak,
     stop,
+    startStreamingSession,
+    enqueueStreamingSentence,
+    finishStreamingSession,
   }
 }

@@ -42,11 +42,11 @@ export interface UseSpeechRecognitionOptions {
   lang?: string
   /**
    * Tolerância de silêncio em milissegundos para concluir a fala.
-   * Conforme o manual da Lumi IA para crianças de 6 a 12 anos: padrão 1200ms
+   * Lumi Live 2.0: padrão 1050ms para encerrar o turno sem repetição
    */
   silenceDurationMs?: number
   /**
-   * Se deve reiniciar automaticamente o recognition caso o navegador encerre a sessão prematuramente
+   * Se deve manter escuta contínua até o silêncio do turno
    */
   continuous?: boolean
   /**
@@ -67,9 +67,132 @@ export interface UseSpeechRecognitionOptions {
   onError?: (errorMessage: string, rawError: string) => void
 }
 
+function normalizarComparacao(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.,!?;:]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Mescla um novo segmento de fala ao texto acumulado sem duplicar prefixos ou sufixos.
+ * - Se o novo segmento já começa com o acumulado (comportamento comum no Chrome Android/Desktop),
+ *   substitui em vez de concatenar.
+ * - Remove sobreposição sufixo-prefixo palavra a palavra.
+ */
+export function mesclarSegmentosSemOverlap(acumulado: string, novoSegmento: string): string {
+  const accTrim = acumulado.trim()
+  const novoTrim = novoSegmento.trim()
+
+  if (!accTrim) return novoTrim
+  if (!novoTrim) return accTrim
+
+  const accNorm = normalizarComparacao(accTrim)
+  const novoNorm = normalizarComparacao(novoTrim)
+
+  if (!accNorm) return novoTrim
+  if (!novoNorm) return accTrim
+
+  // 1. Se são idênticos, mantém o mais recente
+  if (accNorm === novoNorm) {
+    return novoTrim
+  }
+
+  // 2. Se o novo segmento começa com todo o acumulado, substitui em vez de concatenar!
+  if (novoNorm.startsWith(accNorm)) {
+    return novoTrim
+  }
+
+  // 3. Se o acumulado já começa com o novo segmento ou já termina com ele, mantém o acumulado
+  if (accNorm.startsWith(novoNorm) || accNorm.endsWith(novoNorm)) {
+    return accTrim
+  }
+
+  // 4. Verifica sobreposição sufixo(acumulado) === prefixo(novoSegmento) em nível de palavras
+  const accWords = accTrim.split(/\s+/)
+  const novoWords = novoTrim.split(/\s+/)
+  const accWordsNorm = accWords.map(normalizarComparacao)
+  const novoWordsNorm = novoWords.map(normalizarComparacao)
+
+  const maxOverlap = Math.min(accWords.length, novoWords.length)
+  let overlapCount = 0
+
+  for (let k = maxOverlap; k >= 1; k--) {
+    let match = true
+    for (let j = 0; j < k; j++) {
+      if (accWordsNorm[accWords.length - k + j] !== novoWordsNorm[j]) {
+        match = false
+        break
+      }
+    }
+    if (match) {
+      overlapCount = k
+      break
+    }
+  }
+
+  if (overlapCount > 0) {
+    const restantes = novoWords.slice(overlapCount)
+    return restantes.length > 0 ? `${accTrim} ${restantes.join(' ')}` : accTrim
+  }
+
+  return `${accTrim} ${novoTrim}`
+}
+
+/**
+ * Remove n-gramas adjacentes duplicados (ex: "oi lumi oi lumi" -> "oi lumi",
+ * "quanto é quanto é dois" -> "quanto é dois").
+ */
+export function colapsarRepeticoesConsecutivas(texto: string): string {
+  if (!texto) return ''
+  let words = texto.trim().split(/\s+/)
+  if (words.length <= 1) return texto.trim()
+
+  // Colapsa n-gramas consecutivos de tamanho 6 até 1
+  for (let n = Math.min(6, Math.floor(words.length / 2)); n >= 1; n--) {
+    const result: string[] = []
+    let i = 0
+    while (i < words.length) {
+      if (i + 2 * n <= words.length) {
+        const bloco1 = words
+          .slice(i, i + n)
+          .map(normalizarComparacao)
+          .join(' ')
+        const bloco2 = words
+          .slice(i + n, i + 2 * n)
+          .map(normalizarComparacao)
+          .join(' ')
+        if (bloco1 && bloco1 === bloco2) {
+          result.push(...words.slice(i, i + n))
+          i += 2 * n
+          // Pula caso haja uma 3ª repetição seguida do mesmo bloco
+          while (
+            i + n <= words.length &&
+            words
+              .slice(i, i + n)
+              .map(normalizarComparacao)
+              .join(' ') === bloco1
+          ) {
+            i += n
+          }
+          continue
+        }
+      }
+      result.push(words[i])
+      i++
+    }
+    words = result
+  }
+
+  return words.join(' ').trim()
+}
+
 export function useSpeechRecognition({
   lang = 'pt-BR',
-  silenceDurationMs = 1200,
+  silenceDurationMs = 1050,
   continuous = true,
   onSpeechStarted,
   onInterimResult,
@@ -87,10 +210,10 @@ export function useSpeechRecognition({
   const isManuallyStoppedRef = useRef(false)
   const isStartingRef = useRef(false)
   const isRunningRef = useRef(false)
+  const turnEmittedRef = useRef(false)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const accumulatedFinalRef = useRef('')
-  const currentInterimRef = useRef('')
+  const mergedTranscriptRef = useRef('')
 
   const callbacksRef = useRef({ onSpeechStarted, onInterimResult, onFinalResult, onError })
   useEffect(() => {
@@ -118,55 +241,67 @@ export function useSpeechRecognition({
     }
   }, [])
 
+  const teardownRecognitionInstance = useCallback(() => {
+    const rec = recognitionRef.current
+    if (!rec) return
+    recognitionRef.current = null
+    try {
+      rec.onresult = null
+      rec.onend = null
+      rec.onerror = null
+      rec.onstart = null
+      rec.abort()
+    } catch {
+      // ignore
+    }
+  }, [])
+
   const finalizeAndEmit = useCallback(
-    (reason: 'silence' | 'manual') => {
+    (_reason: 'silence' | 'manual') => {
+      // Trava atômica: garante que cada turno de fala seja emitido no máximo 1 única vez
+      if (turnEmittedRef.current) return
+      turnEmittedRef.current = true
+
       clearSilenceTimer()
-      const textoFinal = (accumulatedFinalRef.current + ' ' + currentInterimRef.current).trim()
-      accumulatedFinalRef.current = ''
-      currentInterimRef.current = ''
+      clearRestartTimer()
+      isManuallyStoppedRef.current = true
+      isStartingRef.current = false
+      isRunningRef.current = false
+
+      const textoBruto = mergedTranscriptRef.current.trim()
+      const textoFinalLimpo = colapsarRepeticoesConsecutivas(textoBruto)
+
+      mergedTranscriptRef.current = ''
       setInterimTranscript('')
+      setIsListening(false)
 
-      if (textoFinal && callbacksRef.current.onFinalResult) {
-        callbacksRef.current.onFinalResult(textoFinal)
-      }
+      // Desarma onresult/onend e aborta imediatamente para impedir eventos tardios duplicados
+      teardownRecognitionInstance()
 
-      if (reason === 'silence') {
-        // Encerra a escuta do turno após o silêncio infantil de 1,2s
-        isManuallyStoppedRef.current = true
-        if (recognitionRef.current && isRunningRef.current) {
-          try {
-            recognitionRef.current.stop()
-          } catch {
-            // ignore
-          }
-        }
-        setIsListening(false)
-        isRunningRef.current = false
+      if (textoFinalLimpo && callbacksRef.current.onFinalResult) {
+        setFinalTranscript(textoFinalLimpo)
+        callbacksRef.current.onFinalResult(textoFinalLimpo)
       }
     },
-    [clearSilenceTimer],
+    [clearSilenceTimer, clearRestartTimer, teardownRecognitionInstance],
   )
 
   const stopListening = useCallback(() => {
-    isManuallyStoppedRef.current = true
-    isStartingRef.current = false
-    clearSilenceTimer()
-    clearRestartTimer()
-
-    if (recognitionRef.current && isRunningRef.current) {
-      try {
-        recognitionRef.current.stop()
-      } catch {
-        // ignore
-      }
+    if (!turnEmittedRef.current && mergedTranscriptRef.current.trim()) {
+      finalizeAndEmit('manual')
+      return
     }
 
-    setIsListening(false)
+    turnEmittedRef.current = true
+    isManuallyStoppedRef.current = true
+    isStartingRef.current = false
     isRunningRef.current = false
-
-    // Se houver texto acumulado e o usuário parou manualmente, emite o resultado
-    finalizeAndEmit('manual')
-  }, [clearSilenceTimer, clearRestartTimer, finalizeAndEmit])
+    clearSilenceTimer()
+    clearRestartTimer()
+    teardownRecognitionInstance()
+    setIsListening(false)
+    setInterimTranscript('')
+  }, [clearSilenceTimer, clearRestartTimer, finalizeAndEmit, teardownRecognitionInstance])
 
   const startListening = useCallback(async () => {
     clearRestartTimer()
@@ -185,17 +320,13 @@ export function useSpeechRecognition({
       return
     }
 
-    // Se já estiver iniciando ou rodando, evita chamadas duplicadas
     if (isStartingRef.current || isRunningRef.current) {
       return
     }
 
-    // Tenta solicitar permissão explícita de microfone primeiro se a API de mídia estiver disponível
     if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
       try {
-        // Verifica se a permissão já foi concedida ou solicita
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        // Libera os tracks imediatamente pois o SpeechRecognition abrirá o canal próprio
         stream.getTracks().forEach((track) => track.stop())
         setPermissionDenied(false)
       } catch (mediaErr: unknown) {
@@ -215,28 +346,21 @@ export function useSpeechRecognition({
 
     isManuallyStoppedRef.current = false
     isStartingRef.current = true
+    turnEmittedRef.current = false
+    mergedTranscriptRef.current = ''
     setErrorMessage(null)
     setPermissionDenied(false)
-    accumulatedFinalRef.current = ''
-    currentInterimRef.current = ''
     setInterimTranscript('')
     setFinalTranscript('')
 
     try {
-      // Se havia uma instância prévia, cancela
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort()
-        } catch {
-          // ignore
-        }
-        recognitionRef.current = null
-      }
+      teardownRecognitionInstance()
 
       const recognition = new SpeechConstructor()
       recognition.continuous = continuous
       recognition.interimResults = true
       recognition.lang = lang
+      recognition.maxAlternatives = 1
 
       recognition.onstart = () => {
         isStartingRef.current = false
@@ -252,39 +376,28 @@ export function useSpeechRecognition({
       }
 
       recognition.onresult = (event: SpeechRecognitionEventLike) => {
-        // Dispara barge-in imediato na primeira detecção de fala
+        if (turnEmittedRef.current || isManuallyStoppedRef.current) return
+
         callbacksRef.current.onSpeechStarted?.()
 
-        // Algoritmo canônico da Web Speech API:
-        // results é cumulativo na sessão continuous; percorre todo o array separando final e interim
-        let finalParts = ''
-        let interimParts = ''
-
+        // Reconstrói o texto da sessão mesclando cada resultado sem overlap nem duplicação
+        let combinado = ''
         for (let i = 0; i < event.results.length; ++i) {
           const item = event.results[i]
-          if (item.isFinal) {
-            finalParts += item[0].transcript + ' '
-          } else {
-            interimParts += item[0].transcript
-          }
+          const seg = (item?.[0]?.transcript || '').trim()
+          if (!seg) continue
+          combinado = mesclarSegmentosSemOverlap(combinado, seg)
         }
 
-        finalParts = finalParts.trim()
-        interimParts = interimParts.trim()
+        const textoSemRepeticoes = colapsarRepeticoesConsecutivas(combinado)
+        mergedTranscriptRef.current = textoSemRepeticoes
 
-        accumulatedFinalRef.current = finalParts
-        currentInterimRef.current = interimParts
+        setInterimTranscript(textoSemRepeticoes)
+        callbacksRef.current.onInterimResult?.(textoSemRepeticoes)
 
-        const textoExibicao = (finalParts ? finalParts + ' ' + interimParts : interimParts).trim()
-
-        setInterimTranscript(textoExibicao)
-        setFinalTranscript(finalParts)
-        callbacksRef.current.onInterimResult?.(textoExibicao)
-
-        // Reinicia o Detector de Silêncio Infantil (~1200ms)
-        // Quando a criança para de falar por mais de 1,2s, concluímos o turno automaticamente
+        // Detector de Silêncio Lumi Live 2.0 (1050ms por padrão)
         clearSilenceTimer()
-        if (textoExibicao) {
+        if (textoSemRepeticoes) {
           silenceTimerRef.current = setTimeout(() => {
             finalizeAndEmit('silence')
           }, silenceDurationMs)
@@ -305,11 +418,7 @@ export function useSpeechRecognition({
           isManuallyStoppedRef.current = true
           setIsListening(false)
           isRunningRef.current = false
-        } else if (err === 'no-speech') {
-          // Chrome dispara no-speech periodicamente se a criança ainda não começou a falar.
-          // Não tratamos como erro fatal, mantemos ouvindo
-        } else if (err === 'aborted') {
-          // Aborto manual / programático — não alarma
+        } else if (err === 'no-speech' || err === 'aborted') {
           setIsListening(false)
           isRunningRef.current = false
         } else {
@@ -325,23 +434,26 @@ export function useSpeechRecognition({
         isStartingRef.current = false
         isRunningRef.current = false
 
-        // Se o usuário não pediu para parar manualmente e ainda há expectativa de escuta,
-        // reinicia graciosamente após um breve intervalo (tolerância de keep-alive do Chrome)
-        if (!isManuallyStoppedRef.current && continuous) {
+        // Se já havia fala capturada e o motor encerrou antes do timer de 1050ms, finaliza 1 única vez
+        if (!turnEmittedRef.current && mergedTranscriptRef.current.trim()) {
+          finalizeAndEmit('silence')
+          return
+        }
+
+        if (!isManuallyStoppedRef.current && !turnEmittedRef.current && continuous) {
           clearRestartTimer()
           restartTimerRef.current = setTimeout(() => {
-            if (!isManuallyStoppedRef.current) {
+            if (!isManuallyStoppedRef.current && !turnEmittedRef.current && recognitionRef.current) {
               try {
-                recognition.start()
+                recognitionRef.current.start()
                 isRunningRef.current = true
                 setIsListening(true)
               } catch {
-                // Se falhar o reinício da mesma instância, zera estado limpo
                 setIsListening(false)
                 isRunningRef.current = false
               }
             }
-          }, 300)
+          }, 250)
         } else {
           clearSilenceTimer()
           setIsListening(false)
@@ -356,8 +468,6 @@ export function useSpeechRecognition({
       isRunningRef.current = false
       setIsListening(false)
       const errStr = String(err)
-      console.warn('Erro ao disparar reconhecimento de voz:', err)
-
       if (errStr.includes('not-allowed')) {
         setPermissionDenied(true)
         setErrorMessage('Permissão do microfone negada. Toque no cadeado da barra do navegador.')
@@ -365,7 +475,15 @@ export function useSpeechRecognition({
         setErrorMessage('Não foi possível iniciar o microfone. Toque para tentar novamente.')
       }
     }
-  }, [lang, continuous, silenceDurationMs, clearSilenceTimer, clearRestartTimer, finalizeAndEmit])
+  }, [
+    lang,
+    continuous,
+    silenceDurationMs,
+    clearSilenceTimer,
+    clearRestartTimer,
+    finalizeAndEmit,
+    teardownRecognitionInstance,
+  ])
 
   const toggleListening = useCallback(() => {
     if (isListening || isRunningRef.current) {
@@ -378,28 +496,22 @@ export function useSpeechRecognition({
   const resetTranscript = useCallback(() => {
     clearSilenceTimer()
     clearRestartTimer()
-    accumulatedFinalRef.current = ''
-    currentInterimRef.current = ''
+    turnEmittedRef.current = false
+    mergedTranscriptRef.current = ''
     setInterimTranscript('')
     setFinalTranscript('')
     setErrorMessage(null)
   }, [clearSilenceTimer, clearRestartTimer])
 
-  // Limpeza ao desmontar
   useEffect(() => {
     return () => {
       isManuallyStoppedRef.current = true
+      turnEmittedRef.current = true
       clearSilenceTimer()
       clearRestartTimer()
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort()
-        } catch {
-          // ignore
-        }
-      }
+      teardownRecognitionInstance()
     }
-  }, [clearSilenceTimer, clearRestartTimer])
+  }, [clearSilenceTimer, clearRestartTimer, teardownRecognitionInstance])
 
   return {
     isSupported,
