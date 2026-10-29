@@ -2614,18 +2614,19 @@ export async function localFetch(input: RequestInfo | URL, init?: RequestInit): 
     if (res.isStream && typeof res.streamText === 'string') {
       const textToStream = res.streamText
       const encoder = new TextEncoder()
-      const words = textToStream.split(/(?=\s)/)
+      // Agrupa por frases/cláusulas para entrega ultra-rápida (< 30ms total) sem atrasar a síntese de voz real
+      const clauses = textToStream.match(/[^.!?\n]+[.!?\n]*\s*/g) || [textToStream]
 
       const stream = new ReadableStream({
         async start(controller) {
-          for (const word of words) {
+          for (const clause of clauses) {
             if (init?.signal?.aborted) {
               controller.close()
               return
             }
-            const chunkPayload = JSON.stringify({ content: word })
+            const chunkPayload = JSON.stringify({ content: clause })
             controller.enqueue(encoder.encode(`event: chunk\ndata: ${chunkPayload}\n\n`))
-            await new Promise((r) => setTimeout(r, 18))
+            await new Promise((r) => setTimeout(r, 8))
           }
           const donePayload = JSON.stringify({
             content: textToStream,

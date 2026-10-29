@@ -1,493 +1,550 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   limparTextoParaVoz,
   dividirTextoEmSegmentos,
+  dividirParaVozRealAgil,
   selecionarMelhorVozPt,
-  SegmentoFala,
 } from '@/lib/speechUtils'
+import {
+  obterAudioLumiUrl,
+  precarregarAudioLumi,
+  getUsarVozIaLumi,
+  getVozIaLumiPreferida,
+  setUsarVozIaLumi as salvarUsarVozIa,
+  setVozIaLumiPreferida as salvarVozIaPreferida,
+} from '@/services/lumiAudioService'
 
 export interface UseSpeechSynthesisOptions {
-  lang?: string
   rate?: number
   pitch?: number
-  voiceName?: string | null
+  volume?: number
   usarVozIa?: boolean
-  vozIaNome?:
-    | 'Kore'
-    | 'Zephyr'
-    | 'Puck'
-    | 'Fenrir'
-    | 'Charon'
-    | 'nova'
-    | 'alloy'
-    | 'ash'
-    | 'coral'
-    | 'echo'
-    | 'fable'
-    | 'onyx'
-    | 'sage'
-    | 'shimmer'
-    | 'verse'
+  vozIaNome?: string
   onStart?: () => void
   onEnd?: () => void
-  onError?: (err: unknown) => void
-  onSegmentStart?: (segmento: SegmentoFala, indice: number, total: number) => void
+  onError?: (err: string) => void
 }
 
-const STORAGE_VOZ_KEY = 'lumi_voz_nome_preferida'
+const STORAGE_VOICE_KEY = 'lumi_voz_preferida_uri'
 
 export function useSpeechSynthesis({
-  lang = 'pt-BR',
-  rate = 1.05,
-  pitch = 1.05,
-  voiceName,
-  usarVozIa = true,
-  vozIaNome = 'Kore',
+  rate = 1.03,
+  pitch = 1.02,
+  volume = 1.0,
+  usarVozIa: usarVozIaProp,
+  vozIaNome: vozIaNomeProp,
   onStart,
   onEnd,
   onError,
-  onSegmentStart,
 }: UseSpeechSynthesisOptions = {}) {
   const [isSupported, setIsSupported] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [isUsingIaVoice, setIsUsingIaVoice] = useState(false)
-  const [currentText, setCurrentText] = useState<string | null>(null)
-  const [currentSegmentText, setCurrentSegmentText] = useState<string | null>(null)
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
+  const [isUsingIaVoice, setIsUsingIaVoice] = useState(true)
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null)
+  const [usarVozIaState, setUsarVozIaState] = useState<boolean>(() =>
+    usarVozIaProp !== undefined ? usarVozIaProp : getUsarVozIaLumi(),
+  )
+  const [vozIaPreferidaState, setVozIaPreferidaState] = useState<string>(
+    () => vozIaNomeProp || getVozIaLumiPreferida(),
+  )
 
-  const audioElementRef = useRef<HTMLAudioElement | null>(null)
+  const sessionCounterRef = useRef<number>(0)
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const watchdogTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const unlockedRef = useRef<boolean>(false)
 
-  const callbacksRef = useRef({ onStart, onEnd, onError, onSegmentStart })
+  // Fila de Streaming de Voz Real Humana (Lumi Live 2.0)
+  const streamingQueueRef = useRef<string[]>([])
+  const isStreamingActiveRef = useRef<boolean>(false)
+  const isStreamingFinishedRef = useRef<boolean>(false)
+  const isPlayingStreamItemRef = useRef<boolean>(false)
+  const streamStartedCallbackFiredRef = useRef<boolean>(false)
+
+  const callbacksRef = useRef({ onStart, onEnd, onError })
   useEffect(() => {
-    callbacksRef.current = { onStart, onEnd, onError, onSegmentStart }
-  }, [onStart, onEnd, onError, onSegmentStart])
-
-  const cancelRequestedRef = useRef(false)
-  const timerPausaRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const watchdogIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // Fila de Streaming Frase a Frase (Lumi Live 2.0 < 220ms)
-  const streamingQueueRef = useRef<SegmentoFala[]>([])
-  const isStreamingSessionActiveRef = useRef(false)
-  const isStreamingPumpRunningRef = useRef(false)
-  const hasStartedStreamingCallbackRef = useRef(false)
-
-  // Carrega e atualiza vozes do sistema priorizando pt-BR com localService === true
-  const atualizarVozes = useCallback(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    try {
-      const lista = window.speechSynthesis.getVoices()
-      if (lista && lista.length > 0) {
-        setVoices(lista)
-
-        let vozDesejada = voiceName
-        if (!vozDesejada) {
-          try {
-            vozDesejada = localStorage.getItem(STORAGE_VOZ_KEY)
-          } catch {
-            // ignore
-          }
-        }
-
-        const melhorVoz = selecionarMelhorVozPt(lista, vozDesejada)
-        setSelectedVoice(melhorVoz)
-      }
-    } catch (err) {
-      console.warn('Erro ao carregar vozes do sintetizador:', err)
-    }
-  }, [voiceName])
+    callbacksRef.current = { onStart, onEnd, onError }
+  }, [onStart, onEnd, onError])
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      setIsSupported(true)
-      atualizarVozes()
-
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = atualizarVozes
-      }
-    } else {
-      setIsSupported(false)
+    if (usarVozIaProp !== undefined) {
+      setUsarVozIaState(usarVozIaProp)
     }
-  }, [atualizarVozes])
+  }, [usarVozIaProp])
+
+  useEffect(() => {
+    if (vozIaNomeProp) {
+      setVozIaPreferidaState(vozIaNomeProp)
+    }
+  }, [vozIaNomeProp])
 
   const limparTimers = useCallback(() => {
-    if (timerPausaRef.current) {
-      clearTimeout(timerPausaRef.current)
-      timerPausaRef.current = null
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current)
+      pauseTimerRef.current = null
     }
-    if (watchdogIntervalRef.current) {
-      clearInterval(watchdogIntervalRef.current)
-      watchdogIntervalRef.current = null
+    if (watchdogTimerRef.current) {
+      clearInterval(watchdogTimerRef.current)
+      watchdogTimerRef.current = null
     }
   }, [])
 
-  // Watchdog com speechSynthesis.resume() para evitar congelamento do motor de voz em frases seguidas
-  const iniciarWatchdogResume = useCallback(() => {
-    if (watchdogIntervalRef.current) {
-      clearInterval(watchdogIntervalRef.current)
+  const pararAudioHtml = useCallback(() => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause()
+        audioRef.current.onended = null
+        audioRef.current.onerror = null
+        audioRef.current.onplay = null
+        audioRef.current.src = ''
+      } catch {
+        // ignore
+      }
+      audioRef.current = null
     }
-    watchdogIntervalRef.current = setInterval(() => {
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    setIsSupported(true)
+
+    if ('speechSynthesis' in window) {
+      const loadVoices = () => {
+        const allVoices = window.speechSynthesis.getVoices()
+        if (!allVoices || allVoices.length === 0) return
+
+        const ptVoices = allVoices.filter((v) => v.lang.toLowerCase().startsWith('pt'))
+        const available = ptVoices.length > 0 ? ptVoices : allVoices
+        setVoices(available)
+
+        let savedName: string | null = null
+        try {
+          savedName = localStorage.getItem(STORAGE_VOICE_KEY)
+        } catch {
+          savedName = null
+        }
+
+        const bestVoice = selecionarMelhorVozPt(allVoices, savedName)
+        if (bestVoice) {
+          setSelectedVoice(bestVoice)
+        }
+      }
+
+      loadVoices()
+      window.speechSynthesis.onvoiceschanged = loadVoices
+    }
+
+    return () => {
+      sessionCounterRef.current += 1
+      limparTimers()
+      pararAudioHtml()
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        try {
-          if (window.speechSynthesis.paused || window.speechSynthesis.speaking) {
-            window.speechSynthesis.resume()
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }, 1800)
-  }, [])
-
-  const obterMelhorVozAtual = useCallback((): SpeechSynthesisVoice | null => {
-    if (selectedVoice && selectedVoice.localService) return selectedVoice
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      const lista = window.speechSynthesis.getVoices()
-      if (lista && lista.length > 0) {
-        let vozSalva: string | null = null
-        try {
-          vozSalva = localStorage.getItem(STORAGE_VOZ_KEY)
-        } catch {
-          // ignore
-        }
-        const melhor = selecionarMelhorVozPt(lista, voiceName || vozSalva)
-        if (melhor) {
-          setSelectedVoice(melhor)
-          return melhor
-        }
-      }
-    }
-    return selectedVoice
-  }, [selectedVoice, voiceName])
-
-  // Parada total imediata (barge-in < 50ms)
-  const stop = useCallback(() => {
-    cancelRequestedRef.current = true
-    streamingQueueRef.current = []
-    isStreamingSessionActiveRef.current = false
-    isStreamingPumpRunningRef.current = false
-    hasStartedStreamingCallbackRef.current = false
-    limparTimers()
-
-    if (audioElementRef.current) {
-      try {
-        audioElementRef.current.pause()
-        audioElementRef.current.currentTime = 0
-        audioElementRef.current.src = ''
-      } catch {
-        // ignore
-      }
-    }
-
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try {
         window.speechSynthesis.cancel()
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume()
+      }
+    }
+  }, [limparTimers, pararAudioHtml])
+
+  const selectVoiceByName = useCallback(
+    (name: string) => {
+      const found = voices.find((v) => v.name === name)
+      if (found) {
+        setSelectedVoice(found)
+        try {
+          localStorage.setItem(STORAGE_VOICE_KEY, found.name)
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
-      }
-    }
-
-    setIsSpeaking(false)
-    setIsUsingIaVoice(false)
-    setCurrentText(null)
-    setCurrentSegmentText(null)
-  }, [limparTimers])
-
-  const warmUp = useCallback(() => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
-    try {
-      const u = new SpeechSynthesisUtterance(' ')
-      u.volume = 0.01
-      u.rate = 2
-      window.speechSynthesis.speak(u)
-    } catch {
-      // ignore
-    }
-  }, [])
-
-  const definirVozPreferida = useCallback(
-    (nomeVoz: string) => {
-      try {
-        localStorage.setItem(STORAGE_VOZ_KEY, nomeVoz)
-      } catch {
-        // ignore
-      }
-      const encontrada = voices.find((v) => v.name === nomeVoz)
-      if (encontrada) {
-        setSelectedVoice(encontrada)
       }
     },
     [voices],
   )
 
-  // ===========================================================================
-  // FILA DE STREAMING DE VOZ FRASE A FRASE (< 220ms) — MODO LUMI LIVE 2.0
-  // ===========================================================================
-  const processarFilaStreaming = useCallback(() => {
-    if (cancelRequestedRef.current) {
-      isStreamingPumpRunningRef.current = false
-      return
+  const setUsarVozIa = useCallback((usar: boolean) => {
+    setUsarVozIaState(usar)
+    salvarUsarVozIa(usar)
+  }, [])
+
+  const setVozIaPreferida = useCallback((voiceId: string) => {
+    setVozIaPreferidaState(voiceId)
+    salvarVozIaPreferida(voiceId)
+  }, [])
+
+  const obterMelhorVozAtual = useCallback((): SpeechSynthesisVoice | null => {
+    if (selectedVoice && !/Desktop|eSpeak/i.test(selectedVoice.name)) {
+      return selectedVoice
     }
-
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      isStreamingPumpRunningRef.current = false
-      setIsSpeaking(false)
-      callbacksRef.current.onEnd?.()
-      return
-    }
-
-    const proximoSegmento = streamingQueueRef.current.shift()
-
-    if (!proximoSegmento) {
-      isStreamingPumpRunningRef.current = false
-      // Se o stream de texto já terminou e a fila esvaziou, conclui a sessão de fala!
-      if (!isStreamingSessionActiveRef.current) {
-        limparTimers()
-        setIsSpeaking(false)
-        setCurrentText(null)
-        setCurrentSegmentText(null)
-        callbacksRef.current.onEnd?.()
-      }
-      return
-    }
-
-    isStreamingPumpRunningRef.current = true
-    setIsSpeaking(true)
-    setIsUsingIaVoice(false)
-
-    if (!hasStartedStreamingCallbackRef.current) {
-      hasStartedStreamingCallbackRef.current = true
-      iniciarWatchdogResume()
-      callbacksRef.current.onStart?.()
-    }
-
-    const vozAlvo = obterMelhorVozAtual()
-    const utterance = new SpeechSynthesisUtterance(proximoSegmento.texto)
-    utterance.lang = lang
-    utterance.pitch = Math.max(0.75, Math.min(1.35, pitch + proximoSegmento.deltaPitch))
-    utterance.rate = Math.max(0.75, Math.min(1.35, rate + proximoSegmento.deltaRate))
-    if (vozAlvo) {
-      utterance.voice = vozAlvo
-    }
-
-    utterance.onstart = () => {
-      if (cancelRequestedRef.current) {
-        window.speechSynthesis.cancel()
-        return
-      }
-      setCurrentSegmentText(proximoSegmento.texto)
-    }
-
-    utterance.onend = () => {
-      if (cancelRequestedRef.current) {
-        isStreamingPumpRunningRef.current = false
-        return
-      }
-      const pausa = Math.min(45, proximoSegmento.pausaAposMs)
-      if (pausa > 0 && streamingQueueRef.current.length > 0) {
-        timerPausaRef.current = setTimeout(() => {
-          processarFilaStreaming()
-        }, pausa)
-      } else {
-        processarFilaStreaming()
-      }
-    }
-
-    utterance.onerror = () => {
-      if (cancelRequestedRef.current) {
-        isStreamingPumpRunningRef.current = false
-        return
-      }
-      processarFilaStreaming()
-    }
-
-    try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume()
-      }
-      window.speechSynthesis.speak(utterance)
-    } catch {
-      processarFilaStreaming()
-    }
-  }, [lang, pitch, rate, limparTimers, iniciarWatchdogResume, obterMelhorVozAtual])
-
-  /**
-   * 1. Inicia uma sessão de Streaming de Voz Frase a Frase (< 220ms)
-   */
-  const startStreamingSession = useCallback(() => {
-    stop()
-    cancelRequestedRef.current = false
-    streamingQueueRef.current = []
-    isStreamingSessionActiveRef.current = true
-    isStreamingPumpRunningRef.current = false
-    hasStartedStreamingCallbackRef.current = false
-    iniciarWatchdogResume()
-  }, [stop, iniciarWatchdogResume])
-
-  /**
-   * 2. Enfileira uma micro-sentença assim que ela fica pronta no stream e inicia a reprodução imediata
-   */
-  const enqueueStreamingSentence = useCallback(
-    (sentence: string) => {
-      if (cancelRequestedRef.current) return
-      const microSegmentos = dividirTextoEmSegmentos(sentence, rate, pitch)
-      if (microSegmentos.length === 0) return
-
-      streamingQueueRef.current.push(...microSegmentos)
-      setCurrentText((prev) => (prev ? `${prev} ${sentence}` : sentence))
-
-      if (!isStreamingPumpRunningRef.current) {
-        processarFilaStreaming()
-      }
-    },
-    [rate, pitch, processarFilaStreaming],
-  )
-
-  /**
-   * 3. Finaliza a sessão de streaming enfileirando eventual resíduo final
-   */
-  const finishStreamingSession = useCallback(
-    (remainingSentence?: string) => {
-      if (remainingSentence && remainingSentence.trim()) {
-        const finais = dividirTextoEmSegmentos(remainingSentence, rate, pitch)
-        if (finais.length > 0) {
-          streamingQueueRef.current.push(...finais)
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const atuais = window.speechSynthesis.getVoices()
+      if (atuais && atuais.length > 0) {
+        let savedName: string | null = null
+        try {
+          savedName = localStorage.getItem(STORAGE_VOICE_KEY)
+        } catch {
+          savedName = null
         }
+        return selecionarMelhorVozPt(atuais, savedName)
       }
-      isStreamingSessionActiveRef.current = false
+    }
+    return selectedVoice
+  }, [selectedVoice])
 
-      if (!isStreamingPumpRunningRef.current) {
-        if (streamingQueueRef.current.length > 0) {
-          processarFilaStreaming()
-        } else {
-          limparTimers()
-          setIsSpeaking(false)
-          setCurrentText(null)
-          setCurrentSegmentText(null)
-          if (hasStartedStreamingCallbackRef.current) {
-            callbacksRef.current.onEnd?.()
-          }
-        }
-      }
-    },
-    [rate, pitch, processarFilaStreaming, limparTimers],
-  )
-
-  // Executa a síntese local completa (também com watchdog resume e localService === true)
-  const executarSinteseLocal = useCallback(
-    (textoLimpo: string) => {
-      startStreamingSession()
-      enqueueStreamingSentence(textoLimpo)
-      finishStreamingSession()
-    },
-    [startStreamingSession, enqueueStreamingSentence, finishStreamingSession],
-  )
-
-  // Reproduz um texto completo (usado no botão "Ouvir Lumi" ou mensagens curtas)
-  const speak = useCallback(
-    async (rawText: string) => {
-      const textoLimpo = limparTextoParaVoz(rawText)
-      if (!textoLimpo) return
-
-      // Para garantir resposta instantânea (< 220ms), prioriza a fila de micro-sentenças localService
-      let iaHabilitada = usarVozIa
+  const warmUp = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (!unlockedRef.current && 'speechSynthesis' in window) {
       try {
-        const valStorage = localStorage.getItem('lumi_voz_ia_habilitada')
-        if (valStorage !== null) {
-          iaHabilitada = valStorage === 'true'
-        }
+        window.speechSynthesis.getVoices()
+        window.speechSynthesis.resume()
+        unlockedRef.current = true
       } catch {
         // ignore
       }
+    }
+  }, [])
 
-      // Verifica se já está em cache instantâneo da IA; se não estiver, usa síntese local imediata (< 220ms)
-      if (iaHabilitada) {
+  /**
+   * Reproduz um único bloco de texto usando Voz Humana Real (Gemini Neural TTS)
+   * com fallback para a melhor voz neural do navegador apenas se offline/indisponível.
+   */
+  const reproduzirBlocoUnico = useCallback(
+    async (textoBloco: string, sessionId: number): Promise<boolean> => {
+      const limpo = limparTextoParaVoz(textoBloco)
+      if (!limpo || sessionCounterRef.current !== sessionId) return false
+
+      // 1. Tenta Voz Humana Real (Gemini Neural TTS via /api/lumi/tts)
+      if (usarVozIaState) {
         try {
-          const { obterAudioLumiUrl, dividirEmFrasesParaAudio } =
-            await import('@/services/lumiAudioService')
+          if (!streamStartedCallbackFiredRef.current) {
+            setIsLoadingAudio(true)
+          }
 
-          const lotes = dividirEmFrasesParaAudio(textoLimpo, 8)
-          if (lotes.length > 0) {
-            // Dispara com timeout curto de 650ms para nunca atrasar a resposta se o servidor demorar
-            const audioUrl = await Promise.race([
-              obterAudioLumiUrl({ text: lotes[0], voice: vozIaNome }),
-              new Promise<null>((resolve) => setTimeout(() => resolve(null), 650)),
-            ])
+          const urlIa = await Promise.race([
+            obterAudioLumiUrl({
+              text: limpo,
+              voice: vozIaPreferidaState,
+            }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 6500)),
+          ])
 
-            if (audioUrl && !cancelRequestedRef.current) {
-              stop()
-              cancelRequestedRef.current = false
-              setIsSpeaking(true)
-              setIsUsingIaVoice(true)
-              setCurrentText(textoLimpo)
-              setCurrentSegmentText(lotes[0])
-              callbacksRef.current.onStart?.()
+          if (sessionCounterRef.current !== sessionId) {
+            setIsLoadingAudio(false)
+            return false
+          }
 
-              if (!audioElementRef.current) {
-                audioElementRef.current = new Audio()
+          if (urlIa) {
+            const tocouComSucesso = await new Promise<boolean>((resolve) => {
+              if (sessionCounterRef.current !== sessionId) {
+                resolve(false)
+                return
               }
-              const audio = audioElementRef.current
-              audio.src = audioUrl
-              audio.playbackRate = Math.max(0.85, Math.min(1.25, rate || 1.0))
-              audio.onended = () => {
-                if (cancelRequestedRef.current) return
-                setIsSpeaking(false)
-                setIsUsingIaVoice(false)
-                setCurrentText(null)
-                setCurrentSegmentText(null)
-                callbacksRef.current.onEnd?.()
-              }
-              audio.onerror = () => {
-                if (!cancelRequestedRef.current) {
-                  executarSinteseLocal(textoLimpo)
+              pararAudioHtml()
+              const audio = new Audio(urlIa)
+              audioRef.current = audio
+              audio.volume = Math.max(0, Math.min(1, volume))
+              // Mantém o timbre humano natural sem distorcer (velocidade sutil entre 0.94 e 1.12)
+              audio.playbackRate = Math.max(0.94, Math.min(1.12, rate))
+
+              audio.onplay = () => {
+                if (sessionCounterRef.current !== sessionId) {
+                  audio.pause()
+                  resolve(false)
+                  return
+                }
+                setIsLoadingAudio(false)
+                setIsUsingIaVoice(true)
+                setIsSpeaking(true)
+                if (!streamStartedCallbackFiredRef.current) {
+                  streamStartedCallbackFiredRef.current = true
+                  callbacksRef.current.onStart?.()
                 }
               }
-              await audio.play()
-              return
+
+              audio.onended = () => {
+                if (sessionCounterRef.current !== sessionId) {
+                  resolve(false)
+                  return
+                }
+                audioRef.current = null
+                resolve(true)
+              }
+
+              audio.onerror = () => {
+                audioRef.current = null
+                resolve(false)
+              }
+
+              audio.play().catch(() => {
+                audioRef.current = null
+                resolve(false)
+              })
+            })
+
+            if (tocouComSucesso) {
+              return true
             }
           }
         } catch {
-          // Fallback imediato (< 220ms) para fila local
+          // Segue para fallback neural do navegador se necessário
         }
       }
 
-      executarSinteseLocal(textoLimpo)
-    },
-    [usarVozIa, vozIaNome, rate, stop, executarSinteseLocal],
-  )
+      if (sessionCounterRef.current !== sessionId) return false
+      setIsLoadingAudio(false)
 
-  useEffect(() => {
-    return () => {
-      cancelRequestedRef.current = true
-      limparTimers()
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      // 2. Fallback: Voz Neural do Navegador (ex: Microsoft Francisca Natural / Google português do Brasil)
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        return false
+      }
+
+      return new Promise<boolean>((resolve) => {
+        if (sessionCounterRef.current !== sessionId) {
+          resolve(false)
+          return
+        }
+
         try {
-          window.speechSynthesis.cancel()
+          window.speechSynthesis.resume()
         } catch {
           // ignore
         }
+
+        const utterance = new SpeechSynthesisUtterance(limpo)
+        utterance.lang = 'pt-BR'
+        const vozAtiva = obterMelhorVozAtual()
+        if (vozAtiva) {
+          utterance.voice = vozAtiva
+          utterance.lang = vozAtiva.lang || 'pt-BR'
+        }
+        utterance.rate = Math.max(0.92, Math.min(1.15, rate))
+        utterance.pitch = Math.max(0.95, Math.min(1.1, pitch))
+        utterance.volume = Math.max(0, Math.min(1, volume))
+
+        utterance.onstart = () => {
+          if (sessionCounterRef.current !== sessionId) {
+            window.speechSynthesis.cancel()
+            resolve(false)
+            return
+          }
+          setIsUsingIaVoice(false)
+          setIsSpeaking(true)
+          if (!streamStartedCallbackFiredRef.current) {
+            streamStartedCallbackFiredRef.current = true
+            callbacksRef.current.onStart?.()
+          }
+        }
+
+        utterance.onend = () => {
+          resolve(true)
+        }
+
+        utterance.onerror = (event) => {
+          if (event.error === 'interrupted' || event.error === 'canceled') {
+            resolve(false)
+            return
+          }
+          resolve(false)
+        }
+
+        window.speechSynthesis.speak(utterance)
+      })
+    },
+    [
+      usarVozIaState,
+      vozIaPreferidaState,
+      volume,
+      rate,
+      pitch,
+      pararAudioHtml,
+      obterMelhorVozAtual,
+    ],
+  )
+
+  /**
+   * Processador ágil da fila de Streaming de Voz Real Humana:
+   * - Reproduz a 1ª frase imediatamente com voz humana real.
+   * - Enquanto a frase atual toca, agrupa e pré-carrega em segundo plano as frases seguintes
+   *   para que toquem em sequência sem pausas robóticas.
+   */
+  const processarFilaStreaming = useCallback(
+    async (sessionId: number) => {
+      if (sessionCounterRef.current !== sessionId) return
+      if (isPlayingStreamItemRef.current) return
+
+      if (streamingQueueRef.current.length === 0) {
+        if (isStreamingFinishedRef.current) {
+          isStreamingActiveRef.current = false
+          setIsSpeaking(false)
+          setIsLoadingAudio(false)
+          limparTimers()
+          callbacksRef.current.onEnd?.()
+        }
+        return
       }
+
+      isPlayingStreamItemRef.current = true
+
+      // Se ainda não começamos a falar, pegamos a 1ª frase curta para início imediato.
+      // Se já estamos falando e acumularam várias frases na fila, consolidamos em um bloco fluido (até 320 chars)
+      // e pré-carregamos o próximo!
+      let textoAtual = streamingQueueRef.current.shift()!
+      if (streamStartedCallbackFiredRef.current && streamingQueueRef.current.length > 0) {
+        while (
+          streamingQueueRef.current.length > 0 &&
+          (textoAtual + ' ' + streamingQueueRef.current[0]).length <= 320
+        ) {
+          textoAtual = `${textoAtual} ${streamingQueueRef.current.shift()!}`
+        }
+      }
+
+      // Pré-carrega o próximo bloco em paralelo enquanto o atual vai tocar!
+      if (usarVozIaState && streamingQueueRef.current.length > 0) {
+        const proximoPreview = streamingQueueRef.current.slice(0, 2).join(' ')
+        precarregarAudioLumi(proximoPreview, vozIaPreferidaState)
+      }
+
+      await reproduzirBlocoUnico(textoAtual, sessionId)
+
+      if (sessionCounterRef.current !== sessionId) {
+        isPlayingStreamItemRef.current = false
+        return
+      }
+
+      isPlayingStreamItemRef.current = false
+      void processarFilaStreaming(sessionId)
+    },
+    [limparTimers, reproduzirBlocoUnico, usarVozIaState, vozIaPreferidaState],
+  )
+
+  const startStreamingSession = useCallback(() => {
+    sessionCounterRef.current += 1
+    const currentSession = sessionCounterRef.current
+    limparTimers()
+    pararAudioHtml()
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
     }
-  }, [limparTimers])
+
+    streamingQueueRef.current = []
+    isStreamingActiveRef.current = true
+    isStreamingFinishedRef.current = false
+    isPlayingStreamItemRef.current = false
+    streamStartedCallbackFiredRef.current = false
+    setIsLoadingAudio(false)
+
+    return currentSession
+  }, [limparTimers, pararAudioHtml])
+
+  const enqueueStreamingSentence = useCallback(
+    (sentence: string) => {
+      const limpo = limparTextoParaVoz(sentence)
+      if (!limpo) return
+
+      if (!isStreamingActiveRef.current) {
+        startStreamingSession()
+      }
+
+      streamingQueueRef.current.push(limpo)
+
+      // Se for a 1ª ou 2ª frase entrando na fila, já dispara o pré-carregamento da voz real humana imediatamente!
+      if (usarVozIaState && streamingQueueRef.current.length <= 2) {
+        precarregarAudioLumi(limpo, vozIaPreferidaState)
+      }
+
+      if (!isPlayingStreamItemRef.current) {
+        void processarFilaStreaming(sessionCounterRef.current)
+      }
+    },
+    [startStreamingSession, processarFilaStreaming, usarVozIaState, vozIaPreferidaState],
+  )
+
+  const finishStreamingSession = useCallback(
+    (remainingText?: string) => {
+      if (remainingText) {
+        const limpo = limparTextoParaVoz(remainingText)
+        if (limpo) {
+          streamingQueueRef.current.push(limpo)
+          if (usarVozIaState) {
+            precarregarAudioLumi(limpo, vozIaPreferidaState)
+          }
+        }
+      }
+      isStreamingFinishedRef.current = true
+      if (!isPlayingStreamItemRef.current) {
+        void processarFilaStreaming(sessionCounterRef.current)
+      }
+    },
+    [processarFilaStreaming, usarVozIaState, vozIaPreferidaState],
+  )
+
+  /**
+   * Fala um texto completo com Voz Humana Real Ágil:
+   * Divide em Bloco 1 (1ª frase rápida para resposta em ~500ms) + Blocos seguintes pré-carregados em paralelo!
+   */
+  const speak = useCallback(
+    async (text: string) => {
+      const blocos = dividirParaVozRealAgil(text)
+      if (blocos.length === 0) return
+
+      sessionCounterRef.current += 1
+      const currentSession = sessionCounterRef.current
+
+      limparTimers()
+      pararAudioHtml()
+      streamingQueueRef.current = [...blocos]
+      isStreamingActiveRef.current = true
+      isStreamingFinishedRef.current = true
+      isPlayingStreamItemRef.current = false
+      streamStartedCallbackFiredRef.current = false
+
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+
+      // Dispara o pré-carregamento paralelo do 1º e do 2º bloco imediatamente!
+      if (usarVozIaState) {
+        blocos.slice(0, 2).forEach((bloco) => precarregarAudioLumi(bloco, vozIaPreferidaState))
+      }
+
+      await processarFilaStreaming(currentSession)
+    },
+    [limparTimers, pararAudioHtml, usarVozIaState, vozIaPreferidaState, processarFilaStreaming],
+  )
+
+  const stop = useCallback(() => {
+    sessionCounterRef.current += 1
+    limparTimers()
+    pararAudioHtml()
+    streamingQueueRef.current = []
+    isStreamingActiveRef.current = false
+    isStreamingFinishedRef.current = true
+    isPlayingStreamItemRef.current = false
+    streamStartedCallbackFiredRef.current = false
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+    setIsSpeaking(false)
+    setIsLoadingAudio(false)
+  }, [limparTimers, pararAudioHtml])
 
   return {
     isSupported,
     isSpeaking,
+    isLoadingAudio,
     isUsingIaVoice,
-    currentText,
-    currentSegmentText,
+    usarVozIa: usarVozIaState,
+    setUsarVozIa,
+    vozIaPreferida: vozIaPreferidaState,
+    setVozIaPreferida,
     voices,
     selectedVoice,
-    definirVozPreferida,
-    warmUp,
+    selectVoiceByName,
     speak,
-    stop,
     startStreamingSession,
     enqueueStreamingSentence,
     finishStreamingSession,
+    stop,
+    warmUp,
+    dividirTextoEmSegmentos,
   }
 }

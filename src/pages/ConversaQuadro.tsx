@@ -15,7 +15,7 @@ import { obterPromptAtivo } from '@/services/prompts'
 import { verificarCheckinHoje, registrarCheckinEmocional } from '@/services/checkinEmocional'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
-import { extrairMicroSentencasStream } from '@/lib/speechUtils'
+import { extrairMicroSentencasStream, dividirParaVozRealAgil } from '@/lib/speechUtils'
 import {
   detectarModeloPedagogicoIdeal,
   CATALOGO_MODELOS_PEDAGOGICOS,
@@ -23,7 +23,11 @@ import {
   type ModeloPedagogico,
 } from '@/lib/orquestradorPedagogico'
 import { useGeminiLiveVoice, type VozGeminiLive } from '@/hooks/useGeminiLiveVoice'
-import { getVozIaLumiPreferida, setVozIaLumiPreferida } from '@/services/lumiAudioService'
+import {
+  getVozIaLumiPreferida,
+  setVozIaLumiPreferida,
+  precarregarAudioLumi,
+} from '@/services/lumiAudioService'
 import { BotaoVozCrianca } from '@/components/BotaoVozCrianca'
 import { BotaoOuvirLumi } from '@/components/BotaoOuvirLumi'
 import type {
@@ -951,10 +955,8 @@ export const ConversaQuadro: React.FC = () => {
         status: 'ativo',
       })
 
-      // 2. Inicia fila de Streaming de Voz Frase a Frase (< 220ms) se voz estiver ativa
-      const usarStreamingVoz =
-        faseAtual.ttsObrigatorio ||
-        (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe'))
+      // 2. Inicia fila de Streaming de Voz Humana Real Frase a Frase se voz estiver ativa
+      const usarStreamingVoz = Boolean(vozHabilitada || faseAtual.ttsObrigatorio)
       streamSpeechOffsetRef.current = 0
       if (usarStreamingVoz) {
         setMensagemFalandoId(lumiMsgId)
@@ -999,15 +1001,15 @@ export const ConversaQuadro: React.FC = () => {
               if (visaoChat === 'orbe') {
                 setLegendaFalando(full)
               }
-              // Modo Lumi Live 2.0: Fatiamento em micro-sentenças e reprodução imediata (< 220ms) da 1ª frase!
+              // Modo Lumi Live 2.0: Fatiamento em sentenças e reprodução imediata da 1ª frase com voz humana real!
               if (usarStreamingVoz) {
-                const { sentencasProntas, novoOffset } = extrairMicroSentencasStream(
+                const { novasSentencas, novoOffset } = extrairMicroSentencasStream(
                   full,
                   streamSpeechOffsetRef.current,
                 )
-                if (sentencasProntas.length > 0) {
+                if (novasSentencas.length > 0) {
                   streamSpeechOffsetRef.current = novoOffset
-                  sentencasProntas.forEach((sent) => enqueueStreamingSentence(sent))
+                  novasSentencas.forEach((sent) => enqueueStreamingSentence(sent))
                 }
               }
             },
@@ -1139,11 +1141,7 @@ export const ConversaQuadro: React.FC = () => {
             ),
           )
 
-          if (
-            (faseAtual.ttsObrigatorio ||
-              (vozHabilitada && (modoConversacaoVoz || visaoChat === 'orbe'))) &&
-            syncRes.content
-          ) {
+          if ((vozHabilitada || faseAtual.ttsObrigatorio) && syncRes.content) {
             setMensagemFalandoId(lumiMsgId)
             setLegendaFalando(syncRes.content)
             synthSpeak(syncRes.content)
@@ -1338,6 +1336,11 @@ export const ConversaQuadro: React.FC = () => {
         } else {
           setPrecisaCheckinHoje(false)
           setHumorHoje(res.checkin?.humor || null)
+          const welcomeText = `Oi, ${criancaSelecionada.nome.split(' ')[0]}! 🌟 Sou a Lumi, sua Agente de IA pessoal (com filtro seguro para ${criancaSelecionada.idade} anos)! Eu aprendo sobre os seus gostos a cada conversa e posso criar histórias, explicar curiosidades, desenhar imagens, compor músicas, ensinar programação ou ajudar nas tarefas! O que vamos fazer hoje?`
+          const primeiroBloco = dividirParaVozRealAgil(welcomeText)[0]
+          if (primeiroBloco) {
+            precarregarAudioLumi(primeiroBloco, vozRealAtiva)
+          }
           setMessages((prev) =>
             prev.length > 0
               ? prev
@@ -1345,7 +1348,7 @@ export const ConversaQuadro: React.FC = () => {
                   {
                     id: 'welcome',
                     sender: 'lumi',
-                    text: `Oi, ${criancaSelecionada.nome.split(' ')[0]}! 🌟 Sou a Lumi, sua Agente de IA pessoal (com filtro seguro para ${criancaSelecionada.idade} anos)! Eu aprendo sobre os seus gostos a cada conversa e posso criar histórias, explicar curiosidades, desenhar imagens, compor músicas, ensinar programação ou ajudar nas tarefas! O que vamos fazer hoje?`,
+                    text: welcomeText,
                     timestamp: new Date().toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -1358,7 +1361,14 @@ export const ConversaQuadro: React.FC = () => {
         }
       })
     }
-  }, [criancaSelecionada, estagioPiaget, adicionarEventoTelemetria, setEtapaAtual, setMateriaDetectada])
+  }, [
+    criancaSelecionada,
+    estagioPiaget,
+    adicionarEventoTelemetria,
+    setEtapaAtual,
+    setMateriaDetectada,
+    vozRealAtiva,
+  ])
 
   const handleSelecionarHumor = async (humor: HumorEmocional) => {
     if (!criancaSelecionada) return
@@ -1390,6 +1400,12 @@ export const ConversaQuadro: React.FC = () => {
           etapa: etapaAtual,
         },
       ])
+
+      if (vozHabilitada) {
+        setMensagemFalandoId('welcome_checkin')
+        setLegendaFalando(textoBoasVindas)
+        void synthSpeak(textoBoasVindas)
+      }
     } catch (err) {
       console.error('Erro ao registrar check-in:', err)
       setPrecisaCheckinHoje(false)

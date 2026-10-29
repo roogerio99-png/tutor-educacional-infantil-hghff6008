@@ -3,7 +3,7 @@ import { createServer } from 'http'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { WebSocketServer, WebSocket } from 'ws'
-import { GoogleGenAI, LiveServerMessage, Modality, Type } from '@google/genai'
+import { GoogleGenAI, LiveServerMessage, Modality, ThinkingLevel, Type } from '@google/genai'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -51,7 +51,153 @@ function resolveGeminiVoice(voiceInput?: string): GeminiVoiceName {
 
 // In-memory TTS cache to make repeated phrases instantaneous
 const ttsAudioCache = new Map<string, string>()
-let ttsRateLimitedUntil = 0
+
+/**
+ * Converts raw 24kHz 16-bit mono PCM (returned by Gemini TTS & Live API) into a valid
+ * RIFF/WAVE base64 data URI so HTMLAudioElement can play it natively in all browsers.
+ */
+function pcmToWavDataUri(base64Audio: string, sampleRate = 24000): string {
+  const rawBuffer = Buffer.from(base64Audio, 'base64')
+  // Check if it already has a RIFF header ("RIFF" = 0x52 0x49 0x46 0x46)
+  if (
+    rawBuffer.length >= 44 &&
+    rawBuffer[0] === 0x52 &&
+    rawBuffer[1] === 0x49 &&
+    rawBuffer[2] === 0x46 &&
+    rawBuffer[3] === 0x46
+  ) {
+    return `data:audio/wav;base64,${base64Audio}`
+  }
+
+  const numChannels = 1
+  const bitsPerSample = 16
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8
+  const blockAlign = (numChannels * bitsPerSample) / 8
+  const dataSize = rawBuffer.length
+  const wavHeader = Buffer.alloc(44)
+
+  wavHeader.write('RIFF', 0)
+  wavHeader.writeUInt32LE(36 + dataSize, 4)
+  wavHeader.write('WAVE', 8)
+  wavHeader.write('fmt ', 12)
+  wavHeader.writeUInt32LE(16, 16) // Subchunk1Size (16 for PCM)
+  wavHeader.writeUInt16LE(1, 20) // AudioFormat (1 = PCM)
+  wavHeader.writeUInt16LE(numChannels, 22)
+  wavHeader.writeUInt32LE(sampleRate, 24)
+  wavHeader.writeUInt32LE(byteRate, 28)
+  wavHeader.writeUInt16LE(blockAlign, 32)
+  wavHeader.writeUInt16LE(bitsPerSample, 34)
+  wavHeader.write('data', 36)
+  wavHeader.writeUInt32LE(dataSize, 40)
+
+  const wavBuffer = Buffer.concat([wavHeader, rawBuffer])
+  return `data:audio/wav;base64,${wavBuffer.toString('base64')}`
+}
+
+/**
+ * Fallback real human voice synthesizer using Gemini 3.8 Live WebSocket when standard TTS hits 429 rate limits.
+ */
+async function synthesizeViaGeminiLive(
+  text: string,
+  voiceName: GeminiVoiceName,
+): Promise<string | null> {
+  return new Promise<string | null>((resolve) => {
+    let resolved = false
+    let liveSession: any = null
+    const pcmChunks: Buffer[] = []
+
+    const finish = (result: string | null) => {
+      if (resolved) return
+      resolved = true
+      if (liveSession) {
+        try {
+          liveSession.close()
+        } catch {
+          // ignore
+        }
+      }
+      resolve(result)
+    }
+
+    const timer = setTimeout(() => {
+      if (pcmChunks.length > 0) {
+        const combined = Buffer.concat(pcmChunks)
+        finish(pcmToWavDataUri(combined.toString('base64'), 24000))
+      } else {
+        finish(null)
+      }
+    }, 5500)
+
+    ;(async () => {
+      try {
+        const ai = getGenAIClient()
+        liveSession = await ai.live.connect({
+          model: 'gemini-3.8-live',
+          config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName },
+              },
+            },
+            systemInstruction:
+              'Você é a Lumi, uma tutora brasileira carinhosa, acolhedora e expressiva. Leia em voz alta em Português do Brasil EXATAMENTE o texto enviado pelo usuário, palavra por palavra, com entonação humana natural e afetuosa, sem adicionar nem omitir nenhuma palavra.',
+          },
+          callbacks: {
+            onopen: () => {
+              try {
+                liveSession.sendRealtimeInput({
+                  text: `Leia exatamente este texto em voz alta: "${text}"`,
+                })
+              } catch {
+                clearTimeout(timer)
+                finish(null)
+              }
+            },
+            onmessage: (message: LiveServerMessage) => {
+              const parts = message.serverContent?.modelTurn?.parts || []
+              for (const part of parts) {
+                if (part.inlineData?.data) {
+                  pcmChunks.push(Buffer.from(part.inlineData.data, 'base64'))
+                }
+              }
+              if (message.serverContent?.turnComplete) {
+                clearTimeout(timer)
+                if (pcmChunks.length > 0) {
+                  const combined = Buffer.concat(pcmChunks)
+                  finish(pcmToWavDataUri(combined.toString('base64'), 24000))
+                } else {
+                  finish(null)
+                }
+              }
+            },
+            onerror: () => {
+              clearTimeout(timer)
+              if (pcmChunks.length > 0) {
+                const combined = Buffer.concat(pcmChunks)
+                finish(pcmToWavDataUri(combined.toString('base64'), 24000))
+              } else {
+                finish(null)
+              }
+            },
+            onclose: () => {
+              clearTimeout(timer)
+              if (pcmChunks.length > 0) {
+                const combined = Buffer.concat(pcmChunks)
+                finish(pcmToWavDataUri(combined.toString('base64'), 24000))
+              } else {
+                finish(null)
+              }
+            },
+          },
+        })
+      } catch {
+        clearTimeout(timer)
+        finish(null)
+      }
+    })()
+  })
+}
 
 function buildLumiSystemInstruction(params: {
   criancaNome?: string
@@ -189,7 +335,8 @@ async function startServer() {
   app.use(express.json({ limit: '25mb' }))
 
   // ===========================================================================
-  // 1. TTS Endpoint powered by gemini-3.8-flash-lite-tts (with 429 cooldown)
+  // 1. Real Human Voice TTS Endpoint (3-Tier Gemini Neural Voice Pipeline)
+  //    Tier 1: gemini-3.8-flash-lite-tts -> Tier 2: gemini-3.8-flash-tts -> Tier 3: gemini-3.8-live
   // ===========================================================================
   const handleTtsRequest = async (req: express.Request, res: express.Response) => {
     try {
@@ -219,66 +366,78 @@ async function startServer() {
         return
       }
 
-      // If we are inside a 429 rate-limit window, return immediately so client uses Web Speech fallback
-      if (Date.now() < ttsRateLimitedUntil) {
-        res.status(200).json({
-          cached: false,
-          rate_limited: true,
-          retry_after_ms: Math.max(5000, ttsRateLimitedUntil - Date.now()),
-          format: 'wav',
-          voice: geminiVoice,
-          model: 'gemini-3.8-flash-lite-tts',
-          audio_base64: '',
-          audio_url: null,
-        })
-        return
-      }
-
       const ai = getGenAIClient()
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash-lite-tts',
-        contents: [
-          {
-            role: 'user',
-            parts: [
+      const ttsStylePrompt =
+        'Warm, affectionate, cheerful, natural Brazilian Portuguese female tutor speaking clearly, naturally, and expressively to a child'
+
+      let dataUri: string | null = null
+      let usedModel = 'gemini-3.8-flash-lite-tts'
+
+      // Tier 1 & Tier 2: Try gemini-3.8-flash-lite-tts first, then gemini-3.8-flash-tts if rate-limited
+      const ttsModelsToTry = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'] as const
+      for (const candidateModel of ttsModelsToTry) {
+        try {
+          const response = await ai.models.generateContent({
+            model: candidateModel,
+            contents: [
               {
-                text: cleanText,
-                // @ts-ignore - speechMetadata supported by Gemini 3.8 TTS
-                speechMetadata: {
-                  style:
-                    'Warm, affectionate, cheerful, natural Brazilian Portuguese female tutor speaking clearly and expressively to a child',
-                },
+                role: 'user',
+                parts: [
+                  {
+                    text: cleanText,
+                    // @ts-ignore - speechMetadata supported by Gemini 3.8 TTS
+                    speechMetadata: {
+                      style: ttsStylePrompt,
+                    },
+                  },
+                ],
               },
             ],
-          },
-        ],
-        config: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: geminiVoice },
+            config: {
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: geminiVoice },
+                },
+              },
             },
-          },
-        },
-      })
+          })
 
-      const base64Audio =
-        response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data)?.inlineData
-          ?.data || ''
+          const base64Audio =
+            response.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData?.data)
+              ?.inlineData?.data || ''
 
-      if (!base64Audio) {
+          if (base64Audio) {
+            dataUri = pcmToWavDataUri(base64Audio, 24000)
+            usedModel = candidateModel
+            break
+          }
+        } catch {
+          // Proceed to next model tier
+        }
+      }
+
+      // Tier 3: If standard TTS models hit free-tier 3 RPM quota, synthesize via Gemini 3.8 Live WebSocket!
+      if (!dataUri) {
+        const liveWav = await synthesizeViaGeminiLive(cleanText, geminiVoice)
+        if (liveWav) {
+          dataUri = liveWav
+          usedModel = 'gemini-3.8-live'
+        }
+      }
+
+      if (!dataUri) {
         res.status(200).json({
           cached: false,
           format: 'wav',
           voice: geminiVoice,
-          model: 'gemini-3.8-flash-lite-tts',
+          model: usedModel,
           audio_base64: '',
           audio_url: null,
         })
         return
       }
 
-      const dataUri = `data:audio/wav;base64,${base64Audio}`
       if (ttsAudioCache.size > 300) {
         const firstKey = ttsAudioCache.keys().next().value
         if (firstKey) ttsAudioCache.delete(firstKey)
@@ -289,26 +448,11 @@ async function startServer() {
         cached: false,
         format: 'wav',
         voice: geminiVoice,
-        model: 'gemini-3.8-flash-lite-tts',
+        model: usedModel,
         audio_base64: dataUri,
         audio_url: null,
       })
-    } catch (error: any) {
-      const errMsg = String(error?.message || error || '')
-      if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota')) {
-        ttsRateLimitedUntil = Date.now() + 26000
-        res.status(200).json({
-          cached: false,
-          rate_limited: true,
-          retry_after_ms: 26000,
-          format: 'wav',
-          voice: 'Kore',
-          model: 'gemini-3.8-flash-lite-tts',
-          audio_base64: '',
-          audio_url: null,
-        })
-        return
-      }
+    } catch {
       res.status(200).json({
         cached: false,
         format: 'wav',
@@ -373,20 +517,20 @@ ${
     : ''
 }
 
-INSTRUÇÃO DE APRENDIZADO CONTÍNUO E RESPOSTA ESTRUTURADA:
+INSTRUÇÃO DE APRENDIZADO CONTÍNUO E RESPOSTA ÁGIL PARA VOZ HUMANA REAL:
 Retorne SEMPRE um JSON válido contendo:
-- "reply": sua resposta completa em Português do Brasil para ${criancaNome.split(' ')[0]} (use emojis acolhedores, parágrafos curtos e claros, nunca coloque tags técnicas como [[ETAPA:...]] no texto).
+- "reply": sua resposta em Português do Brasil para ${criancaNome.split(' ')[0]}. Comece com uma 1ª frase curta, calorosa e natural (máx. 15 palavras) para que a voz real da Lumi comece a falar imediatamente, seguida da explicação clara e fluida (máximo de 2 parágrafos curtos). Nunca coloque tags técnicas como [[ETAPA:...]] no texto.
 - "etapaSocratica": uma das opções: "entender", "contextualizar", "guiar", "praticar", "consolidar".
 - "materia": matéria principal relacionada ("ciencias", "matematica", "portugues", "historia", "geografia", "programacao", "artes", "musica" ou "geral").
-- "memoriasAprendidas": lista de novos fatos que você aprendeu sobre a criança NESTA mensagem (ex: gostos, animais de estimação, esportes, comidas, amigos, sonhos, estilo de aprendizagem, dificuldades ou conquistas). Se a criança contou algo sobre ela mesma ou pediu para você lembrar de algo, extraia aqui! Se não houver fato pessoal novo nesta mensagem, retorne [].
-- "novosConhecimentos": lista de conceitos ou curiosidades que a criança aprendeu ou explorou nesta mensagem (máximo 2 itens, ou []).
-- "agendamentos": se a criança pediu para anotar/lembrar uma prova, tarefa ou compromisso na agenda, inclua aqui (ou []).
+- "memoriasAprendidas": lista de novos fatos que você aprendeu sobre a criança NESTA mensagem (ou []).
+- "novosConhecimentos": lista de conceitos que a criança explorou nesta mensagem (máximo 2 itens, ou []).
+- "agendamentos": se a criança pediu para anotar uma prova, tarefa ou compromisso na agenda, inclua aqui (ou []).
 - "bloqueadoPorIdade": boolean (true se a pergunta violou o filtro de segurança para ${criancaIdade} anos).`
 
       const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
 
       if (Array.isArray(history)) {
-        for (const h of history.slice(-14)) {
+        for (const h of history.slice(-8)) {
           const text = String(h?.text || '').trim()
           if (!text) continue
           contents.push({
@@ -407,6 +551,9 @@ Retorne SEMPRE um JSON válido contendo:
         contents,
         config: {
           systemInstruction,
+          ...(selectedModel === 'gemini-3.8-flash'
+            ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+            : {}),
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,

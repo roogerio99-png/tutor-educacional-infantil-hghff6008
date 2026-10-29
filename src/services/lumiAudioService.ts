@@ -1,56 +1,86 @@
-import pb from '@/lib/pocketbase/client'
-
-export type VozIaNome =
-  | 'Kore'
-  | 'Zephyr'
-  | 'Puck'
-  | 'Fenrir'
-  | 'Charon'
-  | 'nova'
-  | 'alloy'
-  | 'ash'
-  | 'coral'
-  | 'echo'
-  | 'fable'
-  | 'onyx'
-  | 'sage'
-  | 'shimmer'
-  | 'verse'
+import { limparTextoParaVoz } from '@/lib/speechUtils'
 
 export interface GerarAudioLumiParams {
   text: string
-  voice?: VozIaNome
-  model?: string
-  speed?: number
+  voice?: string
 }
 
 export interface GerarAudioLumiResponse {
   cached: boolean
+  rate_limited?: boolean
+  retry_after_ms?: number
   format: string
   voice: string
-  model: string
-  audio_base64?: string
-  audio_url?: string | null
+  model?: string
+  audio_base64: string
+  audio_url: string | null
 }
 
-// Cache em memória na sessão do navegador para velocidade instantânea
-const memoryAudioCache = new Map<string, string>()
-
-// Fila e controle de promessas de preload para não disparar requisições duplicadas em voo
+// Cache em memória no frontend para reprodução instantânea (0ms) de frases já geradas
+const audioCache = new Map<string, string>()
+// Deduplicação de requisições em andamento para que o prefetch paralelo compartilhe a mesma Promise
 const inFlightRequests = new Map<string, Promise<string | null>>()
 
-export const STORAGE_KEY_VOZ_IA_HABILITADA = 'lumi_voz_ia_habilitada'
-export const STORAGE_KEY_VOZ_IA_NOME = 'lumi_voz_ia_nome'
+const STORAGE_VOZ_IA_KEY = 'lumi_voz_ia_preferida'
+const STORAGE_USAR_VOZ_IA_KEY = 'lumi_usar_voz_ia'
 
-/**
- * Obtém o nome da voz real da Lumi (Gemini Live / TTS) salva nas preferências
- */
-export function getVozIaLumiPreferida(): 'Kore' | 'Zephyr' | 'Puck' | 'Fenrir' | 'Charon' {
-  if (typeof window === 'undefined') return 'Kore'
+export interface OpcaoVozIaLumi {
+  id: string
+  nome: string
+  descricao: string
+}
+
+export const VOZES_IA_LUMI: OpcaoVozIaLumi[] = [
+  {
+    id: 'Kore',
+    nome: 'Kore (Voz Humana Acolhedora)',
+    descricao: 'Voz feminina calorosa, carinhosa e natural (Recomendada)',
+  },
+  {
+    id: 'Zephyr',
+    nome: 'Zephyr (Voz Humana Suave)',
+    descricao: 'Voz feminina serena, paciente e cristalina',
+  },
+  {
+    id: 'Puck',
+    nome: 'Puck (Voz Humana Animada)',
+    descricao: 'Voz jovem, divertida, energética e curiosa',
+  },
+  {
+    id: 'Fenrir',
+    nome: 'Fenrir (Voz Humana Calma)',
+    descricao: 'Voz tranquila e segura para foco profundo',
+  },
+  {
+    id: 'Charon',
+    nome: 'Charon (Voz Humana Narradora)',
+    descricao: 'Cadência expressiva de contação de histórias',
+  },
+]
+
+const MAPA_VOZES_LEGADAS: Record<string, string> = {
+  nova: 'Kore',
+  coral: 'Kore',
+  shimmer: 'Kore',
+  alloy: 'Zephyr',
+  sage: 'Zephyr',
+  fable: 'Puck',
+  verse: 'Puck',
+  onyx: 'Fenrir',
+  echo: 'Charon',
+}
+
+export function getVozIaLumiPreferida(): string {
   try {
-    const val = localStorage.getItem(STORAGE_KEY_VOZ_IA_NOME)
-    if (val === 'Kore' || val === 'Zephyr' || val === 'Puck' || val === 'Fenrir' || val === 'Charon') {
-      return val
+    const salva = localStorage.getItem(STORAGE_VOZ_IA_KEY)
+    if (!salva) return 'Kore'
+    if (MAPA_VOZES_LEGADAS[salva]) {
+      const migrada = MAPA_VOZES_LEGADAS[salva]
+      localStorage.setItem(STORAGE_VOZ_IA_KEY, migrada)
+      return migrada
+    }
+    if (VOZES_IA_LUMI.some((v) => v.id === salva)) {
+      return salva
     }
     return 'Kore'
   } catch {
@@ -58,171 +88,120 @@ export function getVozIaLumiPreferida(): 'Kore' | 'Zephyr' | 'Puck' | 'Fenrir' |
   }
 }
 
-/**
- * Salva o nome da voz real da Lumi (Gemini Live / TTS)
- */
-export function setVozIaLumiPreferida(voz: 'Kore' | 'Zephyr' | 'Puck' | 'Fenrir' | 'Charon'): void {
-  if (typeof window === 'undefined') return
+export function setVozIaLumiPreferida(voiceId: string): void {
   try {
-    localStorage.setItem(STORAGE_KEY_VOZ_IA_NOME, voz)
+    const resolved = MAPA_VOZES_LEGADAS[voiceId] || voiceId
+    localStorage.setItem(STORAGE_VOZ_IA_KEY, resolved)
   } catch {
     // ignore
   }
 }
 
-/**
- * Verifica se a voz verdadeira da Lumi (IA) está ativada nas preferências
- * Default: true (ligado por padrão)
- */
-export function isVozIaLumiHabilitada(): boolean {
-  if (typeof window === 'undefined') return true
+export function getUsarVozIaLumi(): boolean {
   try {
-    const val = localStorage.getItem(STORAGE_KEY_VOZ_IA_HABILITADA)
-    if (val === null) return true // Padrão ativado
-    return val === 'true'
+    const val = localStorage.getItem(STORAGE_USAR_VOZ_IA_KEY)
+    return val === null ? true : val === 'true'
   } catch {
     return true
   }
 }
 
-/**
- * Salva preferência da voz da Lumi (IA ativada/desativada)
- */
-export function setVozIaLumiHabilitada(habilitada: boolean): void {
-  if (typeof window === 'undefined') return
+export function setUsarVozIaLumi(usar: boolean): void {
   try {
-    localStorage.setItem(STORAGE_KEY_VOZ_IA_HABILITADA, String(habilitada))
+    localStorage.setItem(STORAGE_USAR_VOZ_IA_KEY, String(usar))
   } catch {
     // ignore
   }
 }
 
-/**
- * Limpa metadados e tags técnicas para síntese de áudio limpa
- */
-export function limparTextoParaTTS(rawText: string): string {
-  if (!rawText) return ''
-  return rawText
-    .replace(/\[\[ETAPA:[^\]]+\]\]/gi, '')
-    .replace(/\[TELEFONE_REMOVIDO\]/g, '')
-    .replace(/\[DOCUMENTO_REMOVIDO\]/g, '')
-    .replace(/\[EMAIL_REMOVIDO\]/g, '')
-    .replace(/\[ENDERECO_REMOVIDO\]/g, '')
-    .replace(/\[ESCOLA_REMOVIDA\]/g, 'sua escola')
-    .replace(/[*_#`~>]/g, '') // remove markdown decorativo
-    .trim()
-}
+export const isVozIaLumiHabilitada = getUsarVozIaLumi
+export const setVozIaLumiHabilitada = setUsarVozIaLumi
 
-// Controle de cooldown caso o modelo TTS retorne 429 (limite de requisições por minuto)
-let ttsCooldownUntil = 0
-
-/**
- * Agrupa o texto em blocos maiores (até 8 frases por requisição) para economizar
- * a cota de requisições por minuto (RPM) do modelo gemini-3.8-flash-lite-tts.
- */
-export function dividirEmFrasesParaAudio(texto: string, maxPorLote = 8): string[] {
-  const limpo = limparTextoParaTTS(texto)
-  if (!limpo) return []
-  const matches = limpo.match(/[^.!?\n]+[.!?]+(?:\s+|$)|[^.!?\n]+$/g) || [limpo]
-  const frases = matches.map((f) => f.trim()).filter((f) => f.length > 0)
-
-  if (frases.length <= maxPorLote) return [limpo]
-
-  const lotes: string[] = []
-  let acumulado = ''
-  let count = 0
-
-  for (const f of frases) {
-    if (count < maxPorLote) {
-      acumulado = acumulado ? `${acumulado} ${f}` : f
-      count++
-    } else {
-      if (acumulado) lotes.push(acumulado)
-      acumulado = f
-      count = 1
-    }
+function normalizarUrlAudio(rawBase64OrUrl: string, format = 'wav'): string {
+  if (
+    rawBase64OrUrl.startsWith('data:') ||
+    rawBase64OrUrl.startsWith('http') ||
+    rawBase64OrUrl.startsWith('blob:')
+  ) {
+    return rawBase64OrUrl
   }
-  if (acumulado) lotes.push(acumulado)
-
-  return lotes
-}
-
-function getCacheKey(text: string, voice = 'Kore', model = 'gemini-3.8-flash-lite-tts'): string {
-  return `${voice}_${model}_${text.trim().toLowerCase()}`
+  const mime = format === 'wav' ? 'audio/wav' : 'audio/mpeg'
+  return `data:${mime};base64,${rawBase64OrUrl}`
 }
 
 /**
- * Obtém URL reproduzível de áudio (WAV base64 data URI) via Gemini 3.8 TTS no servidor
+ * Solicita a síntese de voz humana real da Lumi diretamente na rota Express (/api/lumi/tts)
+ * com cache em memória e deduplicação de chamadas paralelas.
  */
 export async function obterAudioLumiUrl(params: GerarAudioLumiParams): Promise<string | null> {
-  const textClean = limparTextoParaTTS(params.text)
-  if (!textClean) return null
+  const textoLimpo = limparTextoParaVoz(params.text)
+  if (!textoLimpo) return null
 
-  const voice =
-    params.voice && params.voice !== 'nova' ? params.voice : getVozIaLumiPreferida()
-  const model = params.model || 'gemini-3.8-flash-lite-tts'
-  const speed = params.speed || 1.05
-  const key = getCacheKey(textClean, voice, model)
+  const rawVoice = params.voice || getVozIaLumiPreferida()
+  const voice = MAPA_VOZES_LEGADAS[rawVoice] || rawVoice
+  const cacheKey = `${voice}:${textoLimpo.toLowerCase()}`
 
-  // 1. Verifica cache em memória
-  if (memoryAudioCache.has(key)) {
-    return memoryAudioCache.get(key) || null
+  const cached = audioCache.get(cacheKey)
+  if (cached) {
+    return cached
   }
 
-  // Se estiver em cooldown de rate-limit (429), retorna null imediatamente para usar o fallback Web Speech sem erro
-  if (Date.now() < ttsCooldownUntil) {
-    return null
+  const emAndamento = inFlightRequests.get(cacheKey)
+  if (emAndamento) {
+    return emAndamento
   }
 
-  // 2. Se já existe uma requisição em andamento para o mesmo texto, reaproveita a Promise
-  if (inFlightRequests.has(key)) {
-    return inFlightRequests.get(key)!
-  }
-
-  const reqPromise = (async () => {
+  const requestPromise = (async (): Promise<string | null> => {
     try {
-      const res = await pb.send<GerarAudioLumiResponse & { rate_limited?: boolean; retry_after_ms?: number }>(
-        '/backend/v1/lumi/tts',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            text: textClean,
-            voice,
-            model,
-            speed,
-          }),
-        },
-      )
+      const nativeFetch =
+        typeof window !== 'undefined' && (window as any).__lumiNativeFetch
+          ? (window as any).__lumiNativeFetch
+          : fetch
 
-      if (res.rate_limited) {
-        ttsCooldownUntil = Date.now() + (res.retry_after_ms || 25000)
-        return null
+      const response = await nativeFetch('/api/lumi/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: textoLimpo,
+          voice,
+        }),
+      })
+
+      if (!response.ok) return null
+      const res: GerarAudioLumiResponse = await response.json()
+
+      if (res?.audio_base64) {
+        const dataUri = normalizarUrlAudio(res.audio_base64, res.format || 'wav')
+        if (audioCache.size > 80) {
+          const firstKey = audioCache.keys().next().value
+          if (firstKey) audioCache.delete(firstKey)
+        }
+        audioCache.set(cacheKey, dataUri)
+        return dataUri
       }
 
-      const finalUrl = res.audio_base64 || res.audio_url || null
-      if (finalUrl) {
-        memoryAudioCache.set(key, finalUrl)
-        return finalUrl
+      if (res?.audio_url) {
+        audioCache.set(cacheKey, res.audio_url)
+        return res.audio_url
       }
+
       return null
     } catch {
       return null
     } finally {
-      inFlightRequests.delete(key)
+      inFlightRequests.delete(cacheKey)
     }
   })()
 
-  inFlightRequests.set(key, reqPromise)
-  return reqPromise
+  inFlightRequests.set(cacheKey, requestPromise)
+  return requestPromise
 }
 
 /**
- * Inicia preload controlado apenas de textos completos quando não estiver em cooldown
+ * Pré-carrega o áudio humano real em segundo plano para que a próxima frase toque com latência 0ms.
  */
-export function preloadAudioLumi(text: string, voice?: VozIaNome): void {
-  if (Date.now() < ttsCooldownUntil) return
-  const limpo = limparTextoParaTTS(text)
-  if (!limpo || limpo.length < 10) return
-  const vozAlvo = voice && voice !== 'nova' ? voice : getVozIaLumiPreferida()
-  obterAudioLumiUrl({ text: limpo, voice: vozAlvo }).catch(() => {})
+export function precarregarAudioLumi(text: string, voice?: string): void {
+  const limpo = limparTextoParaVoz(text)
+  if (!limpo) return
+  void obterAudioLumiUrl({ text: limpo, voice })
 }
