@@ -118,9 +118,7 @@ export const Header: React.FC = () => {
   const { user, logout, tipoConta } = useAuth()
   const { criancas, criancaSelecionada, selecionarCrianca, recarregarCriancas } = useCrianca()
   const {
-    pinConfigurado,
     modalConfigurarPinAberto,
-    abrirModalConfigurarPin,
     fecharModalConfigurarPin,
   } = useModoCrianca()
   const location = useLocation()
@@ -172,10 +170,247 @@ export const Header: React.FC = () => {
     }
   }
 
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false)
+
   return (
     <>
-      <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-30 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      {/* =========================================================================
+          CABEÇALHO MOBILE (< 768px): Compacto (apenas 56px), sem travar meia tela!
+         ========================================================================= */}
+      <header className="md:hidden bg-slate-900 text-white shadow-md sticky top-0 z-30 border-b border-slate-800 h-14">
+        <div className="h-full px-3 flex items-center justify-between gap-2">
+          {/* Logo compacta */}
+          <Link
+            to="/conversa"
+            className="flex items-center gap-2 shrink-0 py-1"
+            onClick={() => setMenuMobileAberto(false)}
+          >
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-300 flex items-center justify-center shadow-xs">
+              <span className="text-base">✨</span>
+            </div>
+            <span className="text-base font-extrabold tracking-tight text-white">Lumi IA</span>
+          </Link>
+
+          {/* Atalho do Aluno Atual + Alternador Criança + Botão Menu */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {criancas.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMenuMobileAberto(true)}
+                className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 px-2 py-1.5 rounded-xl text-xs font-bold text-amber-300 max-w-[125px] truncate cursor-pointer transition-colors"
+                title="Trocar aluno ou ver opções"
+              >
+                <span>🧒</span>
+                <span className="truncate">{criancaSelecionada?.nome.split(' ')[0] || 'Aluno'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setModalAtivarModoCrianca(true)}
+              className="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[11px] font-extrabold px-2.5 py-1.5 rounded-xl shadow-xs active:scale-95 transition-all cursor-pointer"
+              title="Acessar como Criança"
+            >
+              <span>🧒</span>
+              <span>Criança</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMenuMobileAberto(!menuMobileAberto)}
+              className="p-2 rounded-xl text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 cursor-pointer transition-colors"
+              aria-label={menuMobileAberto ? 'Fechar menu' : 'Abrir menu'}
+            >
+              {menuMobileAberto ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Drawer / Menu deslizante para celular */}
+        {menuMobileAberto && (
+          <div className="fixed inset-0 top-14 z-40 bg-slate-950/70 backdrop-blur-xs flex flex-col justify-start p-3 animate-in fade-in duration-150">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 text-white shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+              {/* Seletor de Criança */}
+              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">
+                    Aluno em Atendimento:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuMobileAberto(false)
+                      setModalNovaCrianca(true)
+                    }}
+                    className="text-xs font-bold text-amber-400 hover:text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30 transition-colors"
+                  >
+                    + Novo Aluno
+                  </button>
+                </div>
+                {criancas.length > 0 ? (
+                  <select
+                    aria-label="Selecionar aluno"
+                    value={criancaSelecionada?.id || ''}
+                    onChange={(e) => {
+                      const target = criancas.find((c) => c.id === e.target.value) || null
+                      selecionarCrianca(target)
+                      setMenuMobileAberto(false)
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 text-sm font-semibold text-amber-300 p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {criancas.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome} ({c.serie || `${c.idade} anos`})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-amber-400 italic">Nenhum aluno cadastrado ainda.</p>
+                )}
+              </div>
+
+              {/* Alternador Rápido: Acesso Responsável vs Criança */}
+              <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80 space-y-2">
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wide block">
+                  Perfil de Acesso:
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center justify-center gap-1.5">
+                    <span>👨‍👩‍👧</span>
+                    <span>Responsável</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuMobileAberto(false)
+                      setModalAtivarModoCrianca(true)
+                    }}
+                    className="px-3 py-2 rounded-xl text-xs font-extrabold bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                  >
+                    <span>🧒</span>
+                    <span>Modo Criança</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Ações Especiais: App no Celular e Tour Guiado */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuMobileAberto(false)
+                    setModalInstalarCelular(true)
+                  }}
+                  className="p-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-200 text-xs font-extrabold flex flex-col items-center justify-center gap-1.5 transition-colors"
+                >
+                  <span className="text-xl">📲</span>
+                  <span>App no Celular</span>
+                </button>
+
+                {tipoConta === 'responsavel' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuMobileAberto(false)
+                      setTourGuiadoAberto(true)
+                    }}
+                    className="p-3 rounded-2xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-sky-200 text-xs font-extrabold flex flex-col items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <span className="text-xl">🧭</span>
+                    <span>Tour Guiado</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Informações da Conta & Logout */}
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-200 truncate max-w-[200px]">
+                    {user?.name || user?.email}
+                  </p>
+                  <p className="text-[10px] text-slate-400">Responsável Logado</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuMobileAberto(false)
+                    logout()
+                    navigate('/login')
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 text-xs font-bold transition-colors flex items-center gap-1"
+                >
+                  <span>Sair</span>
+                  <span>🚪</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* =========================================================================
+          BARRA DE NAVEGAÇÃO INFERIOR PARA CELULAR (< 768px): Thumb Zone Ergonomic
+         ========================================================================= */}
+      <nav
+        aria-label="Navegação móvel"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 h-14 px-1 flex items-center justify-around"
+      >
+        {TABS.filter((tab) => {
+          if (
+            (tab.id === 'prompts' || tab.id === 'grafo' || tab.id === 'configuracoes') &&
+            tipoConta === 'crianca'
+          ) {
+            return false
+          }
+          return true
+        }).map((tab) => {
+          const isActive = location.pathname === tab.path
+          return (
+            <Link
+              key={tab.id}
+              to={tab.path}
+              className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+                isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <div
+                className={`p-1 rounded-xl transition-all ${
+                  isActive ? 'bg-amber-400/20 scale-105' : ''
+                }`}
+              >
+                {tab.icon}
+              </div>
+              <span className="text-[10px] tracking-tight leading-none truncate max-w-[64px]">
+                {tab.id === 'conversa'
+                  ? 'Conversa'
+                  : tab.id === 'quadro'
+                    ? 'Quadro'
+                    : tab.id === 'agenda'
+                      ? 'Agenda'
+                      : tab.id === 'grafo'
+                        ? 'Grafo'
+                        : tab.id === 'prompts'
+                          ? 'Prompts'
+                          : 'Família'}
+              </span>
+            </Link>
+          )
+        })}
+      </nav>
+
+      {/* =========================================================================
+          CABEÇALHO DESKTOP (>= 768px): Completo, espaçoso e com todas as ferramentas
+         ========================================================================= */}
+      <header className="hidden md:block bg-slate-900 text-white shadow-lg sticky top-0 z-30 border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
           {/* Logo e Nome */}
           <div className="flex items-center gap-3">
             <Link to="/conversa" className="flex items-center gap-2.5 group">
@@ -222,7 +457,7 @@ export const Header: React.FC = () => {
             <button
               type="button"
               onClick={() => setModalNovaCrianca(true)}
-              className="text-xs text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-700 px-2 py-1 rounded-md transition-colors ml-1 font-medium"
+              className="text-xs text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-700 px-2 py-1 rounded-md transition-colors ml-1 font-medium cursor-pointer"
               title="Cadastrar nova criança"
             >
               + Novo
@@ -284,7 +519,7 @@ export const Header: React.FC = () => {
                 logout()
                 navigate('/login')
               }}
-              className="text-xs text-slate-400 hover:text-rose-300 p-2 rounded-lg hover:bg-slate-800 transition-colors"
+              className="text-xs text-slate-400 hover:text-rose-300 p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               title="Encerrar sessão"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,7 +534,7 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* 4 Abas do Protótipo Lumi IA */}
+        {/* 4 Abas do Protótipo Lumi IA no Desktop */}
         <div className="bg-slate-800/90 border-t border-slate-700/60">
           <div className="max-w-7xl mx-auto px-4 flex overflow-x-auto custom-scroll">
             {TABS.filter((tab) => {

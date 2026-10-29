@@ -57,7 +57,143 @@ export const HeaderModoCrianca: React.FC = () => {
 
   return (
     <>
-      <header className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none">
+      {/* =========================================================================
+          CABEÇALHO MODO CRIANÇA MOBILE (< 768px): Compacto 56px, sem ocupar a tela!
+         ========================================================================= */}
+      <header className="md:hidden bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none h-14">
+        <div className="h-full px-3 flex items-center justify-between gap-2">
+          {/* Logo compacta */}
+          <Link
+            to="/conversa"
+            className="flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-xs px-2.5 py-1.5 rounded-2xl transition-all shrink-0"
+          >
+            <div className="w-7 h-7 rounded-lg bg-white text-amber-500 flex items-center justify-center text-sm shadow-xs font-black">
+              ✨
+            </div>
+            <div className="flex flex-col">
+              <span className="font-extrabold text-sm tracking-tight leading-none text-white">
+                Lumi
+              </span>
+              <span className="text-[9px] text-amber-100 font-bold leading-none mt-0.5">
+                Criança 🧒
+              </span>
+            </div>
+          </Link>
+
+          {/* Atalho Aluno + Botão Acessar como Responsável (com PIN) */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 bg-white/20 px-2.5 py-1 rounded-xl text-xs font-bold text-white shadow-xs max-w-[100px] truncate">
+              <span>⭐</span>
+              <span className="truncate">
+                {criancaUsuario?.nome_exibicao?.split(' ')[0] ||
+                  criancaSelecionada?.nome.split(' ')[0] ||
+                  'Aluno'}
+              </span>
+            </div>
+
+            {tipoConta === 'crianca' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPinDigitado('')
+                    setErroPinGate(null)
+                    setParentalGateAberto(true)
+                  }}
+                  className="bg-black/30 hover:bg-black/40 text-white font-extrabold px-2.5 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1 shadow-xs cursor-pointer"
+                  title="Acessar painel do Responsável (Exige PIN)"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Pais</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="bg-white/15 hover:bg-white/25 text-white font-bold p-1.5 rounded-xl text-xs transition-all flex items-center justify-center cursor-pointer"
+                  title="Sair"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={abrirModalSairModo}
+                className="bg-black/30 hover:bg-black/40 active:bg-black/50 text-white px-2.5 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1 shadow-inner cursor-pointer"
+                title="Acessar como Responsável (Exige PIN)"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Pais</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* =========================================================================
+          BARRA DE NAVEGAÇÃO INFERIOR PARA CRIANÇA NO CELULAR (< 768px)
+         ========================================================================= */}
+      <nav
+        aria-label="Navegação da Criança"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-amber-200 h-14 px-2 flex items-center justify-around shadow-lg"
+      >
+        {permissoes.conversa !== false && (
+          <Link
+            to="/conversa"
+            className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+              isConversa ? 'text-amber-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <div
+              className={`p-1 rounded-xl transition-all ${
+                isConversa ? 'bg-amber-100 text-amber-600 scale-105' : ''
+              }`}
+            >
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <span className="text-[10px] tracking-tight leading-none mt-0.5">Conversar</span>
+          </Link>
+        )}
+
+        {permissoes.conversa !== false && (
+          <Link
+            to="/quadro"
+            className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+              isQuadro ? 'text-indigo-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <div
+              className={`p-1 rounded-xl transition-all ${
+                isQuadro ? 'bg-indigo-100 text-indigo-600 scale-105' : ''
+              }`}
+            >
+              <span className="text-base leading-none">🎨</span>
+            </div>
+            <span className="text-[10px] tracking-tight leading-none mt-0.5">Quadro</span>
+          </Link>
+        )}
+
+        <Link
+          to="/agenda"
+          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+            isAgenda ? 'text-orange-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <div
+            className={`p-1 rounded-xl transition-all ${
+              isAgenda ? 'bg-orange-100 text-orange-600 scale-105' : ''
+            }`}
+          >
+            {!permissoes.agenda ? <Lock className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
+          </div>
+          <span className="text-[10px] tracking-tight leading-none mt-0.5">Agenda</span>
+        </Link>
+      </nav>
+
+      {/* =========================================================================
+          CABEÇALHO DESKTOP (>= 768px): Amplo e completo
+         ========================================================================= */}
+      <header className="hidden md:block bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none">
         <div className="max-w-6xl mx-auto px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 flex-wrap">
           {/* Logo infantil fofo com Lumi */}
           <div className="flex items-center gap-2.5">

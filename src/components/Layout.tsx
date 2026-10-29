@@ -28,7 +28,7 @@ export const Layout: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#F4F7FB] text-slate-800">
       <AlertaOfflineBanner />
       {exibirModoCriancaHeader ? <HeaderModoCrianca /> : <Header />}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 pb-20 md:pb-8">
         <Outlet />
       </main>
       <BannerInstalacaoPwa />

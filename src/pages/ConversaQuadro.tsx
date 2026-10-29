@@ -1638,44 +1638,44 @@ export const ConversaQuadro: React.FC = () => {
       )}
 
       {/* Navegação Infantil Segregada e Clara no Topo: 1 atividade por vez! */}
-      <div className="bg-white rounded-3xl p-2 shadow-sm border border-amber-200/80 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-1.5 sm:p-2 shadow-xs border border-amber-200/80 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-[220px]">
           <button
             type="button"
             onClick={() => navigate('/conversa')}
-            className={`flex-1 py-3 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
+            className={`flex-1 py-2 sm:py-3 px-2.5 sm:px-4 rounded-xl sm:rounded-2xl font-extrabold text-xs sm:text-base flex items-center justify-center gap-1.5 sm:gap-2.5 transition-all cursor-pointer ${
               !isModoQuadro
                 ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/20 scale-[1.01]'
                 : 'bg-amber-50/70 text-amber-900 hover:bg-amber-100/80'
             }`}
           >
-            <MessageCircle className="w-5 h-5 shrink-0" />
-            <span>1. Conversar com a Lumi</span>
+            <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            <span className="truncate">1. Conversar com a Lumi</span>
           </button>
 
           <button
             type="button"
             onClick={() => navigate('/quadro')}
-            className={`flex-1 py-3 px-4 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all cursor-pointer ${
+            className={`flex-1 py-2 sm:py-3 px-2.5 sm:px-4 rounded-xl sm:rounded-2xl font-extrabold text-xs sm:text-base flex items-center justify-center gap-1.5 sm:gap-2.5 transition-all cursor-pointer ${
               isModoQuadro
                 ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/20 scale-[1.01]'
                 : 'bg-indigo-50/70 text-indigo-900 hover:bg-indigo-100/80'
             }`}
           >
-            <Palette className="w-5 h-5 shrink-0" />
-            <span>2. Quadro & Missões 🎨</span>
+            <Palette className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+            <span className="truncate">2. Quadro & Missões 🎨</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Botão Memórias da Lumi (Aprendizado Contínuo) */}
           <button
             type="button"
             onClick={() => setModalMemoriasAberto(true)}
-            className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-extrabold bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
             title="Ver tudo o que a Lumi já aprendeu sobre você"
           >
-            <Brain className="w-4 h-4 text-purple-600" />
+            <Brain className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
             <span>Memórias ({memoriasCrianca.length})</span>
           </button>
 
@@ -1686,7 +1686,7 @@ export const ConversaQuadro: React.FC = () => {
               setModoRespiracao(true)
               setModalCalmaAberto(true)
             }}
-            className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-extrabold bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
             title="Fazer uma pausa para respirar com calma"
           >
             <span>🧘</span>
@@ -1699,7 +1699,7 @@ export const ConversaQuadro: React.FC = () => {
           ESPAÇO 1: CONVERSAR COM A LUMI (Agente IA Geral com Filtro de Idade)
          ===================================================================== */}
       {!isModoQuadro ? (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {/* Check-in Emocional Diário */}
           {precisaCheckinHoje && (
             <CheckinEmocionalCard
@@ -1710,12 +1710,12 @@ export const ConversaQuadro: React.FC = () => {
           )}
 
           {/* Barra do Agente de IA: Modo (Agente Livre vs Tutor Socrático) + Modelo Gemini + Filtro de Idade */}
-          <div className="bg-white rounded-3xl p-3 shadow-xs border border-amber-200/70 flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-2 sm:p-3 shadow-xs border border-amber-200/70 flex items-center justify-between gap-2 overflow-x-auto custom-scroll">
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl shrink-0">
               <button
                 type="button"
                 onClick={() => handleTrocarModoAgente('agente_geral')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
                   modoAgente === 'agente_geral'
                     ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
                     : 'text-slate-700 hover:bg-white/70'
@@ -1728,7 +1728,7 @@ export const ConversaQuadro: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleTrocarModoAgente('tutor_socratico')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
                   modoAgente === 'tutor_socratico'
                     ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
                     : 'text-slate-700 hover:bg-white/70'
@@ -1740,7 +1740,7 @@ export const ConversaQuadro: React.FC = () => {
             </div>
 
             {/* Seletor de Inteligência Gemini */}
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0">
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
                 <button
                   type="button"
@@ -1780,7 +1780,7 @@ export const ConversaQuadro: React.FC = () => {
                 </button>
               </div>
 
-              <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl">
+              <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl shrink-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Filtro {criancaSelecionada?.idade || 10} anos ativo</span>
               </span>
@@ -1908,62 +1908,62 @@ export const ConversaQuadro: React.FC = () => {
           {/* Cartão Único e Limpo de Conversa com a Lumi */}
           <div className="flex flex-col bg-white rounded-3xl shadow-soft border border-amber-100 overflow-hidden">
             {/* Cabeçalho Limpo da Lumi */}
-            <div className="p-3.5 sm:p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50/50 border-b border-amber-100/90 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-400 text-white flex items-center justify-center text-xl shadow-md shadow-amber-400/30 shrink-0">
+            <div className="p-2.5 sm:p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50/50 border-b border-amber-100/90 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-orange-400 text-white flex items-center justify-center text-lg sm:text-xl shadow-md shadow-amber-400/30 shrink-0">
                   ✨
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-base sm:text-lg font-black text-slate-800">Lumi IA</h2>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <h2 className="text-sm sm:text-lg font-black text-slate-800">Lumi IA</h2>
+                    <span className="hidden xs:inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
                       <Brain className="w-3 h-3 text-purple-600" />
                       Aprende com você
                     </span>
                     {humorHoje && (
-                      <span className="text-[11px] text-amber-900 bg-amber-100/80 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold">
+                      <span className="text-[10px] sm:text-[11px] text-amber-900 bg-amber-100/80 border border-amber-300 px-2 py-0.5 rounded-full font-bold">
                         {humorHoje === 'muito_feliz' && '🌟 Super Feliz!'}
                         {humorHoje === 'feliz' && '😊 Feliz'}
-                        {humorHoje === 'neutro' && '😐 Tranquilo(a)'}
-                        {humorHoje === 'triste' && '💛 Acolhendo você'}
-                        {humorHoje === 'muito_triste' && '💛 Com todo carinho'}
+                        {humorHoje === 'neutro' && '😐 Tranquilo'}
+                        {humorHoje === 'triste' && '💛 Acolhendo'}
+                        {humorHoje === 'muito_triste' && '💛 Carinho'}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] sm:text-xs text-slate-500 truncate max-w-[190px] sm:max-w-none">
                     {modoAgente === 'agente_geral'
-                      ? `Peça histórias, curiosidades, códigos, desenhos ou músicas para ${criancaSelecionada?.nome?.split(' ')[0] || 'você'}!`
+                      ? `Histórias, curiosidades, arte ou tarefas para ${criancaSelecionada?.nome?.split(' ')[0] || 'você'}!`
                       : `Guiando ${criancaSelecionada?.nome?.split(' ')[0] || 'você'} passo a passo`}
                   </p>
                 </div>
               </div>
 
               {/* Seletor Grande e Infantil: Voz ao Vivo vs Texto + Som */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex bg-amber-100/90 p-1 rounded-2xl border border-amber-200">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <div className="flex bg-amber-100/90 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl border border-amber-200">
                   <button
                     type="button"
                     onClick={() => handleAlternarModoVozOuTexto('orbe')}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
                       visaoChat === 'orbe'
                         ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
                         : 'text-amber-900 hover:bg-white/60'
                     }`}
                   >
-                    <Mic className="w-4 h-4" />
-                    <span>Voz ao Vivo</span>
+                    <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span>Voz</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleAlternarModoVozOuTexto('texto')}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
                       visaoChat === 'texto'
                         ? 'bg-white text-amber-950 shadow-xs'
                         : 'text-amber-900 hover:bg-white/60'
                     }`}
                   >
-                    <MessageCircle className="w-4 h-4" />
+                    <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     <span>Texto</span>
                   </button>
                 </div>
@@ -1972,7 +1972,7 @@ export const ConversaQuadro: React.FC = () => {
                   type="button"
                   onClick={handleToggleVoz}
                   title={vozHabilitada ? 'Silenciar voz da Lumi' : 'Ativar voz da Lumi'}
-                  className={`p-2 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1 cursor-pointer ${
+                  className={`p-1.5 sm:p-2 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center cursor-pointer ${
                     vozHabilitada
                       ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border-slate-300'
@@ -1989,7 +1989,7 @@ export const ConversaQuadro: React.FC = () => {
                   type="button"
                   onClick={handleCicloRitmo}
                   title={`Ritmo da voz: ${ritmoAtual.nome}`}
-                  className="px-2.5 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                  className="hidden sm:flex px-2.5 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors items-center gap-1 cursor-pointer"
                 >
                   <Gauge className="w-3.5 h-3.5 text-amber-600" />
                   <span>{ritmoAtual.rate}x</span>
@@ -1999,7 +1999,7 @@ export const ConversaQuadro: React.FC = () => {
                   type="button"
                   onClick={handleNovaConversa}
                   title="Começar nova conversa"
-                  className="p-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                  className="p-1.5 sm:p-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -2009,7 +2009,7 @@ export const ConversaQuadro: React.FC = () => {
                     type="button"
                     onClick={abrirModalSairModo}
                     title="Sair do Modo Criança (pede PIN)"
-                    className="text-xs text-amber-800 bg-amber-100/70 hover:bg-amber-100 px-2.5 py-2 rounded-xl font-bold transition-all flex items-center gap-1 cursor-pointer"
+                    className="text-xs text-amber-800 bg-amber-100/70 hover:bg-amber-100 px-2 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1 cursor-pointer"
                   >
                     <span>🔒</span>
                   </button>
