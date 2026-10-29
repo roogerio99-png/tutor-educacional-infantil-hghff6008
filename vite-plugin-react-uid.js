@@ -105,19 +105,27 @@ export default function oxcDeepUidPlugin() {
         if (!node || typeof node !== 'object') return
 
         if (node.type === 'JSXOpeningElement' && node.name) {
-          const { line, column } = getLineColumn(lineOffsets, node.start)
-          const uniqueId = `${relativeFilename}:${line}:${column}`
+          const isFragment =
+            node.name.name === 'Fragment' ||
+            (node.name.type === 'JSXMemberExpression' &&
+              node.name.property &&
+              node.name.property.name === 'Fragment')
 
-          const prohibitions = []
+          if (!isFragment) {
+            const { line, column } = getLineColumn(lineOffsets, node.start)
+            const uniqueId = `${relativeFilename}:${line}:${column}`
 
-          if (node.selfClosing || hasJSXExpressions(parent)) {
-            prohibitions.push('editContent')
+            const prohibitions = []
+
+            if (node.selfClosing || hasJSXExpressions(parent)) {
+              prohibitions.push('editContent')
+            }
+
+            s.appendLeft(
+              node.name.end,
+              ` data-uid="${uniqueId}" data-prohibitions="[${prohibitions.join(',')}]"`,
+            )
           }
-
-          s.appendLeft(
-            node.name.end,
-            ` data-uid="${uniqueId}" data-prohibitions="[${prohibitions.join(',')}]"`,
-          )
         }
 
         const keys = Object.keys(node)

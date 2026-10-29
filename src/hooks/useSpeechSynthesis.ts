@@ -13,6 +13,11 @@ export interface UseSpeechSynthesisOptions {
   voiceName?: string | null
   usarVozIa?: boolean
   vozIaNome?:
+    | 'Kore'
+    | 'Zephyr'
+    | 'Puck'
+    | 'Fenrir'
+    | 'Charon'
     | 'nova'
     | 'alloy'
     | 'ash'
@@ -37,7 +42,7 @@ export function useSpeechSynthesis({
   pitch = 1.05,
   voiceName,
   usarVozIa = true,
-  vozIaNome = 'nova',
+  vozIaNome = 'Kore',
   onStart,
   onEnd,
   onError,
@@ -412,7 +417,7 @@ export function useSpeechSynthesis({
               }
               const audio = audioElementRef.current
               audio.src = audioUrl
-              audio.playbackRate = 1.0
+              audio.playbackRate = Math.max(0.85, Math.min(1.25, rate || 1.0))
 
               audio.onended = () => {
                 if (cancelRequestedRef.current) return

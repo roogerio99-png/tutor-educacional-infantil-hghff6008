@@ -1,19 +1,26 @@
 import pb from '@/lib/pocketbase/client'
 
+export type VozIaNome =
+  | 'Kore'
+  | 'Zephyr'
+  | 'Puck'
+  | 'Fenrir'
+  | 'Charon'
+  | 'nova'
+  | 'alloy'
+  | 'ash'
+  | 'coral'
+  | 'echo'
+  | 'fable'
+  | 'onyx'
+  | 'sage'
+  | 'shimmer'
+  | 'verse'
+
 export interface GerarAudioLumiParams {
   text: string
-  voice?:
-    | 'nova'
-    | 'alloy'
-    | 'ash'
-    | 'coral'
-    | 'echo'
-    | 'fable'
-    | 'onyx'
-    | 'sage'
-    | 'shimmer'
-    | 'verse'
-  model?: 'tts-1' | 'tts-1-hd'
+  voice?: VozIaNome
+  model?: string
   speed?: number
 }
 
@@ -36,8 +43,36 @@ export const STORAGE_KEY_VOZ_IA_HABILITADA = 'lumi_voz_ia_habilitada'
 export const STORAGE_KEY_VOZ_IA_NOME = 'lumi_voz_ia_nome'
 
 /**
- * Verifica se a voz verdadeira da Lumi (IA OpenAI) está ativada nas preferências
- * Default: true (ligado por padrão, conforme pedido)
+ * Obtém o nome da voz real da Lumi (Gemini Live / TTS) salva nas preferências
+ */
+export function getVozIaLumiPreferida(): 'Kore' | 'Zephyr' | 'Puck' | 'Fenrir' | 'Charon' {
+  if (typeof window === 'undefined') return 'Kore'
+  try {
+    const val = localStorage.getItem(STORAGE_KEY_VOZ_IA_NOME)
+    if (val === 'Kore' || val === 'Zephyr' || val === 'Puck' || val === 'Fenrir' || val === 'Charon') {
+      return val
+    }
+    return 'Kore'
+  } catch {
+    return 'Kore'
+  }
+}
+
+/**
+ * Salva o nome da voz real da Lumi (Gemini Live / TTS)
+ */
+export function setVozIaLumiPreferida(voz: 'Kore' | 'Zephyr' | 'Puck' | 'Fenrir' | 'Charon'): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY_VOZ_IA_NOME, voz)
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Verifica se a voz verdadeira da Lumi (IA) está ativada nas preferências
+ * Default: true (ligado por padrão)
  */
 export function isVozIaLumiHabilitada(): boolean {
   if (typeof window === 'undefined') return true
@@ -85,13 +120,11 @@ export function limparTextoParaTTS(rawText: string): string {
 export function dividirEmFrasesParaAudio(texto: string, maxPorLote = 2): string[] {
   const limpo = limparTextoParaTTS(texto)
   if (!limpo) return []
-  // Regex para segmentar por pontuação forte mantendo a pontuação
   const matches = limpo.match(/[^.!?\n]+[.!?]+(?:\s+|$)|[^.!?\n]+$/g) || [limpo]
   const frases = matches.map((f) => f.trim()).filter((f) => f.length > 0)
 
   if (frases.length <= maxPorLote) return [limpo]
 
-  // Agrupa em blocos pequenos de 1 ou 2 frases
   const lotes: string[] = []
   let acumulado = ''
   let count = 0
@@ -111,22 +144,20 @@ export function dividirEmFrasesParaAudio(texto: string, maxPorLote = 2): string[
   return lotes
 }
 
-/**
- * Chave de hash rápida para a memória da sessão
- */
-function getCacheKey(text: string, voice = 'nova', model = 'tts-1'): string {
+function getCacheKey(text: string, voice = 'Kore', model = 'gemini-3.8-flash-lite-tts'): string {
   return `${voice}_${model}_${text.trim().toLowerCase()}`
 }
 
 /**
- * Obtém URL reproduzível de áudio (data URI ou URL remota) via PocketBase hook
+ * Obtém URL reproduzível de áudio (WAV base64 data URI) via Gemini 3.8 TTS no servidor
  */
 export async function obterAudioLumiUrl(params: GerarAudioLumiParams): Promise<string | null> {
   const textClean = limparTextoParaTTS(params.text)
   if (!textClean) return null
 
-  const voice = params.voice || 'nova'
-  const model = params.model || 'tts-1'
+  const voice =
+    params.voice && params.voice !== 'nova' ? params.voice : getVozIaLumiPreferida()
+  const model = params.model || 'gemini-3.8-flash-lite-tts'
   const speed = params.speed || 1.05
   const key = getCacheKey(textClean, voice, model)
 
@@ -173,9 +204,10 @@ export async function obterAudioLumiUrl(params: GerarAudioLumiParams): Promise<s
 /**
  * Inicia preload proativo de um texto (ou frases) sem tocar imediatamente
  */
-export function preloadAudioLumi(text: string, voice: 'nova' = 'nova'): void {
+export function preloadAudioLumi(text: string, voice?: VozIaNome): void {
   const lotes = dividirEmFrasesParaAudio(text)
+  const vozAlvo = voice && voice !== 'nova' ? voice : getVozIaLumiPreferida()
   lotes.forEach((lote) => {
-    obterAudioLumiUrl({ text: lote, voice }).catch(() => {})
+    obterAudioLumiUrl({ text: lote, voice: vozAlvo }).catch(() => {})
   })
 }

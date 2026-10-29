@@ -1,6 +1,6 @@
 import PocketBase from 'pocketbase'
 
-const STORAGE_DB_KEY = 'lumi_pb_db_v2'
+const STORAGE_DB_KEY = 'lumi_pb_db_v3'
 const STORAGE_AUTH_KEY = 'lumi_pb_auth_v2'
 
 export interface LocalRecord {
@@ -482,85 +482,169 @@ function createInitialSeedDatabase(): DatabaseSchema {
     missoes_bncc: [
       {
         id: 'missao_f1_1',
+        fase: 'fase_1',
         fase_etaria: 'fase_1',
-        bncc_code: 'EF02CI04',
-        titulo: 'Detetive das Plantinhas do Quintal',
+        faixa_etaria: '5 a 8 anos',
+        bncc_code: 'EF01LP07',
+        habilidades_bncc: 'EF01LP07, EF12LP01 (Consciência fonológica e fonética)',
+        titulo: 'O Safari das Letras',
+        materia: 'Português',
+        descricao:
+          'A Lumi pronuncia o som das letras e você descobre qual animal da floresta começa com cada som!',
         narrativa_ludica:
-          'As plantinhas do jardim têm um segredo mágico para beber água sem usar copo! Vamos investigar de pertinho?',
+          'A Lumi pronuncia o som das letras e você descobre qual animal da floresta começa com cada som!',
         instrucao_acao_fisica:
-          'Vá até uma planta da sua casa ou janela, observe as folhas e a terra, e volte para contar à Lumi por onde você acha que a planta bebe água!',
+          'Ouça o som da letra com a Lumi e diga em voz alta o nome de um animal que começa com essa letra!',
+        tipo_interacao: 'audio_e_clique_sensorial',
+        recursos_midia: {
+          icone: '🦁',
+          cor: '#FDE68A',
+          foco: 'Consciência fonológica e fonética',
+        },
         tempo_estimado_min: 10,
-        icone: '🌱',
+        icone: '🦁',
+        ordem: 1,
+        ativo: true,
         created: now,
         updated: now,
       },
       {
         id: 'missao_f1_2',
+        fase: 'fase_1',
         fase_etaria: 'fase_1',
-        bncc_code: 'EF02MA06',
-        titulo: 'Caça aos Tesouros das Dezenas',
+        faixa_etaria: '5 a 8 anos',
+        bncc_code: 'EF01MA01',
+        habilidades_bncc: 'EF01MA01, EF01MA02 (Contagem física e quantidade)',
+        titulo: 'A Feira das Frutas Mágicas',
+        materia: 'Matemática',
+        descricao:
+          'Contagem divertida com maçãs e laranjas coloridas, explorando agrupamento visual e soma unitária.',
         narrativa_ludica:
-          'O Pirata dos Números espalhou objetos pela sala! Precisamos juntar um grupo de 10 tesouros para formar uma Dezena Brilhante!',
+          'O Pirata dos Números espalhou frutas coloridas pela feira! Precisamos juntar grupos de 10 para formar uma Dezena Brilhante!',
         instrucao_acao_fisica:
           'Junte 10 lápis, tampinhas ou brinquedos pequenos em cima da mesa. Depois tire 3 deles e conte para a Lumi quantos sobraram!',
+        tipo_interacao: 'arraste_visual_e_voz',
+        recursos_midia: {
+          icone: '🍎',
+          cor: '#FCA5A5',
+          foco: 'Contagem concreta e associação tátil',
+        },
         tempo_estimado_min: 10,
-        icone: '🏴‍☠️',
+        icone: '🍎',
+        ordem: 2,
+        ativo: true,
         created: now,
         updated: now,
       },
       {
         id: 'missao_f2_1',
+        fase: 'fase_2',
         fase_etaria: 'fase_2',
-        bncc_code: 'EF05CI02',
-        titulo: 'O Mistério da Cozinha Solar (Fotossíntese)',
+        faixa_etaria: '9 a 12 anos',
+        bncc_code: 'EF05MA03',
+        habilidades_bncc: 'EF05MA03, EF05CI02 (Frações equivalentes e reflexão da luz)',
+        titulo: 'Operação Alexandria',
+        materia: 'Matemática & Ciências',
+        descricao:
+          'Resolução de frações equivalentes para destravar engrenagens históricas e posicionamento de espelhos para refletir a luz.',
         narrativa_ludica:
-          'Imagine que cada folha verde é um laboratório secreto movido a energia solar! Como será que ela fabrica energia sem fogão?',
+          'Dois exploradores encontraram discos solares divididos em 1/2 e 2/4. Como alinhar as engrenagens para abrir o observatório?',
         instrucao_acao_fisica:
-          'Olhe pela janela ou observe uma folha de planta. Desenhe no seu caderno os 3 ingredientes que entram na planta (Sol, Água e Ar) e conte para a Lumi!',
+          'Dobre uma folha de papel ao meio (1/2) e depois dobre novamente em 4 partes (2/4). Compare os tamanhos e conte sua descoberta para a Lumi!',
+        tipo_interacao: 'painel_controle_engrenagens',
+        recursos_midia: {
+          icone: '🏛️',
+          cor: '#818CF8',
+          foco: 'Frações, engrenagens e física da luz',
+        },
         tempo_estimado_min: 15,
-        icone: '☀️',
+        icone: '🏛️',
+        ordem: 3,
+        ativo: true,
         created: now,
         updated: now,
       },
       {
         id: 'missao_f2_2',
+        fase: 'fase_2',
         fase_etaria: 'fase_2',
-        bncc_code: 'EF05MA03',
-        titulo: 'Pizzaria das Frações Equivalentes',
+        faixa_etaria: '9 a 12 anos',
+        bncc_code: 'EF06CI07',
+        habilidades_bncc: 'EF06CI07, EF06GE05 (Ecossistemas e ciclos biogeoquímicos)',
+        titulo: 'Biosfera Orbital 2040',
+        materia: 'Ciências & Geografia',
+        descricao:
+          'Equilíbrio de teias alimentares, fotossíntese e fluxo de água em uma estação espacial que simula os biomas brasileiros.',
         narrativa_ludica:
-          'Dois clientes pediram pizzas do mesmo tamanho: um comeu 1/2 da pizza e o outro comeu 2/4. Quem comeu mais?',
+          'Imagine que cada folha verde na estação orbital é uma cozinha solar! Quais ingredientes ela usa para produzir oxigênio para a tripulação?',
         instrucao_acao_fisica:
-          'Dobre uma folha de papel ao meio (1/2) e depois dobre novamente em 4 partes (2/4). Compare os tamanhos e conte sua descoberta para a Lumi!',
+          'Observe uma folha de planta e anote os 3 ingredientes que entram na planta (Sol, Água e Ar) para contar à Lumi!',
+        tipo_interacao: 'simulador_sistemas',
+        recursos_midia: {
+          icone: '🚀',
+          cor: '#38BDF8',
+          foco: 'Cadeias tróficas e preservação de biomas',
+        },
         tempo_estimado_min: 15,
-        icone: '🍕',
+        icone: '🚀',
+        ordem: 4,
+        ativo: true,
         created: now,
         updated: now,
       },
       {
         id: 'missao_f3_1',
+        fase: 'fase_3',
         fase_etaria: 'fase_3',
-        bncc_code: 'EF07MA11',
-        titulo: 'Expedição Submarina: Números Abaixo de Zero',
+        faixa_etaria: '13 a 16 anos',
+        bncc_code: 'EM13LGG301',
+        habilidades_bncc: 'EM13LGG301, EM13CHS101 (Argumentação crítica e lógica proposicional)',
+        titulo: 'O Tribunal Socrático',
+        materia: 'Filosofia & Redação',
+        descricao:
+          'Construa uma argumentação sólida e sem falácias lógicas para debater e refutar a tese apresentada pela Lumi.',
         narrativa_ludica:
-          'Um submarino científico está a -40 metros de profundidade e desce mais 25 metros para explorar um recife profundo.',
+          'No Tribunal Socrático, cada argumento precisa de premissas claras e conclusão coerente.',
         instrucao_acao_fisica:
-          'Trace uma reta vertical no caderno marcando o nível do mar como 0. Marque onde o submarino parou e explique sua lógica para a Lumi!',
+          'Formule uma tese com dois argumentos principais e apresente à Lumi por voz ou texto!',
+        tipo_interacao: 'arena_dialetica_texto',
+        recursos_midia: {
+          icone: '⚖️',
+          cor: '#A78BFA',
+          foco: 'Refutação sem falácias, retórica e dialética',
+        },
         tempo_estimado_min: 20,
-        icone: '🌊',
+        icone: '⚖️',
+        ordem: 5,
+        ativo: true,
         created: now,
         updated: now,
       },
       {
         id: 'missao_f3_2',
+        fase: 'fase_3',
         fase_etaria: 'fase_3',
-        bncc_code: 'EF07HI08',
-        titulo: 'Navegadores das Estrelas e Rotas Antigas',
+        faixa_etaria: '13 a 16 anos',
+        bncc_code: 'EM13CNT301',
+        habilidades_bncc: 'EM13CNT301, EM13MAT301 (Cinemática vetorial e funções de 2º grau)',
+        titulo: 'Acelerador de Partículas & Cinemática',
+        materia: 'Física & Funções',
+        descricao:
+          'Modelagem matemática de trajetórias curvas, variações de sinal negativo e conservação de energia.',
         narrativa_ludica:
-          'Antes do GPS e dos satélites, como os navegadores atravessavam oceanos inteiros olhando apenas para o céu noturno?',
+          'Um sensor térmico registra variações abaixo de zero durante o experimento. Como modelar a trajetória e a variação?',
         instrucao_acao_fisica:
-          'Anote 2 instrumentos ou pistas da natureza que você usaria se estivesse em uma caravela no século XV e debata com a Lumi!',
+          'Trace uma reta vertical no caderno marcando o ponto 0 e explique sua hipótese para a Lumi!',
+        tipo_interacao: 'workspace_graficos',
+        recursos_midia: {
+          icone: '⚛️',
+          cor: '#34D399',
+          foco: 'Física moderna, vetores e análise de funções',
+        },
         tempo_estimado_min: 20,
-        icone: '🧭',
+        icone: '⚛️',
+        ordem: 6,
+        ativo: true,
         created: now,
         updated: now,
       },
@@ -568,7 +652,10 @@ function createInitialSeedDatabase(): DatabaseSchema {
     daily_metrics: [
       {
         id: 'dm_ana_1',
+        crianca: idAna,
         student_id: idAna,
+        session_id: 'sess_ana_01',
+        user_id: demoOwnerId,
         date: today,
         duration_minutes: 28,
         academic_tags: {
@@ -598,7 +685,10 @@ function createInitialSeedDatabase(): DatabaseSchema {
       },
       {
         id: 'dm_lucas_1',
+        crianca: idLucas,
         student_id: idLucas,
+        session_id: 'sess_lucas_01',
+        user_id: demoOwnerId,
         date: today,
         duration_minutes: 20,
         academic_tags: {
@@ -627,7 +717,10 @@ function createInitialSeedDatabase(): DatabaseSchema {
       },
       {
         id: 'dm_bia_1',
+        crianca: idBeatriz,
         student_id: idBeatriz,
+        session_id: 'sess_bia_01',
+        user_id: demoOwnerId,
         date: today,
         duration_minutes: 34,
         academic_tags: {
@@ -1195,16 +1288,35 @@ async function handleBackendRoute(
     }
   }
 
-  // 3. POST /backend/v1/lumi/tts
+  // 3. POST /backend/v1/lumi/tts -> Real Gemini 3.8 TTS on Express server (/api/lumi/tts)
   if (pathname === '/backend/v1/lumi/tts' && method === 'POST') {
-    // Return empty audio_base64 so useSpeechSynthesis seamlessly uses native Web Speech API
+    try {
+      const nativeFetch =
+        typeof window !== 'undefined' && (window as any).__lumiNativeFetch
+          ? (window as any).__lumiNativeFetch
+          : fetch
+      const ttsRes = await nativeFetch('/api/lumi/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyObj),
+      })
+      if (ttsRes.ok) {
+        const ttsData = await ttsRes.json()
+        return {
+          status: 200,
+          data: ttsData,
+        }
+      }
+    } catch {
+      // Fallback gracefully if server route is unreachable
+    }
     return {
       status: 200,
       data: {
         cached: false,
-        format: 'mp3',
-        voice: bodyObj.voice || 'nova',
-        model: 'tts-1',
+        format: 'wav',
+        voice: bodyObj.voice || 'Kore',
+        model: 'gemini-3.8-flash-lite-tts',
         audio_base64: '',
         audio_url: null,
       },
@@ -1559,19 +1671,24 @@ async function handleBackendRoute(
   // 8. Métricas Socioemocionais routes: /backend/v1/metricas/*
   if (pathname.startsWith('/backend/v1/metricas/socioemocional/') && method === 'GET') {
     const criancaId = pathname.split('/').pop() || ''
+    const criancaRec = db.criancas.find((c) => c.id === criancaId)
     const metrics = sortRecords(
-      db.daily_metrics.filter((m) => m.student_id === criancaId),
+      db.daily_metrics.filter((m) => m.crianca === criancaId || m.student_id === criancaId),
       '-date',
     )
     return {
       status: 200,
-      data: { metrics },
+      data: {
+        metrics,
+        crianca_nome: criancaRec?.nome,
+        crianca_idade: criancaRec?.idade,
+      },
     }
   }
 
   if (pathname === '/backend/v1/metricas/finalizar-sessao' && method === 'POST') {
+    const criancaId = bodyObj.crianca_id || bodyObj.criancaId || 'crianca_ana_paula'
     const {
-      criancaId,
       duration_minutes,
       resilience_moments_count,
       resilience_autonomous_rate,
@@ -1581,15 +1698,18 @@ async function handleBackendRoute(
 
     const novaMetrica: LocalRecord = {
       id: generateId('dm'),
+      crianca: criancaId,
       student_id: criancaId,
+      session_id: bodyObj.session_id || `sess_${Date.now()}`,
+      user_id: currentUserId || 'user_demo_rogerio',
       date: today,
       duration_minutes: duration_minutes || 20,
-      academic_tags: {
+      academic_tags: bodyObj.academic_tags || {
         logic_mathematics: 84,
         reading_comprehension: 78,
         scientific_investigation: 90,
       },
-      socioemotional_tags: {
+      socioemotional_tags: bodyObj.socioemotional_tags || {
         focus_attention: {
           score: 86,
           context: `Sessão concluída com ${duration_minutes || 20} minutos de engajamento ativo.`,
@@ -1602,7 +1722,7 @@ async function handleBackendRoute(
       },
       resilience_moments_count: resilience_moments_count || 5,
       resilience_autonomous_rate: resilience_autonomous_rate || 80,
-      parent_bridges: [
+      parent_bridges: bodyObj.parent_bridges || [
         `Pergunte a ${primeiroNome} qual foi a pergunta mais curiosa que ele(a) desvendou sozinho(a) hoje com a Lumi!`,
         'Peça para ele(a) explicar com um exemplo do dia a dia o tema estudado na sessão de hoje.',
       ],
@@ -1613,7 +1733,7 @@ async function handleBackendRoute(
     saveDatabase(db)
     return {
       status: 200,
-      data: { ok: true, metric: novaMetrica },
+      data: { ok: true, success: true, metric: novaMetrica },
     }
   }
 
@@ -1648,6 +1768,34 @@ class LocalAuthStore {
         if (parsed && parsed.token && parsed.record) {
           this.token = parsed.token
           this.record = parsed.record
+          return
+        }
+      }
+
+      // Migrate from default PocketBase SDK storage key if present
+      const legacyRaw = localStorage.getItem('pocketbase_auth')
+      if (legacyRaw) {
+        const parsed = JSON.parse(legacyRaw)
+        const rec = parsed?.record || parsed?.model
+        if (parsed?.token && rec) {
+          this.token = parsed.token
+          this.record = rec
+          localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify({ token: this.token, record: this.record }))
+          return
+        }
+      }
+
+      // Auto-authenticate with the seeded demo parent account unless explicitly logged out
+      if (localStorage.getItem('lumi_explicit_logout') !== 'true') {
+        const db = loadDatabase()
+        const demoUser = db.users?.[0]
+        if (demoUser) {
+          this.token = `local_jwt_user_${demoUser.id}`
+          this.record = { ...demoUser, collectionName: 'users' }
+          localStorage.setItem(
+            STORAGE_AUTH_KEY,
+            JSON.stringify({ token: this.token, record: this.record }),
+          )
         }
       }
     } catch {
@@ -1660,6 +1808,7 @@ class LocalAuthStore {
     this.record = record
     try {
       if (token && record) {
+        localStorage.removeItem('lumi_explicit_logout')
         localStorage.setItem(STORAGE_AUTH_KEY, JSON.stringify({ token, record }))
       } else {
         localStorage.removeItem(STORAGE_AUTH_KEY)
@@ -1674,7 +1823,9 @@ class LocalAuthStore {
     this.token = ''
     this.record = null
     try {
+      localStorage.setItem('lumi_explicit_logout', 'true')
       localStorage.removeItem(STORAGE_AUTH_KEY)
+      localStorage.removeItem('pocketbase_auth')
     } catch {
       // ignore
     }
@@ -2043,6 +2194,7 @@ function installLocalBackendFetchInterceptor(localPb: LocalPocketBaseClient) {
   w.__lumiFetchIntercepted = true
 
   const originalFetch = window.fetch.bind(window)
+  w.__lumiNativeFetch = originalFetch
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const urlStr =
@@ -2119,13 +2271,8 @@ function installLocalBackendFetchInterceptor(localPb: LocalPocketBaseClient) {
   }
 }
 
-const externalPbUrl = import.meta.env.VITE_POCKETBASE_URL?.trim()
-
 function createClient(): PocketBase {
-  if (externalPbUrl) {
-    return new PocketBase(externalPbUrl)
-  }
-  // Ensure database seed is initialized and intercept /backend/v1/* calls
+  // Always use the self-contained local database + backend router in AI Studio
   loadDatabase()
   const localClient = new LocalPocketBaseClient()
   installLocalBackendFetchInterceptor(localClient)

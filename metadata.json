@@ -1,5 +1,6 @@
 {
   "name": "Aprendiz — Tutor Educacional",
   "description": "O Aprendiz acompanha as atividades escolares, identifica dificuldades com acolhimento socrático e constrói o saber de cada criança.",
-  "requestFramePermissions": ["microphone"]
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

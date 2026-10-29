@@ -6,6 +6,8 @@ import { obterPromptAtivo } from '@/services/prompts'
 import { verificarCheckinHoje, registrarCheckinEmocional } from '@/services/checkinEmocional'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
+import { useGeminiLiveVoice, type VozGeminiLive } from '@/hooks/useGeminiLiveVoice'
+import { getVozIaLumiPreferida, setVozIaLumiPreferida } from '@/services/lumiAudioService'
 import { BotaoVozCrianca } from '@/components/BotaoVozCrianca'
 import { BotaoOuvirLumi } from '@/components/BotaoOuvirLumi'
 import { ToggleModoConversacao } from '@/components/ToggleModoConversacao'
@@ -125,6 +127,11 @@ export const ConversaQuadro: React.FC = () => {
     } catch {
       return true
     }
+  })
+
+  // Timbre da Voz Real Gemini (Kore, Zephyr, Puck, Fenrir, Charon)
+  const [vozRealAtiva, setVozRealAtiva] = useState<VozGeminiLive>(() => {
+    return getVozIaLumiPreferida()
   })
 
   // Ritmo da Voz (Presets: Padrão Natural 1.05x, migrando 'rapido' antigo se houver)
@@ -350,6 +357,88 @@ export const ConversaQuadro: React.FC = () => {
     .toLowerCase()
     .includes('fonte grande')
 
+  // Hook de Voz Real Full-Duplex com Gemini 3.8 Live
+  const {
+    isConnected: liveConnected,
+    isConnecting: liveConnecting,
+    isMicActive: liveMicActive,
+    isSpeaking: liveSpeaking,
+    isThinking: liveThinking,
+    liveInputTranscript,
+    liveOutputTranscript,
+    volumeLevel,
+    errorMessage: erroLiveVoice,
+    permissionDenied: livePermDenied,
+    connect: connectLive,
+    disconnect: disconnectLive,
+    toggleMic: toggleLiveMic,
+    stopOutputPlayback: stopLivePlayback,
+  } = useGeminiLiveVoice({
+    criancaNome: criancaSelecionada?.nome,
+    criancaIdade: criancaSelecionada?.idade,
+    criancaSerie: criancaSelecionada?.serie,
+    criancaInteresses: criancaSelecionada?.interesses,
+    criancaAcessibilidade: criancaSelecionada?.acessibilidade,
+    materiaAtual: materiaDetectada,
+    etapaAtual,
+    vozPreferida: vozRealAtiva,
+    playbackRate: ritmoAtual.rate,
+    muted: !vozHabilitada,
+    onStageDetected: (etapa) => {
+      setEtapaAtual(etapa)
+    },
+    onTurnComplete: (userText, lumiText) => {
+      const horario = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      const novasMsgs: ChatMessage[] = []
+      if (userText && userText.trim()) {
+        novasMsgs.push({
+          id: `live-user-${Date.now()}`,
+          sender: 'user',
+          text: userText.trim(),
+          timestamp: horario,
+        })
+      }
+      if (lumiText && lumiText.trim()) {
+        const etapaDetectada = detectarEtapaDoTexto(lumiText) || etapaAtual
+        if (etapaDetectada) {
+          setEtapaAtual(etapaDetectada)
+        }
+        setLegendaFalando(lumiText.trim())
+        novasMsgs.push({
+          id: `live-lumi-${Date.now() + 1}`,
+          sender: 'lumi',
+          text: lumiText.trim(),
+          timestamp: horario,
+          etapa: etapaDetectada,
+        })
+        adicionarEventoTelemetria({
+          tipo: 'socratica',
+          titulo: `Conversa de Voz Real (${vozRealAtiva})`,
+          detalhe: `Turno concluído no Gemini Live na etapa ${etapaDetectada.toUpperCase()}.`,
+          status: 'executado',
+        })
+      }
+      if (novasMsgs.length > 0) {
+        setMessages((prev) => [...prev, ...novasMsgs])
+      }
+    },
+  })
+
+  // Trocar timbre da voz real Gemini
+  const handleTrocarVozReal = useCallback(
+    (novaVoz: VozGeminiLive) => {
+      setVozRealAtiva(novaVoz)
+      setVozIaLumiPreferida(novaVoz)
+      adicionarEventoTelemetria({
+        tipo: 'piaget',
+        titulo: `Voz Real Alterada: ${novaVoz}`,
+        detalhe: `Timbre neural Gemini ajustado para ${novaVoz}.`,
+        status: 'ativo',
+      })
+    },
+    [adicionarEventoTelemetria],
+  )
+
   // Hook de Síntese de Voz (Lumi fala) com o rate selecionado e warm-up no primeiro gesto
   const {
     isSupported: synthSuportado,
@@ -360,11 +449,12 @@ export const ConversaQuadro: React.FC = () => {
   } = useSpeechSynthesis({
     rate: ritmoAtual.rate,
     pitch: 1.05,
+    vozIaNome: vozRealAtiva,
     onEnd: () => {
       setMensagemFalandoId(null)
       setLegendaFalando('')
-      // No Modo Conversação por Voz (Lumi Live), devolve o microfone para a criança falar
-      if (modoConversacaoVoz || visaoChat === 'orbe') {
+      // No Modo Conversação por Voz (quando não estiver conectado ao WebSocket Live), devolve o microfone
+      if ((modoConversacaoVoz || visaoChat === 'orbe') && !liveConnected) {
         setTimeout(() => {
           startListening()
         }, 300)
@@ -373,7 +463,7 @@ export const ConversaQuadro: React.FC = () => {
     onError: () => {
       setMensagemFalandoId(null)
       setLegendaFalando('')
-      if (modoConversacaoVoz || visaoChat === 'orbe') {
+      if ((modoConversacaoVoz || visaoChat === 'orbe') && !liveConnected) {
         setTimeout(() => {
           startListening()
         }, 300)
@@ -390,19 +480,21 @@ export const ConversaQuadro: React.FC = () => {
         setMensagemFalandoId(null)
         setLegendaFalando('')
       } else {
+        stopLivePlayback()
         synthStop()
         setMensagemFalandoId(msgId)
         setLegendaFalando(texto)
         synthSpeak(texto)
       }
     },
-    [vozHabilitada, mensagemFalandoId, isSpeaking, synthStop, synthSpeak],
+    [vozHabilitada, mensagemFalandoId, isSpeaking, synthStop, synthSpeak, stopLivePlayback],
   )
 
   // Barge-in Instantâneo (< 50ms): Interrompe a Lumi assim que a criança fala ou clica no botão
   const executarBargeIn = useCallback(
     (motivo = 'Fala da criança') => {
-      if (isSpeaking || mensagemFalandoId || enviando) {
+      if (liveSpeaking || isSpeaking || mensagemFalandoId || enviando) {
+        stopLivePlayback()
         synthStop()
         setMensagemFalandoId(null)
         setLegendaFalando('')
@@ -414,7 +506,15 @@ export const ConversaQuadro: React.FC = () => {
         })
       }
     },
-    [isSpeaking, mensagemFalandoId, enviando, synthStop, adicionarEventoTelemetria],
+    [
+      liveSpeaking,
+      isSpeaking,
+      mensagemFalandoId,
+      enviando,
+      stopLivePlayback,
+      synthStop,
+      adicionarEventoTelemetria,
+    ],
   )
 
   // Função de envio unificada (digitação ou fala)
@@ -482,7 +582,7 @@ export const ConversaQuadro: React.FC = () => {
               // Preload antecipado em segundo plano: se já tiver pelo menos uma frase completa, inicia o TTS
               if (full.length > 30 && /[.!?]\s*$/.test(full)) {
                 import('@/services/lumiAudioService').then(({ preloadAudioLumi }) => {
-                  preloadAudioLumi(full, 'nova')
+                  preloadAudioLumi(full, vozRealAtiva)
                 })
               }
             },
@@ -700,7 +800,7 @@ export const ConversaQuadro: React.FC = () => {
     },
   })
 
-  // Alterna o toggle do Modo Conversação por Voz (Lumi Live)
+  // Alterna o toggle do Modo Conversação por Voz (Lumi Live com Gemini 3.8 Live)
   const handleToggleModoConversacao = () => {
     const novoValor = !modoConversacaoVoz
     setModoConversacaoVoz(novoValor)
@@ -712,18 +812,27 @@ export const ConversaQuadro: React.FC = () => {
     }
 
     if (!novoValor) {
+      stopLivePlayback()
+      disconnectLive()
       synthStop()
       stopListening()
       setMensagemFalandoId(null)
       setLegendaFalando('')
     } else {
-      // Ao ativar o modo conversação, pré-aquece o sintetizador e liga o microfone
+      // Ao ativar o modo conversação por voz, inicia sessão de voz real Gemini 3.8 Live
       synthWarmUp()
-      if (!isSpeaking && !enviando) {
-        startListening()
-      }
+      connectLive(true)
     }
   }
+
+  // Botão central da Orbe para falar/pausar microfone na sessão Live
+  const handleFalarAgoraOrbe = useCallback(() => {
+    if (liveConnected || liveConnecting) {
+      toggleLiveMic()
+    } else {
+      connectLive(true)
+    }
+  }, [liveConnected, liveConnecting, toggleLiveMic, connectLive])
 
   // Alterna o som da voz da Lumi
   const handleToggleVoz = () => {
@@ -735,6 +844,7 @@ export const ConversaQuadro: React.FC = () => {
       // ignore
     }
     if (!novo) {
+      stopLivePlayback()
       synthStop()
       setMensagemFalandoId(null)
       setLegendaFalando('')
@@ -1042,14 +1152,15 @@ export const ConversaQuadro: React.FC = () => {
 
   const { tipoConta, permissoes } = useAuth()
 
-  // Estado atual da Orbe Lumi Live
-  const estadoOrbe: EstadoLumiLive = isListening
-    ? 'ouvindo'
-    : enviando
-      ? 'pensando'
-      : isSpeaking
-        ? 'falando'
-        : 'ocioso'
+  // Estado atual da Orbe Lumi Live (combina Gemini Live + TTS/STT)
+  const estadoOrbe: EstadoLumiLive =
+    liveSpeaking || isSpeaking
+      ? 'falando'
+      : liveThinking || enviando
+        ? 'pensando'
+        : liveMicActive || isListening
+          ? 'ouvindo'
+          : 'ocioso'
 
   // Se for conta de criança e o responsável bloqueou a conversa com a Lumi:
   if (tipoConta === 'crianca' && !permissoes.conversa) {
@@ -1243,11 +1354,11 @@ export const ConversaQuadro: React.FC = () => {
                     } catch {
                       // ignore
                     }
-                    if (!isSpeaking && !enviando) {
-                      startListening()
+                    if (!liveConnected && !liveConnecting) {
+                      connectLive(true)
                     }
                   }}
-                  title="Modo Lumi Live (Voz em tempo real + Orbe animada)"
+                  title="Modo Lumi Live (Voz Real Gemini 3.8 Live + Orbe animada)"
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
                     visaoChat === 'orbe'
                       ? 'bg-amber-500 text-white shadow-2xs'
@@ -1341,7 +1452,7 @@ export const ConversaQuadro: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {isSpeaking && (
+                {(liveSpeaking || isSpeaking) && (
                   <button
                     type="button"
                     onClick={() => executarBargeIn('Interrupção manual do usuário')}
@@ -1360,8 +1471,9 @@ export const ConversaQuadro: React.FC = () => {
             <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between bg-slate-50/40">
               <OrbeLumiLive
                 estado={estadoOrbe}
-                legendaOuvindo={interimTranscript}
+                legendaOuvindo={liveInputTranscript || interimTranscript}
                 legendaFalando={
+                  liveOutputTranscript ||
                   legendaFalando ||
                   (messages[messages.length - 1]?.sender === 'lumi'
                     ? messages[messages.length - 1]?.text
@@ -1370,15 +1482,20 @@ export const ConversaQuadro: React.FC = () => {
                 vozHabilitada={vozHabilitada}
                 onToggleVoz={handleToggleVoz}
                 onInterromper={() => executarBargeIn('Botão Interromper Lumi')}
-                onFalarAgora={toggleListening}
-                isListening={isListening}
+                onFalarAgora={handleFalarAgoraOrbe}
+                isListening={liveMicActive || isListening}
                 ritmoNome={ritmoAtual.nome}
                 onCicloRitmo={handleCicloRitmo}
-                isSupported={recSuportado}
-                permissionDenied={permissionDenied}
-                errorMessage={erroReconhecimento}
+                isSupported={true}
+                permissionDenied={livePermDenied || permissionDenied}
+                errorMessage={erroLiveVoice || erroReconhecimento}
                 etapaAtual={etapaAtual}
                 passoDetectadoNome={passoAtualAmigavel}
+                liveConnected={liveConnected}
+                liveConnecting={liveConnecting}
+                volumeLevel={volumeLevel}
+                vozRealAtiva={vozRealAtiva}
+                onTrocarVozReal={handleTrocarVozReal}
               />
             </div>
           ) : (

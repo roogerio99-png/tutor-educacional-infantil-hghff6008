@@ -8,17 +8,20 @@ import {
   RefreshCw,
   Info,
   Bot,
-  Mic,
 } from 'lucide-react'
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
 import {
   isVozIaLumiHabilitada,
   setVozIaLumiHabilitada,
+  getVozIaLumiPreferida,
+  setVozIaLumiPreferida,
   obterAudioLumiUrl,
 } from '@/services/lumiAudioService'
+import { VOZES_REAIS_LUMI, type VozGeminiLive } from '@/hooks/useGeminiLiveVoice'
 
 export const ConfiguracaoVozLumiCard: React.FC = () => {
   const [vozIaAtiva, setVozIaAtiva] = useState<boolean>(true)
+  const [vozIaPreferida, setVozIaPreferidaState] = useState<VozGeminiLive>('Kore')
   const [tocandoAmostraIa, setTocandoAmostraIa] = useState<boolean>(false)
   const [carregandoAmostraIa, setCarregandoAmostraIa] = useState<boolean>(false)
   const audioIaRef = useRef<HTMLAudioElement | null>(null)
@@ -31,9 +34,9 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
   )
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null)
 
-  // Inicializa preferência da voz da IA (OpenAI TTS)
   useEffect(() => {
     setVozIaAtiva(isVozIaLumiHabilitada())
+    setVozIaPreferidaState(getVozIaLumiPreferida())
   }, [])
 
   const {
@@ -48,10 +51,9 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
   } = useSpeechSynthesis({
     rate: taxaTeste,
     pitch: 1.05,
-    usarVozIa: false, // O teste do sintetizador local neste card foca nas vozes do aparelho
+    usarVozIa: false,
   })
 
-  // Carrega e filtra vozes pt-BR quando a lista estiver disponível
   useEffect(() => {
     if (voices && voices.length > 0) {
       const filtradas = voices.filter(
@@ -74,7 +76,6 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     }
   }, [voices, selectedVoice])
 
-  // Alterna o toggle de Voz Verdadeira da Lumi (IA)
   const handleToggleVozIa = (novoEstado: boolean) => {
     setVozIaAtiva(novoEstado)
     setVozIaLumiHabilitada(novoEstado)
@@ -85,7 +86,7 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     stop()
     setMensagemSucesso(
       novoEstado
-        ? 'Voz Verdadeira da Lumi (IA Nova) ativada com sucesso!'
+        ? `Voz Verdadeira da Lumi (${vozIaPreferida}) ativada com sucesso!`
         : 'Voz local do aparelho ativada.',
     )
     setTimeout(() => {
@@ -93,7 +94,19 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     }, 3500)
   }
 
-  // Toca amostra exclusiva da Voz Nova da OpenAI TTS
+  const handleTrocarVozIa = (novaVoz: VozGeminiLive) => {
+    setVozIaPreferidaState(novaVoz)
+    setVozIaLumiPreferida(novaVoz)
+    if (audioIaRef.current) {
+      audioIaRef.current.pause()
+      setTocandoAmostraIa(false)
+    }
+    setMensagemSucesso(`Voz Real da Lumi alterada para "${novaVoz}"!`)
+    setTimeout(() => {
+      setMensagemSucesso(null)
+    }, 3500)
+  }
+
   const handleTocarAmostraVozIa = async () => {
     stop()
     if (tocandoAmostraIa) {
@@ -109,8 +122,7 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     try {
       const audioUrl = await obterAudioLumiUrl({
         text: textoAmostra,
-        voice: 'nova',
-        model: 'tts-1',
+        voice: vozIaPreferida,
       })
 
       if (!audioUrl) {
@@ -140,7 +152,6 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     }
   }
 
-  // Trata a troca de voz
   const handleSelecionarVoz = (nome: string) => {
     stop()
     if (audioIaRef.current) {
@@ -155,7 +166,6 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
     }, 3000)
   }
 
-  // Toca a amostra com a voz selecionada
   const handleTestarAmostra = () => {
     if (audioIaRef.current) {
       audioIaRef.current.pause()
@@ -182,33 +192,31 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
               <h3 className="text-lg font-black text-slate-800">Calibragem da Voz da Lumi</h3>
               <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                 <Sparkles className="w-3 h-3 text-emerald-600" />
-                Voz Natural Local
+                Gemini Live & TTS Real
               </span>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5 font-medium">
-              Escolha a voz mais expressiva e natural disponível no seu aparelho para o Modo Criança
-              e Lumi Live.
+              Personalize a voz humana real da Lumi para o Modo Criança e a Orbe Live em tempo real.
             </p>
           </div>
         </div>
 
-        {/* Status de síntese vocal */}
         <div className="text-xs shrink-0">
           {isSupported ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Web Speech API Ativa
+              Áudio em Tempo Real Ativo
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 font-bold">
               <span className="w-2 h-2 rounded-full bg-rose-500" />
-              Sintetizador Não Suportado
+              Sintetizador Local Indisponível
             </span>
           )}
         </div>
       </div>
 
-      {/* CARD DE DESTAQUE: VOZ VERDADEIRA DA LUMI (OPENAI TTS NOVA) */}
+      {/* CARD DE DESTAQUE: VOZ VERDADEIRA DA LUMI (GEMINI LIVE & TTS) */}
       <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white shadow-md relative overflow-hidden space-y-4">
         <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -219,14 +227,16 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-base font-black tracking-tight">Voz Verdadeira da Lumi (IA)</h4>
+                <h4 className="text-base font-black tracking-tight">
+                  Voz Verdadeira da Lumi (Gemini Live IA)
+                </h4>
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-amber-700 shadow-2xs">
-                  Recomendado para Crianças
+                  Voz Humana Real
                 </span>
               </div>
               <p className="text-xs text-amber-100 font-medium mt-0.5">
-                Voz feminina super acolhedora (Nova - OpenAI TTS), com ritmo natural de conversa,
-                respiração e entonação humana carinhosa.
+                Conversação em tempo real (Gemini 3.8 Live) com respiração, entonação carinhosa e
+                resposta imediata.
               </p>
             </div>
           </div>
@@ -256,11 +266,46 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
           </div>
         </div>
 
-        {/* Botão de Amostra da Voz Nova da OpenAI */}
+        {/* Grade de escolha das 5 Vozes Reais */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2 relative z-10">
+          {VOZES_REAIS_LUMI.map((v) => {
+            const selecionada = vozIaPreferida === v.id
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => handleTrocarVozIa(v.id)}
+                className={`p-2.5 rounded-2xl text-left border transition-all cursor-pointer ${
+                  selecionada
+                    ? 'bg-white text-amber-950 border-white shadow-md scale-[1.02]'
+                    : 'bg-white/15 hover:bg-white/25 text-white border-white/25'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-xs font-black">
+                    {v.emoji} {v.nome}
+                  </span>
+                  {selecionada && <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />}
+                </div>
+                <p
+                  className={`text-[10px] mt-1 leading-snug ${
+                    selecionada ? 'text-slate-600 font-medium' : 'text-amber-100/90'
+                  }`}
+                >
+                  {v.descricao}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Botão de Amostra da Voz Real */}
         <div className="pt-2 border-t border-white/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
           <div className="text-xs text-amber-100/90 flex items-center gap-1.5">
             <Bot className="w-4 h-4 text-yellow-200" />
-            <span>Modelo tts-1 • Voz: Nova (feminina, acolhedora infantil)</span>
+            <span>
+              Voz selecionada: <strong>{vozIaPreferida}</strong> (Gemini 3.8 Live & Flash TTS)
+            </span>
           </div>
 
           <button
@@ -276,17 +321,17 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
             {carregandoAmostraIa ? (
               <>
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Gerando Voz da Lumi...</span>
+                <span>Gerando Voz Real ({vozIaPreferida})...</span>
               </>
             ) : tocandoAmostraIa ? (
               <>
                 <VolumeX className="w-3.5 h-3.5" />
-                <span>Pausar Voz Nova</span>
+                <span>Pausar Amostra</span>
               </>
             ) : (
               <>
                 <Play className="w-3.5 h-3.5 fill-current text-amber-600" />
-                <span>Ouvir Amostra Voz Nova (IA) 🔊</span>
+                <span>Ouvir Amostra Voz Real ({vozIaPreferida}) 🔊</span>
               </>
             )}
           </button>
@@ -297,9 +342,8 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
       <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 text-xs text-amber-950 flex items-start gap-3">
         <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          <strong>Voz Local de Fallback (Web Speech API):</strong> Se o dispositivo estiver offline
-          ou sem conexão com a nuvem, a Lumi usa automaticamente a voz do aparelho abaixo sem
-          interromper a aula.
+          <strong>Voz Local de Fallback (Web Speech API):</strong> Se o dispositivo estiver offline,
+          a Lumi usa automaticamente a voz do aparelho abaixo sem interromper a aula.
         </p>
       </div>
 
@@ -377,15 +421,14 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h4 className="text-xs font-black uppercase text-slate-700 tracking-wider">
-              Amostra de Fala da Lumi
+              Frase de Amostra para Teste
             </h4>
             <p className="text-xs text-slate-500 mt-0.5">
-              Ritmo calibrado para fala natural de adulto com criança (~1.0–1.15x) com modulação
-              viva de entonação.
+              Escolha uma frase abaixo e clique em &ldquo;Ouvir Amostra Voz Real&rdquo; ou teste a
+              voz local.
             </p>
           </div>
 
-          {/* Controle rápido de taxa para teste */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-600">Ritmo do teste:</span>
             <div className="inline-flex rounded-xl bg-white border border-slate-300 p-0.5">
@@ -414,7 +457,6 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
           </div>
         </div>
 
-        {/* Seletor de Frases de Amostra */}
         <div className="flex flex-wrap gap-2">
           {[
             'Olá! Eu sou a Lumi. Adoro descobrir curiosidades com você! O que vamos explorar hoje?',
@@ -439,12 +481,10 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
           ))}
         </div>
 
-        {/* Caixa de texto da amostra */}
         <p className="p-3 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm text-slate-800 font-medium italic">
           &ldquo;{textoAmostra}&rdquo;
         </p>
 
-        {/* Botão de Ouvir Amostra */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <button
@@ -460,22 +500,15 @@ export const ConfiguracaoVozLumiCard: React.FC = () => {
               {isSpeaking ? (
                 <>
                   <VolumeX className="w-4 h-4" />
-                  <span>Pausar Amostra</span>
+                  <span>Pausar Voz Local</span>
                 </>
               ) : (
                 <>
                   <Play className="w-4 h-4 fill-current" />
-                  <span>Ouvir com esta Voz 🔊</span>
+                  <span>Testar Voz Local do Aparelho 🔊</span>
                 </>
               )}
             </button>
-
-            {isSpeaking && (
-              <span className="text-xs text-amber-700 font-bold flex items-center gap-1.5 animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                Reproduzindo prosódia com pausas e entonação natural...
-              </span>
-            )}
           </div>
 
           {mensagemSucesso && (
