@@ -44,11 +44,12 @@ const App = () => (
             {/* Rota Pública de Redefinição de PIN por Link Seguro */}
             <Route path="/redefinir-pin" element={<RedefinirPinPage />} />
 
-            {/* Rotas Protegidas - 4 Abas do Protótipo Lumi IA */}
+            {/* Rotas Protegidas - Abas do Aprendiz / Lumi IA */}
             <Route element={<ProtectedRoute />}>
               <Route element={<Layout />}>
                 <Route path="/" element={<Navigate to="/conversa" replace />} />
                 <Route path="/conversa" element={<ConversaQuadro />} />
+                <Route path="/quadro" element={<ConversaQuadro />} />
                 <Route path="/agenda" element={<AgendaPage />} />
 
                 {/* Rotas exclusivas do Responsável */}

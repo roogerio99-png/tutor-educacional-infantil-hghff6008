@@ -1253,14 +1253,20 @@ async function handleBackendRoute(
   if (pathname === '/backend/v1/lumi/chat' && method === 'POST') {
     const result = processarMensagemLumi(
       db,
-      bodyObj.criancaId || 'crianca_ana_paula',
+      bodyObj.crianca_id || bodyObj.criancaId || 'crianca_ana_paula',
       bodyObj.message || '',
-      bodyObj.conversationId,
+      bodyObj.conversation_id || bodyObj.conversationId,
       currentUserId,
     )
     return {
       status: 200,
-      data: result,
+      data: {
+        ...result,
+        content: result.reply,
+        conversation_id: result.conversationId,
+        etapa: result.etapaSocratica,
+        materia: result.materia,
+      },
     }
   }
 
@@ -1268,9 +1274,9 @@ async function handleBackendRoute(
   if (pathname === '/backend/v1/lumi/chat-stream' && method === 'POST') {
     const result = processarMensagemLumi(
       db,
-      bodyObj.criancaId || 'crianca_ana_paula',
+      bodyObj.crianca_id || bodyObj.criancaId || 'crianca_ana_paula',
       bodyObj.message || '',
-      bodyObj.conversationId,
+      bodyObj.conversation_id || bodyObj.conversationId,
       currentUserId,
     )
     return {
@@ -1330,10 +1336,12 @@ async function handleBackendRoute(
   if (pathname === '/backend/v1/auth/pin/status' && method === 'GET') {
     const bloqueadoAte = activeUser?.pin_bloqueado_ate || null
     const bloqueado = bloqueadoAte ? new Date(bloqueadoAte).getTime() > Date.now() : false
+    const definido = activeUser ? Boolean(activeUser.pin_definido) : true
     return {
       status: 200,
       data: {
-        pin_definido: activeUser ? Boolean(activeUser.pin_definido) : true,
+        definido,
+        pin_definido: definido,
         bloqueado,
         bloqueado_ate: bloqueado ? bloqueadoAte : null,
         tentativas: activeUser?.pin_tentativas || 0,
@@ -1342,9 +1350,15 @@ async function handleBackendRoute(
   }
 
   if (pathname === '/backend/v1/auth/pin/definir' && method === 'POST') {
-    const novoPin = String(bodyObj.pin || '').trim()
+    const novoPin = String(bodyObj.novo_pin || bodyObj.pin || '').trim()
     if (!/^\d{4}$/.test(novoPin)) {
-      return { status: 400, data: { message: 'O PIN deve conter exatamente 4 dígitos numéricos.' } }
+      return {
+        status: 400,
+        data: {
+          error: 'O PIN deve conter exatamente 4 dígitos numéricos.',
+          message: 'O PIN deve conter exatamente 4 dígitos numéricos.',
+        },
+      }
     }
     if (activeUser) {
       activeUser.pin_code = novoPin
@@ -1356,7 +1370,12 @@ async function handleBackendRoute(
     }
     return {
       status: 200,
-      data: { ok: true, pin_definido: true },
+      data: {
+        ok: true,
+        success: true,
+        pin_definido: true,
+        message: 'PIN do responsável configurado com sucesso!',
+      },
     }
   }
 
@@ -1390,6 +1409,7 @@ async function handleBackendRoute(
           valido: false,
           tentativas_restantes: Math.max(0, 5 - tentativas),
           bloqueado_ate: bloqueadoAte,
+          aviso: 'PIN incorreto. (Dica da conta demo: 1234)',
           message: 'PIN incorreto. (Dica da conta demo: 1234)',
         },
       }
@@ -1397,9 +1417,15 @@ async function handleBackendRoute(
   }
 
   if (pathname === '/backend/v1/auth/pin/redefinir-com-senha' && method === 'POST') {
-    const novoPin = String(bodyObj.novoPin || '').trim()
+    const novoPin = String(bodyObj.novo_pin || bodyObj.novoPin || '').trim()
     if (!/^\d{4}$/.test(novoPin)) {
-      return { status: 400, data: { message: 'O novo PIN deve ter 4 dígitos.' } }
+      return {
+        status: 400,
+        data: {
+          error: 'O novo PIN deve ter 4 dígitos.',
+          message: 'O novo PIN deve ter 4 dígitos.',
+        },
+      }
     }
     if (activeUser) {
       activeUser.pin_code = novoPin
@@ -1410,7 +1436,12 @@ async function handleBackendRoute(
     }
     return {
       status: 200,
-      data: { ok: true, pin_definido: true },
+      data: {
+        ok: true,
+        success: true,
+        pin_definido: true,
+        message: 'PIN redefinido com sucesso!',
+      },
     }
   }
 
@@ -1429,13 +1460,14 @@ async function handleBackendRoute(
       status: 200,
       data: {
         ok: true,
+        success: true,
         message: 'Enviamos um link seguro de redefinição de PIN para o seu e-mail cadastrado!',
       },
     }
   }
 
   if (pathname === '/backend/v1/auth/pin/redefinir-por-token' && method === 'POST') {
-    const novoPin = String(bodyObj.novoPin || '').trim()
+    const novoPin = String(bodyObj.novo_pin || bodyObj.novoPin || '').trim()
     if (activeUser && /^\d{4}$/.test(novoPin)) {
       activeUser.pin_code = novoPin
       activeUser.pin_definido = true
@@ -1447,6 +1479,7 @@ async function handleBackendRoute(
       status: 200,
       data: {
         ok: true,
+        success: true,
         pin_definido: true,
         message: 'PIN redefinido com sucesso!',
       },
@@ -1563,7 +1596,9 @@ async function handleBackendRoute(
 
   // 7. Criança Acesso (Login/Permissões da Criança): /backend/v1/crianca-acesso/*
   if (pathname === '/backend/v1/crianca-acesso/salvar' && method === 'POST') {
-    const { criancaId, username, password, ativo, permissoes } = bodyObj
+    const criancaId = bodyObj.crianca_id || bodyObj.criancaId
+    const password = bodyObj.senha || bodyObj.password
+    const { username, ativo, permissoes } = bodyObj
     const cleanUser = String(username || '')
       .trim()
       .toLowerCase()
@@ -1610,6 +1645,7 @@ async function handleBackendRoute(
       status: 200,
       data: {
         ok: true,
+        success: true,
         message: 'Acesso da criança salvo com sucesso!',
         acesso: {
           id: existente.id,
@@ -1624,7 +1660,8 @@ async function handleBackendRoute(
   }
 
   if (pathname === '/backend/v1/crianca-acesso/alternar-status' && method === 'POST') {
-    const { criancaId, ativo } = bodyObj
+    const criancaId = bodyObj.crianca_id || bodyObj.criancaId
+    const { ativo } = bodyObj
     const existente = db.criancas_usuarios.find((cu) => cu.crianca === criancaId)
     if (existente) {
       existente.ativo = Boolean(ativo)
@@ -1633,7 +1670,12 @@ async function handleBackendRoute(
     }
     return {
       status: 200,
-      data: { ok: true, ativo: Boolean(ativo) },
+      data: {
+        ok: true,
+        success: true,
+        ativo: Boolean(ativo),
+        message: ativo ? 'Acesso ativado!' : 'Acesso pausado!',
+      },
     }
   }
 
@@ -1644,6 +1686,7 @@ async function handleBackendRoute(
       status: 200,
       data: {
         existe: Boolean(existente),
+        possui_acesso: Boolean(existente),
         acesso: existente
           ? {
               id: existente.id,
@@ -1664,7 +1707,7 @@ async function handleBackendRoute(
     saveDatabase(db)
     return {
       status: 200,
-      data: { ok: true, message: 'Acesso da criança removido.' },
+      data: { ok: true, success: true, message: 'Acesso da criança removido.' },
     }
   }
 
@@ -2186,88 +2229,109 @@ class LocalPocketBaseClient {
   }
 }
 
-// Intercept window.fetch for `/backend/v1/*` when running without external PocketBase
-function installLocalBackendFetchInterceptor(localPb: LocalPocketBaseClient) {
-  if (typeof window === 'undefined') return
-  const w = window as any
-  if (w.__lumiFetchIntercepted) return
-  w.__lumiFetchIntercepted = true
+// Helper for `/backend/v1/*` requests without mutating read-only `window.fetch`
+let activeLocalClient: LocalPocketBaseClient | null = null
 
-  const originalFetch = window.fetch.bind(window)
-  w.__lumiNativeFetch = originalFetch
+export async function localFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const urlStr =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url
 
-  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const urlStr =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url
-
-    let pathname = ''
+  let pathname = ''
+  const idxBackend = urlStr.indexOf('/backend/v1/')
+  if (idxBackend !== -1) {
+    pathname = urlStr.slice(idxBackend).split('?')[0]
+  } else if (urlStr.startsWith('/')) {
+    pathname = urlStr.split('?')[0]
+  } else if (typeof window !== 'undefined') {
     try {
       const parsed = new URL(urlStr, window.location.origin)
       if (parsed.origin === window.location.origin) {
         pathname = parsed.pathname
       }
     } catch {
-      if (urlStr.startsWith('/')) {
-        pathname = urlStr.split('?')[0]
-      }
+      // ignore
     }
+  }
 
-    if (pathname.startsWith('/backend/v1/')) {
-      const res = await handleBackendRoute(
-        pathname,
-        {
-          method: init?.method || 'GET',
-          body: init?.body,
-          headers: init?.headers,
-        },
-        localPb.authStore.record?.id,
-      )
+  if (pathname.startsWith('/backend/v1/')) {
+    const res = await handleBackendRoute(
+      pathname,
+      {
+        method: init?.method || 'GET',
+        body: init?.body,
+        headers: init?.headers,
+      },
+      activeLocalClient?.authStore.record?.id,
+    )
 
-      if (res.isStream && typeof res.streamText === 'string') {
-        const textToStream = res.streamText
-        const encoder = new TextEncoder()
-        const words = textToStream.split(/(?=\s)/)
+    if (res.isStream && typeof res.streamText === 'string') {
+      const textToStream = res.streamText
+      const encoder = new TextEncoder()
+      const words = textToStream.split(/(?=\s)/)
 
-        const stream = new ReadableStream({
-          async start(controller) {
-            for (const word of words) {
-              if (init?.signal?.aborted) {
-                controller.close()
-                return
-              }
-              const chunkPayload = JSON.stringify({ content: word })
-              controller.enqueue(encoder.encode(`event: chunk\ndata: ${chunkPayload}\n\n`))
-              await new Promise((r) => setTimeout(r, 18))
+      const stream = new ReadableStream({
+        async start(controller) {
+          for (const word of words) {
+            if (init?.signal?.aborted) {
+              controller.close()
+              return
             }
-            const donePayload = JSON.stringify({
-              content: textToStream,
-              conversationId: res.data?.conversationId,
-            })
-            controller.enqueue(encoder.encode(`event: done\ndata: ${donePayload}\n\n`))
-            controller.close()
-          },
-        })
-
-        return new Response(stream, {
-          status: 200,
-          headers: res.headers || { 'Content-Type': 'text/event-stream' },
-        })
-      }
-
-      return new Response(JSON.stringify(res.data), {
-        status: res.status,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(res.headers || {}),
+            const chunkPayload = JSON.stringify({ content: word })
+            controller.enqueue(encoder.encode(`event: chunk\ndata: ${chunkPayload}\n\n`))
+            await new Promise((r) => setTimeout(r, 18))
+          }
+          const donePayload = JSON.stringify({
+            content: textToStream,
+            conversationId: res.data?.conversationId,
+          })
+          controller.enqueue(encoder.encode(`event: done\ndata: ${donePayload}\n\n`))
+          controller.close()
         },
+      })
+
+      return new Response(stream, {
+        status: 200,
+        headers: res.headers || { 'Content-Type': 'text/event-stream' },
       })
     }
 
-    return originalFetch(input, init)
+    return new Response(JSON.stringify(res.data), {
+      status: res.status,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(res.headers || {}),
+      },
+    })
+  }
+
+  const nativeFetch =
+    typeof window !== 'undefined' && (window as any).__lumiNativeFetch
+      ? (window as any).__lumiNativeFetch
+      : fetch
+  return nativeFetch(input, init)
+}
+
+function installLocalBackendFetchInterceptor(localPb: LocalPocketBaseClient) {
+  activeLocalClient = localPb
+  if (typeof window === 'undefined') return
+  const w = window as any
+  if (w.__lumiFetchIntercepted) return
+  w.__lumiFetchIntercepted = true
+
+  try {
+    const originalFetch = window.fetch.bind(window)
+    w.__lumiNativeFetch = originalFetch
+    Object.defineProperty(window, 'fetch', {
+      value: localFetch,
+      writable: true,
+      configurable: true,
+    })
+  } catch {
+    // In environments where window.fetch is a non-configurable getter, localFetch is used directly by services
   }
 }
 

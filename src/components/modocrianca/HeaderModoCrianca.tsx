@@ -22,6 +22,7 @@ export const HeaderModoCrianca: React.FC = () => {
   const [menuTrocaAluno, setMenuTrocaAluno] = useState(false)
 
   const isConversa = location.pathname.startsWith('/conversa')
+  const isQuadro = location.pathname.startsWith('/quadro')
   const isAgenda = location.pathname.startsWith('/agenda')
 
   return (
@@ -48,28 +49,42 @@ export const HeaderModoCrianca: React.FC = () => {
             </Link>
           </div>
 
-          {/* Abas Infantis Exclusivas: Chat Lumi & Agenda Divertida (respeita permissões) */}
+          {/* Abas Infantis Segregadas: Conversar, Quadro & Missões e Minha Agenda */}
           <nav className="flex items-center gap-1.5 bg-black/10 p-1 rounded-2xl">
             {permissoes.conversa !== false && (
-              <Link
-                to="/conversa"
-                className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all ${
-                  isConversa
-                    ? 'bg-white text-amber-900 shadow-sm'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span>Conversar com a Lumi</span>
-              </Link>
+              <>
+                <Link
+                  to="/conversa"
+                  className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all ${
+                    isConversa
+                      ? 'bg-white text-amber-900 shadow-sm'
+                      : 'text-white/85 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Conversar</span>
+                </Link>
+
+                <Link
+                  to="/quadro"
+                  className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all ${
+                    isQuadro
+                      ? 'bg-white text-amber-900 shadow-sm'
+                      : 'text-white/85 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span>🎨</span>
+                  <span>Quadro & Missões</span>
+                </Link>
+              </>
             )}
 
             <Link
               to="/agenda"
-              className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all ${
+              className={`flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl font-extrabold text-xs sm:text-sm transition-all ${
                 isAgenda
                   ? 'bg-white text-amber-900 shadow-sm'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
+                  : 'text-white/85 hover:text-white hover:bg-white/10'
               } ${!permissoes.agenda ? 'opacity-70' : ''}`}
             >
               {!permissoes.agenda ? (
@@ -77,7 +92,7 @@ export const HeaderModoCrianca: React.FC = () => {
               ) : (
                 <Calendar className="w-4 h-4" />
               )}
-              <span>Minha Agenda 📅</span>
+              <span>Agenda 📅</span>
             </Link>
           </nav>
 

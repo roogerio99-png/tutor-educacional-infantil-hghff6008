@@ -9,12 +9,17 @@ import { SERIES } from '@/types'
 import { useModoCrianca } from '@/contexts/ModoCriancaContext'
 import { AtivarModoCriancaModal } from '@/components/modocrianca/AtivarModoCriancaModal'
 import { ConfigurarPinModal } from '@/components/modocrianca/ConfigurarPinModal'
+import {
+  TourGuiadoModal,
+  STORAGE_KEY_TOUR_VISTO,
+  type PassoTour,
+} from '@/components/TourGuiadoModal'
 
 const TABS = [
   {
     id: 'conversa',
     path: '/conversa',
-    label: 'Conversa & Quadro',
+    label: 'Conversar com a Lumi',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
@@ -22,6 +27,21 @@ const TABS = [
           strokeLinejoin="round"
           strokeWidth={2}
           d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+        />
+      </svg>
+    ),
+  },
+  {
+    id: 'quadro',
+    path: '/quadro',
+    label: 'Quadro & Missões',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
         />
       </svg>
     ),
@@ -107,6 +127,14 @@ export const Header: React.FC = () => {
 
   const [modalAtivarModoCrianca, setModalAtivarModoCrianca] = useState(false)
   const [modalNovaCrianca, setModalNovaCrianca] = useState(false)
+  const [tourGuiadoAberto, setTourGuiadoAberto] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_TOUR_VISTO) !== 'true'
+    } catch {
+      return false
+    }
+  })
+  const [abaDestacadaTour, setAbaDestacadaTour] = useState<PassoTour['id'] | null>(null)
   const [novoNome, setNovoNome] = useState('')
   const [novaIdade, setNovaIdade] = useState('8')
   const [novaSerie, setNovaSerie] = useState('3º Ano')
@@ -199,6 +227,19 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
+          {/* Botão do Tour Guiado das 4 Abas */}
+          {tipoConta === 'responsavel' && (
+            <button
+              type="button"
+              onClick={() => setTourGuiadoAberto(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/35 transition-colors cursor-pointer"
+              title="Abrir tour guiado interativo das 4 abas do Aprendiz"
+            >
+              <span>🧭</span>
+              <span>Tour Guiado</span>
+            </button>
+          )}
+
           {/* Acesso da Criança e Modo Criança */}
           <Link
             to="/grafo-painel"
@@ -259,17 +300,29 @@ export const Header: React.FC = () => {
               return true
             }).map((tab) => {
               const isActive = location.pathname === tab.path
+              const isTourHighlighted =
+                tourGuiadoAberto &&
+                (abaDestacadaTour === tab.id ||
+                  (abaDestacadaTour === 'prompts' && tab.id === 'configuracoes'))
               return (
                 <Link
                   key={tab.id}
                   to={tab.path}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-                    isActive
-                      ? 'border-amber-400 text-amber-300 bg-slate-700/40'
-                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
+                    isTourHighlighted
+                      ? 'border-amber-300 text-white bg-amber-500/30 ring-2 ring-amber-400/80 shadow-md'
+                      : isActive
+                        ? 'border-amber-400 text-amber-300 bg-slate-700/40'
+                        : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-700/20'
                   }`}
                 >
-                  <span className={isActive ? 'text-amber-400' : 'text-slate-400'}>{tab.icon}</span>
+                  <span
+                    className={
+                      isTourHighlighted || isActive ? 'text-amber-400' : 'text-slate-400'
+                    }
+                  >
+                    {tab.icon}
+                  </span>
                   <span>{tab.label}</span>
                 </Link>
               )
@@ -277,6 +330,15 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Tour Guiado Interativo das 4 Abas para o Responsável */}
+      {tipoConta === 'responsavel' && (
+        <TourGuiadoModal
+          isOpen={tourGuiadoAberto}
+          onClose={() => setTourGuiadoAberto(false)}
+          onHighlightTab={setAbaDestacadaTour}
+        />
+      )}
 
       {/* Modal de Ativação do Modo Criança */}
       <AtivarModoCriancaModal

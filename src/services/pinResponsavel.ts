@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import pb, { localFetch } from '@/lib/pocketbase/client'
 
 export interface PinStatusResponse {
   definido: boolean
@@ -32,8 +32,6 @@ export interface VerificarPinResponse {
   aviso?: string
 }
 
-const BASE_URL = import.meta.env.VITE_POCKETBASE_URL
-
 /**
  * Consulta se o usuário responsável já definiu o PIN numérico de 4 dígitos.
  */
@@ -41,7 +39,7 @@ export async function obterStatusPin(): Promise<boolean> {
   if (!pb.authStore.isValid || !pb.authStore.token) return false
 
   try {
-    const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/status`, {
+    const res = await localFetch('/backend/v1/auth/pin/status', {
       method: 'GET',
       headers: {
         Authorization: pb.authStore.token,
@@ -49,7 +47,6 @@ export async function obterStatusPin(): Promise<boolean> {
     })
 
     if (!res.ok) {
-      // Se a rota falhar, verifica no record do authStore
       const userRec = pb.authStore.record as { pin_definido?: boolean } | null
       return !!userRec?.pin_definido
     }
@@ -73,7 +70,7 @@ export async function definirPinResponsavel(
     throw new Error('Usuário não autenticado.')
   }
 
-  const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/definir`, {
+  const res = await localFetch('/backend/v1/auth/pin/definir', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -105,7 +102,7 @@ export async function solicitarResetPinPorEmail(
     headers['Authorization'] = pb.authStore.token
   }
 
-  const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/solicitar-reset-email`, {
+  const res = await localFetch('/backend/v1/auth/pin/solicitar-reset-email', {
     method: 'POST',
     headers,
     body: JSON.stringify(params || {}),
@@ -125,7 +122,7 @@ export async function solicitarResetPinPorEmail(
 export async function redefinirPinPorToken(
   params: RedefinirPinPorTokenParams,
 ): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/redefinir-por-token`, {
+  const res = await localFetch('/backend/v1/auth/pin/redefinir-por-token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -149,7 +146,7 @@ export async function verificarPinResponsavel(pin: string): Promise<boolean> {
     throw new Error('Usuário não autenticado.')
   }
 
-  const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/verificar`, {
+  const res = await localFetch('/backend/v1/auth/pin/verificar', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -176,7 +173,7 @@ export async function redefinirPinComSenha(
     throw new Error('Usuário não autenticado.')
   }
 
-  const res = await fetch(`${BASE_URL}/backend/v1/auth/pin/redefinir-com-senha`, {
+  const res = await localFetch('/backend/v1/auth/pin/redefinir-com-senha', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import pb, { localFetch } from '@/lib/pocketbase/client'
 import { streamAgentChat, type StreamAgentChatHandlers } from '@/lib/skipAi'
 import type { EtapaSocratica, AcaoLumiExecutada } from '@/types'
 
@@ -24,10 +24,9 @@ export interface LumiChatResponse {
 export async function enviarMensagemLumiSync(
   params: EnviarMensagemLumiParams,
 ): Promise<LumiChatResponse> {
-  const baseUrl = import.meta.env.VITE_POCKETBASE_URL || ''
   const token = pb.authStore.token
 
-  const res = await fetch(`${baseUrl}/backend/v1/lumi/chat`, {
+  const res = await localFetch('/backend/v1/lumi/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -63,10 +62,9 @@ export async function enviarMensagemLumiStream(
   materia?: string
   acoes?: AcaoLumiExecutada[]
 }> {
-  const baseUrl = import.meta.env.VITE_POCKETBASE_URL || ''
   const token = pb.authStore.token
 
-  const res = await fetch(`${baseUrl}/backend/v1/lumi/chat-stream`, {
+  const res = await localFetch('/backend/v1/lumi/chat-stream', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
