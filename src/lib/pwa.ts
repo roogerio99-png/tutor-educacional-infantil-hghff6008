@@ -1,10 +1,87 @@
 /**
- * Gerenciador do Service Worker e fluxo de atualização do PWA
+ * Gerenciador do Service Worker, captura global do evento `beforeinstallprompt`
+ * e fluxo de instalação/atualização do PWA para celular (Android e iOS).
  */
+import { useEffect, useState } from 'react'
 
 export interface SWRegistrationCallbacks {
   onUpdateAvailable?: (reload: () => void) => void
   onSuccess?: () => void
+}
+
+export interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
+let globalDeferredPrompt: BeforeInstallPromptEvent | null = null
+const promptListeners = new Set<(prompt: BeforeInstallPromptEvent | null) => void>()
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e: Event) => {
+    e.preventDefault()
+    globalDeferredPrompt = e as BeforeInstallPromptEvent
+    promptListeners.forEach((cb) => cb(globalDeferredPrompt))
+  })
+
+  window.addEventListener('appinstalled', () => {
+    globalDeferredPrompt = null
+    promptListeners.forEach((cb) => cb(null))
+  })
+}
+
+export function usePWAInstall() {
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(
+    globalDeferredPrompt,
+  )
+  const [isInstalled, setIsInstalled] = useState(false)
+  const [isIOS, setIsIOS] = useState(false)
+
+  useEffect(() => {
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      Boolean((window.navigator as unknown as { standalone?: boolean }).standalone)
+    setIsInstalled(isStandalone)
+
+    const userAgent = window.navigator.userAgent.toLowerCase()
+    setIsIOS(/iphone|ipad|ipod/.test(userAgent))
+
+    const listener = (prompt: BeforeInstallPromptEvent | null) => {
+      setDeferredPrompt(prompt)
+      if (!prompt) {
+        const nowStandalone =
+          window.matchMedia('(display-mode: standalone)').matches ||
+          Boolean((window.navigator as unknown as { standalone?: boolean }).standalone)
+        if (nowStandalone) setIsInstalled(true)
+      }
+    }
+
+    promptListeners.add(listener)
+    return () => {
+      promptListeners.delete(listener)
+    }
+  }, [])
+
+  const install = async (): Promise<boolean> => {
+    const promptEvent = deferredPrompt || globalDeferredPrompt
+    if (!promptEvent) return false
+    await promptEvent.prompt()
+    const { outcome } = await promptEvent.userChoice
+    if (outcome === 'accepted') {
+      globalDeferredPrompt = null
+      setDeferredPrompt(null)
+      setIsInstalled(true)
+      return true
+    }
+    return false
+  }
+
+  return {
+    isInstallable: Boolean(deferredPrompt || globalDeferredPrompt),
+    isInstalled,
+    isIOS,
+    install,
+  }
 }
 
 export function registerServiceWorker(callbacks?: SWRegistrationCallbacks) {
@@ -13,17 +90,14 @@ export function registerServiceWorker(callbacks?: SWRegistrationCallbacks) {
   }
 
   window.addEventListener('load', () => {
-    // Registra o sw.js com escopo raiz
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
       .then((registration) => {
-        // Verifica se há uma atualização aguardando
         if (registration.waiting) {
           notifyUpdate(registration, callbacks)
           return
         }
 
-        // Detecta quando um novo service worker foi encontrado
         registration.addEventListener('updatefound', () => {
           const installingWorker = registration.installing
           if (!installingWorker) return
@@ -31,10 +105,8 @@ export function registerServiceWorker(callbacks?: SWRegistrationCallbacks) {
           installingWorker.addEventListener('statechange', () => {
             if (installingWorker.state === 'installed') {
               if (navigator.serviceWorker.controller) {
-                // Nova versão pronta para assumir
                 notifyUpdate(registration, callbacks)
               } else {
-                // Conteúdo em cache para uso offline
                 callbacks?.onSuccess?.()
               }
             }
@@ -42,16 +114,13 @@ export function registerServiceWorker(callbacks?: SWRegistrationCallbacks) {
         })
       })
       .catch((error) => {
-        // Falhas normais em ambientes sem HTTPS ou iframes restritos
         console.warn('[PWA] Falha ao registrar Service Worker:', error)
       })
 
-    // Ao mudar o controller (skipWaiting), recarrega se o usuário aceitou
     let refreshing = false
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return
       refreshing = true
-      // Opcional: auto-recarregar se desejado
     })
   })
 }

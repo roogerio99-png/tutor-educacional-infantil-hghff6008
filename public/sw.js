@@ -7,7 +7,7 @@
  * - Não intercepta requisições de API PocketBase (/api/) nem WebSockets
  */
 
-const CACHE_NAME = 'aprendiz-pwa-v1'
+const CACHE_NAME = 'lumi-pwa-v2'
 const OFFLINE_URL = '/offline.html'
 
 const APP_SHELL = [
@@ -15,6 +15,10 @@ const APP_SHELL = [
   '/offline.html',
   '/manifest.webmanifest',
   '/favicon.svg',
+  '/apple-touch-icon.png',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-512x512.png',
   '/apple-touch-icon.svg',
   '/icon-192.svg',
   '/icon-512.svg',

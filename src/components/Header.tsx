@@ -14,6 +14,7 @@ import {
   STORAGE_KEY_TOUR_VISTO,
   type PassoTour,
 } from '@/components/TourGuiadoModal'
+import { ModalInstalarCelular } from '@/components/ModalInstalarCelular'
 
 const TABS = [
   {
@@ -127,6 +128,7 @@ export const Header: React.FC = () => {
 
   const [modalAtivarModoCrianca, setModalAtivarModoCrianca] = useState(false)
   const [modalNovaCrianca, setModalNovaCrianca] = useState(false)
+  const [modalInstalarCelular, setModalInstalarCelular] = useState(false)
   const [tourGuiadoAberto, setTourGuiadoAberto] = useState<boolean>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_TOUR_VISTO) !== 'true'
@@ -227,18 +229,30 @@ export const Header: React.FC = () => {
             </button>
           </div>
 
-          {/* Botão do Tour Guiado das 4 Abas */}
-          {tipoConta === 'responsavel' && (
+          {/* Botão do Tour Guiado das 4 Abas e Botão Instalar no Celular */}
+          <div className="flex items-center gap-2">
+            {tipoConta === 'responsavel' && (
+              <button
+                type="button"
+                onClick={() => setTourGuiadoAberto(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/35 transition-colors cursor-pointer"
+                title="Abrir tour guiado interativo das 4 abas do Aprendiz"
+              >
+                <span>🧭</span>
+                <span>Tour Guiado</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => setTourGuiadoAberto(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/35 transition-colors cursor-pointer"
-              title="Abrir tour guiado interativo das 4 abas do Aprendiz"
+              onClick={() => setModalInstalarCelular(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 transition-colors cursor-pointer"
+              title="Como criar e instalar o aplicativo direto no celular (Android e iPhone)"
             >
-              <span>🧭</span>
-              <span>Tour Guiado</span>
+              <span>📲</span>
+              <span>App no Celular</span>
             </button>
-          )}
+          </div>
 
           {/* Governança Comercial: Alternador Rápido "Acessar como Responsável" vs "Acessar como Criança" */}
           <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-xl border border-slate-700">
@@ -346,6 +360,12 @@ export const Header: React.FC = () => {
 
       {/* Modal de Configuração do PIN */}
       <ConfigurarPinModal isOpen={modalConfigurarPinAberto} onClose={fecharModalConfigurarPin} />
+
+      {/* Modal de Instalação no Celular (PWA + Link Público) */}
+      <ModalInstalarCelular
+        aberto={modalInstalarCelular}
+        onFechar={() => setModalInstalarCelular(false)}
+      />
 
       {/* Modal para cadastrar criança */}
       <SimpleModal

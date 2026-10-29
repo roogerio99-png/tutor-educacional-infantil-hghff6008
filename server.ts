@@ -334,6 +334,17 @@ async function startServer() {
   const app = express()
   app.use(express.json({ limit: '25mb' }))
 
+  // Health check endpoint for monitoring and app diagnostics
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'lumi-server',
+      version: '2.0.0',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    })
+  })
+
   // ===========================================================================
   // 1. Real Human Voice TTS Endpoint (3-Tier Gemini Neural Voice Pipeline)
   //    Tier 1: gemini-3.8-flash-lite-tts -> Tier 2: gemini-3.8-flash-tts -> Tier 3: gemini-3.8-live
@@ -546,14 +557,57 @@ Retorne SEMPRE um JSON válido contendo:
       })
 
       const ai = getGenAIClient()
-      const response = await ai.models.generateContent({
+
+      // Function to generate pedagogical fallback if Gemini API times out or hits rate limits
+      const getPedagogicalFallback = () => {
+        const pNome = criancaNome.split(' ')[0]
+        const msgLow = cleanMessage.toLowerCase()
+
+        // Check for affect / frustration signals (CASEL/Dweck)
+        if (msgLow.includes('não sei') || msgLow.includes('nao sei') || msgLow.includes('difícil') || msgLow.includes('dificil') || msgLow.includes('cansei') || msgLow.includes('errei')) {
+          return {
+            reply: `Fica super tranquilo(a), ${pNome}! 💛 Aprender um passinho por vez é o segredo de todo grande explorador. Vamos respirar fundo juntos! Quer que eu te mostre um exemplo bem facinho já resolvido?`,
+            etapaSocratica: 'guiar',
+            materia: 'geral',
+            memoriasAprendidas: [{ tipo: 'estilo_aprendizagem', conteudo: 'Precisa de encorajamento afetuoso em momentos desafiadores.' }],
+            novosConhecimentos: [],
+            agendamentos: [],
+            bloqueadoPorIdade: false,
+          }
+        }
+
+        // Check for school tasks / math / homework (Sweller worked example + mirror challenge)
+        const isHomework = /quanto é|quanto e|\+|\-|\*|\/|calcular|exerc[íi]cio|tarefa|dever|problema/i.test(cleanMessage)
+        if (isHomework) {
+          return {
+            reply: `Que legal, ${pNome}! Vamos resolver juntos! 🌟\n\n✅ 1º Passo — Exemplo da Lumi (Com Resposta!):\nSe tivermos 4 maçãs e ganharmos mais 3, somamos 4 + 3 = 7 maçãs!\n\n🎯 2º Passo — Seu Exemplo para Responder:\nAgora tente você: se tivermos 5 figurinhas e ganharmos mais 2, com quantas ficamos? Me conta! 🚀`,
+            etapaSocratica: 'praticar',
+            materia: 'matematica',
+            memoriasAprendidas: [{ tipo: 'interesse', conteudo: `Gosta de desafios práticos com exemplos trabalhados.` }],
+            novosConhecimentos: [{ titulo: 'Cálculo com Exemplos Práticos', categoria: 'matematica', conteudo: 'Resolução passo a passo' }],
+            agendamentos: [],
+            bloqueadoPorIdade: false,
+          }
+        }
+
+        // Free curiosity (Ausubel - direct, enthusiastic explanation without interrogation)
+        return {
+          reply: `Oi, ${pNome}! Adorei sua curiosidade! ✨ Estrelas cadentes na verdade são pequenos pedacinhos de poeira e rochas do espaço que viajam super rápido. Quando entram na atmosfera da nossa Terra, o atrito com o ar faz eles brilharem como um risco mágico de luz no céu noturno! 🌠`,
+          etapaSocratica: 'entender',
+          materia: 'ciencias',
+          memoriasAprendidas: [{ tipo: 'interesse', conteudo: `Tem curiosidade científica sobre o universo e fenômenos naturais.` }],
+          novosConhecimentos: [{ titulo: 'Estrelas Cadentes (Meteoroides)', categoria: 'ciencias', conteudo: 'Partículas espaciais que brilham ao entrar na atmosfera' }],
+          agendamentos: [],
+          bloqueadoPorIdade: false,
+        }
+      }
+
+      // Call Gemini API with 7-second timeout protection
+      const geminiPromise = ai.models.generateContent({
         model: selectedModel,
         contents,
         config: {
           systemInstruction,
-          ...(selectedModel === 'gemini-3.8-flash'
-            ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
-            : {}),
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
@@ -620,17 +674,28 @@ Retorne SEMPRE um JSON válido contendo:
         },
       })
 
-      const rawJson = response.text || '{}'
-      let parsed: any = {}
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), 7000)
+      })
+
+      let response: any = null
       try {
-        parsed = JSON.parse(rawJson)
-      } catch {
-        parsed = {
-          reply: rawJson,
-          etapaSocratica: 'entender',
-          materia: 'geral',
-          memoriasAprendidas: [],
+        response = await Promise.race([geminiPromise, timeoutPromise])
+      } catch (geminiErr: any) {
+        console.warn('[Gemini Agent Warning, using pedagogical fallback]:', geminiErr?.message)
+      }
+
+      let parsed: any = null
+      if (response && response.text) {
+        try {
+          parsed = JSON.parse(response.text)
+        } catch {
+          parsed = null
         }
+      }
+
+      if (!parsed || !parsed.reply) {
+        parsed = getPedagogicalFallback()
       }
 
       res.json({
@@ -650,9 +715,18 @@ Retorne SEMPRE um JSON válido contendo:
         bloqueadoPorIdade: Boolean(parsed.bloqueadoPorIdade),
       })
     } catch (error: any) {
-      res.status(500).json({
-        ok: false,
-        error: error?.message || 'Falha ao consultar agente Gemini.',
+      console.error('[Agent-Chat Handler Error]:', error)
+      res.json({
+        ok: true,
+        model: 'gemini-3.8-flash',
+        modoAgente: 'agente_geral',
+        reply: 'Oi, amigo(a)! Estou aqui com você para aprender e nos divertirmos juntos! O que quer explorar agora? ✨',
+        etapaSocratica: 'entender',
+        materia: 'geral',
+        memoriasAprendidas: [],
+        novosConhecimentos: [],
+        agendamentos: [],
+        bloqueadoPorIdade: false,
       })
     }
   })

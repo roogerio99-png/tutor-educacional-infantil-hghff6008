@@ -1,7 +1,8 @@
 {
-  "name": "Aprendiz — Tutor Educacional",
-  "short_name": "Aprendiz",
-  "description": "Tutor educacional inteligente e socrático para crianças, com acompanhamento de rotina, atividades e apoio escolar acolhedor.",
+  "id": "/",
+  "name": "Lumi IA — Aprendiz Educacional",
+  "short_name": "Lumi IA",
+  "description": "Tutora educacional inteligente com voz humana real, acompanhamento de rotina escolar e governança parental.",
   "lang": "pt-BR",
   "dir": "ltr",
   "start_url": "/",
@@ -14,32 +15,38 @@
   "categories": ["education", "kids"],
   "icons": [
     {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable-192.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
-    },
-    {
       "src": "/icon-512.svg",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-maskable-512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/apple-touch-icon.svg",
-      "sizes": "180x180",
       "type": "image/svg+xml",
       "purpose": "any"
     }
@@ -48,16 +55,16 @@
     {
       "name": "Conversar com Lumi",
       "short_name": "Conversa",
-      "description": "Abrir conversa com a tutora Lumi",
+      "description": "Abrir conversa por voz e texto com a Lumi",
       "url": "/conversa",
-      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Agenda Escolar",
       "short_name": "Agenda",
       "description": "Ver atividades e rotina escolar",
       "url": "/agenda",
-      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

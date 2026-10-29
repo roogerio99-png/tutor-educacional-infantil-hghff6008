@@ -3,7 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { AuthLayout } from '@/components/AuthLayout'
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
-import { Eye, EyeOff, LogIn, ShieldCheck, Sparkles } from 'lucide-react'
+import { Eye, EyeOff, LogIn, ShieldCheck, Smartphone, Sparkles } from 'lucide-react'
+import { ModalInstalarCelular } from '@/components/ModalInstalarCelular'
 
 export default function Login() {
   const {
@@ -29,6 +30,7 @@ export default function Login() {
 
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [modalCelularAberto, setModalCelularAberto] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [generalError, setGeneralError] = useState<string | null>(null)
 
@@ -380,6 +382,23 @@ export default function Login() {
           Cadastrar Responsável + Autorizações LGPD/ECA + Senha Infantil →
         </Link>
       </div>
+
+      {/* Botão para instalar ou acessar direto pelo celular */}
+      <div className="mt-3 text-center">
+        <button
+          type="button"
+          onClick={() => setModalCelularAberto(true)}
+          className="w-full py-2.5 px-3 rounded-2xl bg-[#FFF8F0] hover:bg-amber-100/70 border border-[#EADBCE] text-[#4A3B32] text-xs font-extrabold flex items-center justify-center gap-2 transition cursor-pointer"
+        >
+          <Smartphone className="w-4 h-4 text-[#F28C28]" />
+          <span>📲 Como instalar o Aplicativo direto no Celular (Android & iPhone)</span>
+        </button>
+      </div>
+
+      <ModalInstalarCelular
+        aberto={modalCelularAberto}
+        onFechar={() => setModalCelularAberto(false)}
+      />
     </AuthLayout>
   )
 }
