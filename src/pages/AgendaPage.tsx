@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { useCrianca } from '@/contexts/CriancaContext'
 import {
   listarEventosAgenda,
@@ -88,9 +89,10 @@ export const AgendaPage: React.FC = () => {
       setModalNovo(false)
       setTitulo('')
       setDescricao('')
+      toast.success('Compromisso salvo na agenda!')
     } catch (err) {
       console.error('Erro ao salvar evento:', err)
-      alert('Não foi possível salvar o compromisso na agenda.')
+      toast.error('Não foi possível salvar o compromisso na agenda.')
     } finally {
       setSalvando(false)
     }

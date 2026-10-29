@@ -71,10 +71,14 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Não intercepta chamadas à API (/api/) nem origens externas de backend/analytics
+  // Não intercepta chamadas à API (/api/, /backend/), módulos de dev do Vite nem WebSockets
   if (
     url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/backend/') ||
     url.pathname.startsWith('/_/') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.startsWith('/@') ||
     url.protocol.startsWith('ws')
   ) {
     return

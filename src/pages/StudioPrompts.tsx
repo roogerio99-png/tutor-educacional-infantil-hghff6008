@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { obterPromptAtivo, salvarPrompt } from '@/services/prompts'
 import type { SystemPromptRecord } from '@/types'
 
@@ -61,10 +62,11 @@ export const StudioPrompts: React.FC = () => {
       setMensagemSucesso(
         'Prompt do sistema atualizado com sucesso! A Lumi já está utilizando as novas instruções.',
       )
+      toast.success('Prompt do sistema atualizado!')
       setTimeout(() => setMensagemSucesso(null), 4000)
     } catch (err) {
       console.error('Erro ao salvar prompt:', err)
-      alert('Não foi possível salvar o prompt do sistema.')
+      toast.error('Não foi possível salvar o prompt do sistema.')
     } finally {
       setSalvando(false)
     }

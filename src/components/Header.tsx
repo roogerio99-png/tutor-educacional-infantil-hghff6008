@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { SimpleModal } from '@/components/SimpleModal'
@@ -132,9 +133,10 @@ export const Header: React.FC = () => {
       setNovoNome('')
       setNovaEscola('')
       setNovasObs('')
+      toast.success('Criança cadastrada com sucesso!')
     } catch (err) {
       console.error('Erro ao criar criança:', err)
-      alert('Não foi possível cadastrar a criança.')
+      toast.error('Não foi possível cadastrar a criança.')
     } finally {
       setSalvandoCrianca(false)
     }
@@ -249,7 +251,7 @@ export const Header: React.FC = () => {
           <div className="max-w-7xl mx-auto px-4 flex overflow-x-auto custom-scroll">
             {TABS.filter((tab) => {
               if (
-                (tab.id === 'prompts' || tab.id === 'grafo-painel' || tab.id === 'configuracoes') &&
+                (tab.id === 'prompts' || tab.id === 'grafo' || tab.id === 'configuracoes') &&
                 tipoConta === 'crianca'
               ) {
                 return false

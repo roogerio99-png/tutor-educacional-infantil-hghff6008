@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useCrianca } from '@/contexts/CriancaContext'
 import { listarDificuldades, criarDificuldade, excluirDificuldade } from '@/services/dificuldades'
 import { listarConhecimento, criarConhecimento, excluirConhecimento } from '@/services/conhecimento'
@@ -145,9 +146,10 @@ export const GrafoPainel: React.FC = () => {
       await carregarDados()
       setModalDif(false)
       setDifDesc('')
+      toast.success('Ponto de atenção registrado!')
     } catch (err) {
       console.error('Erro ao salvar dificuldade:', err)
-      alert('Não foi possível registrar a dificuldade.')
+      toast.error('Não foi possível registrar a dificuldade.')
     } finally {
       setSalvandoDif(false)
     }
@@ -168,9 +170,10 @@ export const GrafoPainel: React.FC = () => {
       setModalConhec(false)
       setConhecTitulo('')
       setConhecConteudo('')
+      toast.success('Estratégia registrada na base de conhecimento!')
     } catch (err) {
       console.error('Erro ao salvar conhecimento:', err)
-      alert('Não foi possível registrar na base de conhecimento.')
+      toast.error('Não foi possível registrar na base de conhecimento.')
     } finally {
       setSalvandoConhec(false)
     }

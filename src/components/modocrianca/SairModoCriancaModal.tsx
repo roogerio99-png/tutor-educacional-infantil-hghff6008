@@ -212,7 +212,7 @@ export const SairModoCriancaModal: React.FC<{
             </div>
           ) : (
             <p className="text-xs text-slate-400 mb-4 text-center">
-              Toque nos números para digitar o código de 4 dígitos
+              Toque nos números para digitar o código de 4 dígitos (Demo: <strong>1234</strong>)
             </p>
           )}
 
