@@ -369,7 +369,7 @@ export function useSpeechSynthesis({
           const { obterAudioLumiUrl, dividirEmFrasesParaAudio } =
             await import('@/services/lumiAudioService')
 
-          const lotes = dividirEmFrasesParaAudio(textoLimpo, 2)
+          const lotes = dividirEmFrasesParaAudio(textoLimpo, 8)
           if (lotes.length > 0) {
             setIsSpeaking(true)
             setIsUsingIaVoice(true)
@@ -393,20 +393,12 @@ export function useSpeechSynthesis({
               const textoDoLote = lotes[loteIdx]
               setCurrentSegmentText(textoDoLote)
 
-              // Preload do próximo lote enquanto este toca
-              if (loteIdx + 1 < lotes.length) {
-                obterAudioLumiUrl({ text: lotes[loteIdx + 1], voice: vozIaNome }).catch(() => {})
-              }
-
               const audioUrl = await obterAudioLumiUrl({ text: textoDoLote, voice: vozIaNome })
 
               if (cancelRequestedRef.current) return
 
               if (!audioUrl) {
-                console.warn(
-                  '[useSpeechSynthesis] Falha ao obter áudio TTS OpenAI, caindo para síntese local',
-                )
-                // Se falhar o lote atual, faz fallback para o restante via síntese local sem parar a experiência
+                // Faz fallback transparente para o restante via síntese local sem parar a experiência
                 const restante = lotes.slice(loteIdx).join(' ')
                 executarSinteseLocal(restante)
                 return

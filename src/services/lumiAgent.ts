@@ -1,6 +1,9 @@
 import pb, { localFetch } from '@/lib/pocketbase/client'
 import { streamAgentChat, type StreamAgentChatHandlers } from '@/lib/skipAi'
-import type { EtapaSocratica, AcaoLumiExecutada } from '@/types'
+import type { EtapaSocratica, AcaoLumiExecutada, MemoriaRecord } from '@/types'
+
+export type ModeloGeminiAgente = 'gemini-3.8-flash' | 'gemini-4-argon' | 'gemini-3.1-flash-lite'
+export type ModoAgenteLumi = 'agente_geral' | 'tutor_socratico'
 
 export interface EnviarMensagemLumiParams {
   message: string
@@ -8,6 +11,9 @@ export interface EnviarMensagemLumiParams {
   criancaId?: string | null
   customPrompt?: string | null
   minutosRestantes?: number
+  model?: ModeloGeminiAgente
+  modoAgente?: ModoAgenteLumi
+  history?: Array<{ role: 'user' | 'model'; text: string }>
   signal?: AbortSignal
 }
 
@@ -19,6 +25,7 @@ export interface LumiChatResponse {
   etapa?: EtapaSocratica
   materia?: string
   acoes?: AcaoLumiExecutada[]
+  memorias_aprendidas?: MemoriaRecord[]
 }
 
 export async function enviarMensagemLumiSync(
@@ -39,6 +46,9 @@ export async function enviarMensagemLumiSync(
       custom_prompt: params.customPrompt || null,
       minutos_restantes:
         params.minutosRestantes !== undefined ? params.minutosRestantes : undefined,
+      model: params.model || 'gemini-3.8-flash',
+      modo_agente: params.modoAgente || 'agente_geral',
+      history: params.history || [],
     }),
     signal: params.signal,
   })
@@ -77,11 +87,13 @@ export async function enviarMensagemLumiStream(
       custom_prompt: params.customPrompt || null,
       minutos_restantes:
         params.minutosRestantes !== undefined ? params.minutosRestantes : undefined,
+      model: params.model || 'gemini-3.8-flash',
+      modo_agente: params.modoAgente || 'agente_geral',
+      history: params.history || [],
     }),
     signal: params.signal,
   })
 
-  // Decodifica headers SSE contendo metadados unificados
   const etapaHeader = (res.headers.get('X-Etapa-Socratica') || undefined) as
     | EtapaSocratica
     | undefined
@@ -107,4 +119,69 @@ export async function enviarMensagemLumiStream(
     materia: materiaHeader,
     acoes: acoesHeader,
   }
+}
+
+export interface GerarImagemLumiParams {
+  prompt: string
+  base64Image?: string | null
+  mimeType?: string
+  aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9'
+  criancaIdade?: number
+}
+
+export interface GerarImagemLumiResult {
+  ok: boolean
+  model: string
+  imageUrl: string
+  caption: string
+}
+
+export async function gerarOuEditarImagemLumi(
+  params: GerarImagemLumiParams,
+): Promise<GerarImagemLumiResult> {
+  const res = await localFetch('/api/lumi/image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.imageUrl) {
+    throw new Error(
+      data.error || 'Não foi possível criar ou editar a imagem agora. Tente novamente!',
+    )
+  }
+
+  return data
+}
+
+export interface GerarMusicaLumiParams {
+  prompt: string
+  durationType?: 'clip' | 'full'
+  criancaIdade?: number
+}
+
+export interface GerarMusicaLumiResult {
+  ok: boolean
+  model: string
+  audioDataUri: string
+  mimeType: string
+  lyrics: string
+}
+
+export async function gerarMusicaLumi(
+  params: GerarMusicaLumiParams,
+): Promise<GerarMusicaLumiResult> {
+  const res = await localFetch('/api/lumi/music', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.audioDataUri) {
+    throw new Error(data.error || 'Não foi possível compor a música agora. Tente novamente!')
+  }
+
+  return data
 }

@@ -3,7 +3,7 @@ import { createServer } from 'http'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { WebSocketServer, WebSocket } from 'ws'
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai'
+import { GoogleGenAI, LiveServerMessage, Modality, Type } from '@google/genai'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -51,6 +51,7 @@ function resolveGeminiVoice(voiceInput?: string): GeminiVoiceName {
 
 // In-memory TTS cache to make repeated phrases instantaneous
 const ttsAudioCache = new Map<string, string>()
+let ttsRateLimitedUntil = 0
 
 function buildLumiSystemInstruction(params: {
   criancaNome?: string
@@ -61,6 +62,8 @@ function buildLumiSystemInstruction(params: {
   materia?: string
   etapaSocratica?: string
   customPrompt?: string
+  modoAgente?: 'agente_geral' | 'tutor_socratico'
+  memorias?: Array<{ tipo?: string; conteudo?: string }>
 }): string {
   const nome = params.criancaNome || 'Amigo(a)'
   const primeiroNome = nome.split(' ')[0]
@@ -70,31 +73,104 @@ function buildLumiSystemInstruction(params: {
   const obs = params.criancaObservacoes || ''
   const materia = params.materia || 'ciencias'
   const etapa = params.etapaSocratica || 'entender'
+  const modoAgente = params.modoAgente || 'agente_geral'
 
-  return `Você é a Lumi, uma tutora educacional socrática infantil com voz humana real, super calorosa, afetuosa, paciente e entusiasmada.
+  const listaMemorias =
+    params.memorias && params.memorias.length > 0
+      ? params.memorias
+          .slice(0, 12)
+          .map((m) => `- [${m.tipo || 'fato'}]: ${m.conteudo}`)
+          .join('\n')
+      : '- Ainda aprendendo os gostos e preferências desta criança.'
+
+  const filtroFaixaEtaria =
+    idade <= 8
+      ? `FILTRO DE IDADE (5 a 8 anos — Primeira Infância):
+- Use frases curtas, vocabulário lúdico, acolhedor, concreto e cheio de encantamento.
+- Proibido qualquer tema assustador, violência, terror, linguagem adulta, gírias pesadas ou conceitos abstratos complexos sem analogia infantil.`
+      : idade <= 12
+        ? `FILTRO DE IDADE (9 a 12 anos — Pré-Adolescência):
+- Use linguagem curiosa, dinâmica, encorajadora e investigativa (estilo explorador/cientista).
+- Proibido conteúdo adulto, violência explícita, armas, drogas, apostas, automutilação, cyberbullying ou temas impróprios para menores.`
+        : `FILTRO DE IDADE (13 a 16 anos — Adolescente):
+- Use linguagem inteligente, respeitosa, madura e parceira (estilo mentor intelectual e criativo).
+- Proibido conteúdo adulto/NSFW, violência gráfica, automutilação, substâncias ilícitas, fraudes ou atividades perigosas.`
+
+  return `Você é a Lumi ✨, uma Agente de Inteligência Artificial Completa, carinhosa e super inteligente que conversa com crianças e jovens, aprende continuamente sobre o usuário e possui filtros de segurança rigorosos para a idade de ${idade} anos.
 Você fala SEMPRE em Português do Brasil (pt-BR), com sotaque brasileiro natural, expressivo e acolhedor.
 
-PERFIL DA CRIANÇA QUE ESTÁ CONVERSANDO COM VOCÊ:
+PERFIL DO USUÁRIO ATUAL:
 - Nome: ${nome} (chame carinhosamente de ${primeiroNome})
 - Idade: ${idade} anos (${serie})
 - Região/Localidade: ${localidade}
-${obs ? `- Interesses e estilo de aprendizagem: ${obs}` : ''}
-- Matéria atual em foco: ${materia}
-- Etapa Socrática atual: ${etapa}
-${params.customPrompt ? `- Diretrizes adicionais: ${params.customPrompt}` : ''}
+${obs ? `- Perfil e interesses cadastrados: ${obs}` : ''}
+- Matéria/Tema atual: ${materia}
+- Modo atual: ${modoAgente === 'agente_geral' ? 'AGENTE IA GERAL COM FILTRO INFANTIL (Responde qualquer curiosidade, cria histórias, poemas, códigos, traduções, piadas, resumos, ideias criativas e ajuda em estudos)' : `TUTOR SOCRÁTICO (Etapa: ${etapa})`}
 
-REGRAS DE OURO PARA SUA FALA EM TEMPO REAL:
-1. FALE CURTO E DIRETO: Responda em no máximo 1 a 3 frases curtas por turno. Crianças precisam de diálogo dinâmico e fluido, nunca de monólogos longos.
-2. MÉTODO SOCRÁTICO PURO: NUNCA dê a resposta pronta de uma tarefa ou conta! Use analogias lúdicas (como fatias de pizza, blocos de montar, cozinha solar das plantas, animais, esportes) e termine sempre com UMA pergunta curiosa e simples que ajude ${primeiroNome} a descobrir a resposta pensando sozinho(a).
-3. PROIBIDO NARRAR O MÉTODO: Nunca diga "agora vou usar o método socrático", "na etapa de contextualizar" ou tags técnicas em voz alta. Não leia colchetes nem tags em voz alta.
-4. TOM DE VOZ: Sorria com a voz! Seja encorajadora, comemore cada tentativa da criança, acolha dúvidas ou erros com muito carinho ("Quase lá!", "Boa pista!", "Vamos pensar juntos nesse pedacinho!").`
+MEMÓRIAS QUE VOCÊ JÁ APRENDEU SOBRE ${primeiroNome.toUpperCase()}:
+${listaMemorias}
+
+${filtroFaixaEtaria}
+
+DIRETRIZES DE COMPORTAMENTO:
+1. APRENDIZADO CONTÍNUO: Use naturalmente o que você já sabe sobre ${primeiroNome} (seus gostos, bichinhos, matérias favoritas, amigos ou estilo de aprender) para personalizar exemplos! Quando ${primeiroNome} te contar algo novo sobre si mesmo(a), demonstre entusiasmo genuíno por aprender isso.
+2. ${
+    modoAgente === 'agente_geral'
+      ? `AGENTE DE IA COMPLETA E PRESTATIVA: ${primeiroNome} pode pedir tudo o que pediria a uma IA comum — explicar como funcionam buracos negros, inventar histórias personalizadas, ensinar programação (Python, Scratch, jogos), traduzir idiomas, criar charadas, planejar estudos, escrever letras de músicas ou tirar dúvidas gerais! Responda de forma completa, clara, criativa e 100% segura para ${idade} anos.`
+      : `MÉTODO SOCRÁTICO: Ajude passo a passo com pistas e perguntas instigantes sem entregar a resposta final de mão beijada logo de cara.`
+  }
+3. GUARDRAIL DE SEGURANÇA INFANTIL: Se ${primeiroNome} pedir algo perigoso, violento, adulto ou inadequado para ${idade} anos, recuse com muito carinho e proponha uma alternativa segura e divertida.`
+}
+
+// Helper to check if a prompt is safe for children before generating images or music
+function isChildSafeCreativePrompt(prompt: string): { safe: boolean; reason?: string } {
+  const norm = prompt
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+
+  const blockedTerms = [
+    'sangue',
+    'violencia',
+    'arma',
+    'pistola',
+    'faca',
+    'morte',
+    'matar',
+    'suicidio',
+    'nudez',
+    'pelado',
+    'pelada',
+    'sexy',
+    'porn',
+    'nsfw',
+    'droga',
+    'cocaina',
+    'maconha',
+    'bebida alcoolica',
+    'terror macabro',
+    'gore',
+  ]
+
+  for (const term of blockedTerms) {
+    if (norm.includes(term)) {
+      return {
+        safe: false,
+        reason:
+          'Ops! Como sou uma IA segura para a sua idade, não posso criar conteúdos com temas violentos, assustadores ou adultos. Que tal criarmos algo mágico, divertido ou científico? ✨',
+      }
+    }
+  }
+  return { safe: true }
 }
 
 async function startServer() {
   const app = express()
-  app.use(express.json({ limit: '10mb' }))
+  app.use(express.json({ limit: '25mb' }))
 
-  // TTS Endpoint powered by gemini-3.8-flash-lite-tts
+  // ===========================================================================
+  // 1. TTS Endpoint powered by gemini-3.8-flash-lite-tts (with 429 cooldown)
+  // ===========================================================================
   const handleTtsRequest = async (req: express.Request, res: express.Response) => {
     try {
       const { text, voice } = req.body || {}
@@ -118,6 +194,21 @@ async function startServer() {
           voice: geminiVoice,
           model: 'gemini-3.8-flash-lite-tts',
           audio_base64: ttsAudioCache.get(cacheKey),
+          audio_url: null,
+        })
+        return
+      }
+
+      // If we are inside a 429 rate-limit window, return immediately so client uses Web Speech fallback
+      if (Date.now() < ttsRateLimitedUntil) {
+        res.status(200).json({
+          cached: false,
+          rate_limited: true,
+          retry_after_ms: Math.max(5000, ttsRateLimitedUntil - Date.now()),
+          format: 'wav',
+          voice: geminiVoice,
+          model: 'gemini-3.8-flash-lite-tts',
+          audio_base64: '',
           audio_url: null,
         })
         return
@@ -168,7 +259,7 @@ async function startServer() {
       }
 
       const dataUri = `data:audio/wav;base64,${base64Audio}`
-      if (ttsAudioCache.size > 200) {
+      if (ttsAudioCache.size > 300) {
         const firstKey = ttsAudioCache.keys().next().value
         if (firstKey) ttsAudioCache.delete(firstKey)
       }
@@ -183,7 +274,21 @@ async function startServer() {
         audio_url: null,
       })
     } catch (error: any) {
-      console.error('[Server TTS Error]:', error?.message || error)
+      const errMsg = String(error?.message || error || '')
+      if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota')) {
+        ttsRateLimitedUntil = Date.now() + 26000
+        res.status(200).json({
+          cached: false,
+          rate_limited: true,
+          retry_after_ms: 26000,
+          format: 'wav',
+          voice: 'Kore',
+          model: 'gemini-3.8-flash-lite-tts',
+          audio_base64: '',
+          audio_url: null,
+        })
+        return
+      }
       res.status(200).json({
         cached: false,
         format: 'wav',
@@ -191,13 +296,382 @@ async function startServer() {
         model: 'gemini-3.8-flash-lite-tts',
         audio_base64: '',
         audio_url: null,
-        error: error?.message || 'Erro ao sintetizar voz IA',
       })
     }
   }
 
   app.post('/api/lumi/tts', handleTtsRequest)
   app.post('/backend/v1/lumi/tts', handleTtsRequest)
+
+  // ===========================================================================
+  // 2. General-Purpose Child-Safe AI Agent Chat + Continuous User Learning
+  //    Supports: gemini-3.8-flash (general), gemini-4-argon (complex), gemini-3.1-flash-lite (fast)
+  // ===========================================================================
+  app.post('/api/lumi/agent-chat', async (req, res) => {
+    try {
+      const {
+        message,
+        history = [],
+        model = 'gemini-3.8-flash',
+        modoAgente = 'agente_geral',
+        crianca = {},
+        memorias = [],
+        customPrompt = '',
+        minutosRestantes,
+      } = req.body || {}
+
+      const cleanMessage = String(message || '').trim()
+      if (!cleanMessage) {
+        res.status(400).json({ error: 'Mensagem vazia.' })
+        return
+      }
+
+      const validModels = ['gemini-3.8-flash', 'gemini-4-argon', 'gemini-3.1-flash-lite']
+      const selectedModel = validModels.includes(model) ? model : 'gemini-3.8-flash'
+
+      const criancaNome = crianca.nome || 'Ana Paula'
+      const criancaIdade = Number(crianca.idade) || 10
+      const criancaSerie = crianca.serie || '5º Ano'
+      const criancaLocalidade = crianca.localidade || 'Brasil'
+      const criancaObs = [crianca.observacoes, crianca.interesses, crianca.acessibilidade]
+        .filter(Boolean)
+        .join(' | ')
+
+      const systemInstruction = `${buildLumiSystemInstruction({
+        criancaNome,
+        criancaIdade,
+        criancaSerie,
+        criancaLocalidade,
+        criancaObservacoes: criancaObs,
+        customPrompt,
+        modoAgente,
+        memorias,
+      })}
+${
+  minutosRestantes !== undefined && minutosRestantes <= 2
+    ? `\nATENÇÃO: Restam apenas ${minutosRestantes} minutos do tempo diário saudável da criança. Ao final da resposta, avise com carinho que o tempo de hoje está terminando para ela descansar os olhos!`
+    : ''
+}
+
+INSTRUÇÃO DE APRENDIZADO CONTÍNUO E RESPOSTA ESTRUTURADA:
+Retorne SEMPRE um JSON válido contendo:
+- "reply": sua resposta completa em Português do Brasil para ${criancaNome.split(' ')[0]} (use emojis acolhedores, parágrafos curtos e claros, nunca coloque tags técnicas como [[ETAPA:...]] no texto).
+- "etapaSocratica": uma das opções: "entender", "contextualizar", "guiar", "praticar", "consolidar".
+- "materia": matéria principal relacionada ("ciencias", "matematica", "portugues", "historia", "geografia", "programacao", "artes", "musica" ou "geral").
+- "memoriasAprendidas": lista de novos fatos que você aprendeu sobre a criança NESTA mensagem (ex: gostos, animais de estimação, esportes, comidas, amigos, sonhos, estilo de aprendizagem, dificuldades ou conquistas). Se a criança contou algo sobre ela mesma ou pediu para você lembrar de algo, extraia aqui! Se não houver fato pessoal novo nesta mensagem, retorne [].
+- "novosConhecimentos": lista de conceitos ou curiosidades que a criança aprendeu ou explorou nesta mensagem (máximo 2 itens, ou []).
+- "agendamentos": se a criança pediu para anotar/lembrar uma prova, tarefa ou compromisso na agenda, inclua aqui (ou []).
+- "bloqueadoPorIdade": boolean (true se a pergunta violou o filtro de segurança para ${criancaIdade} anos).`
+
+      const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
+
+      if (Array.isArray(history)) {
+        for (const h of history.slice(-14)) {
+          const text = String(h?.text || '').trim()
+          if (!text) continue
+          contents.push({
+            role: h?.role === 'model' || h?.sender === 'lumi' ? 'model' : 'user',
+            parts: [{ text }],
+          })
+        }
+      }
+
+      contents.push({
+        role: 'user',
+        parts: [{ text: cleanMessage }],
+      })
+
+      const ai = getGenAIClient()
+      const response = await ai.models.generateContent({
+        model: selectedModel,
+        contents,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              reply: {
+                type: Type.STRING,
+                description: 'Resposta acolhedora, segura para a idade e personalizada da Lumi.',
+              },
+              etapaSocratica: {
+                type: Type.STRING,
+                description: 'entender | contextualizar | guiar | praticar | consolidar',
+              },
+              materia: {
+                type: Type.STRING,
+                description: 'ciencias | matematica | portugues | historia | geografia | geral',
+              },
+              memoriasAprendidas: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    tipo: {
+                      type: Type.STRING,
+                      description: 'preferencia | interesse | estilo_aprendizagem | conquista | contexto',
+                    },
+                    conteudo: {
+                      type: Type.STRING,
+                      description: 'Fato aprendido sobre o usuário em uma frase clara.',
+                    },
+                  },
+                  required: ['tipo', 'conteudo'],
+                },
+              },
+              novosConhecimentos: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    titulo: { type: Type.STRING },
+                    categoria: { type: Type.STRING },
+                    conteudo: { type: Type.STRING },
+                  },
+                  required: ['titulo', 'categoria', 'conteudo'],
+                },
+              },
+              agendamentos: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    titulo: { type: Type.STRING },
+                    descricao: { type: Type.STRING },
+                    tipo: { type: Type.STRING },
+                  },
+                  required: ['titulo'],
+                },
+              },
+              bloqueadoPorIdade: {
+                type: Type.BOOLEAN,
+              },
+            },
+            required: ['reply', 'etapaSocratica', 'materia', 'memoriasAprendidas'],
+          },
+        },
+      })
+
+      const rawJson = response.text || '{}'
+      let parsed: any = {}
+      try {
+        parsed = JSON.parse(rawJson)
+      } catch {
+        parsed = {
+          reply: rawJson,
+          etapaSocratica: 'entender',
+          materia: 'geral',
+          memoriasAprendidas: [],
+        }
+      }
+
+      res.json({
+        ok: true,
+        model: selectedModel,
+        modoAgente,
+        reply: parsed.reply || 'Estou aqui com você! O que mais vamos descobrir juntos? ✨',
+        etapaSocratica: parsed.etapaSocratica || 'entender',
+        materia: parsed.materia || 'ciencias',
+        memoriasAprendidas: Array.isArray(parsed.memoriasAprendidas)
+          ? parsed.memoriasAprendidas
+          : [],
+        novosConhecimentos: Array.isArray(parsed.novosConhecimentos)
+          ? parsed.novosConhecimentos
+          : [],
+        agendamentos: Array.isArray(parsed.agendamentos) ? parsed.agendamentos : [],
+        bloqueadoPorIdade: Boolean(parsed.bloqueadoPorIdade),
+      })
+    } catch (error: any) {
+      res.status(500).json({
+        ok: false,
+        error: error?.message || 'Falha ao consultar agente Gemini.',
+      })
+    }
+  })
+
+  // ===========================================================================
+  // 3. Create & Edit Child-Safe Images powered by gemini-nano-banana-2.1
+  // ===========================================================================
+  app.post('/api/lumi/image', async (req, res) => {
+    try {
+      const {
+        prompt,
+        base64Image,
+        mimeType = 'image/png',
+        aspectRatio = '1:1',
+        criancaIdade = 10,
+      } = req.body || {}
+
+      const cleanPrompt = String(prompt || '').trim()
+      if (!cleanPrompt) {
+        res.status(400).json({ error: 'Descreva o que você quer criar ou editar na imagem!' })
+        return
+      }
+
+      const safety = isChildSafeCreativePrompt(cleanPrompt)
+      if (!safety.safe) {
+        res.status(400).json({ error: safety.reason })
+        return
+      }
+
+      const ageStyleHint =
+        Number(criancaIdade) <= 8
+          ? 'Colorful, friendly, cute, storybook illustration style safe for young children.'
+          : Number(criancaIdade) <= 12
+            ? 'Vibrant, imaginative, detailed educational and adventure illustration safe for kids.'
+            : 'High-quality, artistic, inspiring visual concept safe for teens.'
+
+      const parts: any[] = []
+      if (base64Image && typeof base64Image === 'string') {
+        const strippedBase64 = base64Image.includes(',')
+          ? base64Image.split(',')[1]
+          : base64Image
+        parts.push({
+          inlineData: {
+            data: strippedBase64,
+            mimeType: mimeType || 'image/png',
+          },
+        })
+        parts.push({
+          text: `Edit this image safely for a ${criancaIdade}-year-old student: ${cleanPrompt}. (${ageStyleHint})`,
+        })
+      } else {
+        parts.push({
+          text: `Create a child-safe, inspiring image for a ${criancaIdade}-year-old student: ${cleanPrompt}. (${ageStyleHint})`,
+        })
+      }
+
+      const ai = getGenAIClient()
+      const response = await ai.models.generateContent({
+        model: 'gemini-nano-banana-2.1',
+        contents: { parts },
+        config: {
+          imageConfig: {
+            aspectRatio: ['1:1', '3:4', '4:3', '9:16', '16:9'].includes(aspectRatio)
+              ? aspectRatio
+              : '1:1',
+            imageSize: '1K',
+          },
+        },
+      })
+
+      let imageUrl = ''
+      let captionText = ''
+
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          const outMime = part.inlineData.mimeType || 'image/png'
+          imageUrl = `data:${outMime};base64,${part.inlineData.data}`
+        } else if (part.text) {
+          captionText += part.text
+        }
+      }
+
+      if (!imageUrl) {
+        res.status(500).json({
+          error:
+            captionText ||
+            'Não consegui gerar a imagem agora. Tente descrever com outras palavras!',
+        })
+        return
+      }
+
+      res.json({
+        ok: true,
+        model: 'gemini-nano-banana-2.1',
+        imageUrl,
+        caption:
+          captionText.trim() ||
+          (base64Image
+            ? `Prontinho! Editei a imagem com o seu pedido: "${cleanPrompt}" 🎨✨`
+            : `Aqui está a criação especial que fiz para você: "${cleanPrompt}" 🎨✨`),
+      })
+    } catch (error: any) {
+      res.status(500).json({
+        error:
+          error?.message ||
+          'Não foi possível gerar ou editar a imagem agora. Tente novamente em instantes.',
+      })
+    }
+  })
+
+  // ===========================================================================
+  // 4. Child-Safe Music Generation powered by lyria-3-clip-preview / lyria-3-pro-preview
+  // ===========================================================================
+  app.post('/api/lumi/music', async (req, res) => {
+    try {
+      const { prompt, durationType = 'clip', criancaIdade = 10 } = req.body || {}
+      const cleanPrompt = String(prompt || '').trim()
+      if (!cleanPrompt) {
+        res.status(400).json({ error: 'Descreva o estilo ou tema da música que você quer criar!' })
+        return
+      }
+
+      const safety = isChildSafeCreativePrompt(cleanPrompt)
+      if (!safety.safe) {
+        res.status(400).json({ error: safety.reason })
+        return
+      }
+
+      const selectedModel =
+        durationType === 'full' ? 'lyria-3-pro-preview' : 'lyria-3-clip-preview'
+
+      const enrichedPrompt = `Create a joyful, inspiring, age-appropriate song (${
+        Number(criancaIdade) <= 9 ? 'playful kids music' : 'upbeat youth music'
+      }) in Brazilian Portuguese about: ${cleanPrompt}`
+
+      const ai = getGenAIClient()
+      const responseStream = await ai.models.generateContentStream({
+        model: selectedModel,
+        contents: enrichedPrompt,
+        config: {
+          responseModalities: [Modality.AUDIO],
+        },
+      })
+
+      let audioBase64 = ''
+      let mimeType = 'audio/wav'
+      let lyrics = ''
+
+      for await (const chunk of responseStream) {
+        const parts = chunk.candidates?.[0]?.content?.parts
+        if (!parts) continue
+        for (const part of parts) {
+          if (part.inlineData?.data) {
+            if (part.inlineData.mimeType) {
+              mimeType = part.inlineData.mimeType
+            }
+            audioBase64 += part.inlineData.data
+          }
+          if (part.text) {
+            lyrics += part.text
+          }
+        }
+      }
+
+      if (!audioBase64) {
+        res.status(500).json({
+          error: 'Não foi possível compor a música agora. Tente descrever o ritmo e o tema novamente!',
+        })
+        return
+      }
+
+      res.json({
+        ok: true,
+        model: selectedModel,
+        audioDataUri: `data:${mimeType};base64,${audioBase64}`,
+        mimeType,
+        lyrics: lyrics.trim(),
+      })
+    } catch (error: any) {
+      res.status(500).json({
+        error:
+          error?.message ||
+          'Erro ao compor música com o Lyria 3. Tente novamente em alguns segundos!',
+      })
+    }
+  })
 
   const httpServer = createServer(app)
 
@@ -247,6 +721,7 @@ async function startServer() {
         criancaObservacoes,
         materia,
         etapaSocratica,
+        modoAgente: 'agente_geral',
       })
 
       liveSession = await ai.live.connect({
@@ -275,7 +750,6 @@ async function startServer() {
               const serverContent = message.serverContent
               if (!serverContent) return
 
-              // 1. Model audio chunks (24kHz PCM16 LE base64)
               const parts = serverContent.modelTurn?.parts || []
               for (const part of parts) {
                 if (part.inlineData?.data) {
@@ -292,7 +766,6 @@ async function startServer() {
                 }
               }
 
-              // 2. Live input audio transcription (what the child said)
               if (serverContent.inputTranscription?.text) {
                 sendToClient({
                   type: 'input_transcription',
@@ -300,7 +773,6 @@ async function startServer() {
                 })
               }
 
-              // 3. Live output audio transcription (what Lumi is speaking)
               if (serverContent.outputTranscription?.text) {
                 sendToClient({
                   type: 'output_transcription',
@@ -308,14 +780,12 @@ async function startServer() {
                 })
               }
 
-              // 4. Barge-in / Interruption
               if (serverContent.interrupted) {
                 sendToClient({
                   type: 'interrupted',
                 })
               }
 
-              // 5. Turn completion
               if (serverContent.turnComplete) {
                 sendToClient({
                   type: 'turn_complete',
@@ -326,7 +796,6 @@ async function startServer() {
             }
           },
           onerror: (err: any) => {
-            console.error('[Gemini Live Session Error]:', err)
             sendToClient({
               type: 'error',
               message: err?.message || 'Erro na sessão de voz em tempo real da Lumi.',
@@ -340,7 +809,6 @@ async function startServer() {
         },
       })
     } catch (connErr: any) {
-      console.error('[Failed to connect Gemini Live]:', connErr)
       sendToClient({
         type: 'error',
         message:
@@ -415,7 +883,9 @@ async function startServer() {
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Lumi Server] Running on http://0.0.0.0:${PORT} (Gemini Live + TTS enabled)`)
+    console.log(
+      `[Lumi Server] Running on http://0.0.0.0:${PORT} (Gemini Agent Chat + Live Voice + Image + Music enabled)`,
+    )
   })
 }
 

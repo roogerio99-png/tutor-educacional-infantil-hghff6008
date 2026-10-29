@@ -113,11 +113,14 @@ export function limparTextoParaTTS(rawText: string): string {
     .trim()
 }
 
+// Controle de cooldown caso o modelo TTS retorne 429 (limite de requisições por minuto)
+let ttsCooldownUntil = 0
+
 /**
- * Divide uma resposta maior em frases curtas para que o preload e reprodução
- * possam começar logo na primeira frase enquanto as seguintes carregam.
+ * Agrupa o texto em blocos maiores (até 8 frases por requisição) para economizar
+ * a cota de requisições por minuto (RPM) do modelo gemini-3.8-flash-lite-tts.
  */
-export function dividirEmFrasesParaAudio(texto: string, maxPorLote = 2): string[] {
+export function dividirEmFrasesParaAudio(texto: string, maxPorLote = 8): string[] {
   const limpo = limparTextoParaTTS(texto)
   if (!limpo) return []
   const matches = limpo.match(/[^.!?\n]+[.!?]+(?:\s+|$)|[^.!?\n]+$/g) || [limpo]
@@ -166,6 +169,11 @@ export async function obterAudioLumiUrl(params: GerarAudioLumiParams): Promise<s
     return memoryAudioCache.get(key) || null
   }
 
+  // Se estiver em cooldown de rate-limit (429), retorna null imediatamente para usar o fallback Web Speech sem erro
+  if (Date.now() < ttsCooldownUntil) {
+    return null
+  }
+
   // 2. Se já existe uma requisição em andamento para o mesmo texto, reaproveita a Promise
   if (inFlightRequests.has(key)) {
     return inFlightRequests.get(key)!
@@ -173,15 +181,23 @@ export async function obterAudioLumiUrl(params: GerarAudioLumiParams): Promise<s
 
   const reqPromise = (async () => {
     try {
-      const res = await pb.send<GerarAudioLumiResponse>('/backend/v1/lumi/tts', {
-        method: 'POST',
-        body: JSON.stringify({
-          text: textClean,
-          voice,
-          model,
-          speed,
-        }),
-      })
+      const res = await pb.send<GerarAudioLumiResponse & { rate_limited?: boolean; retry_after_ms?: number }>(
+        '/backend/v1/lumi/tts',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            text: textClean,
+            voice,
+            model,
+            speed,
+          }),
+        },
+      )
+
+      if (res.rate_limited) {
+        ttsCooldownUntil = Date.now() + (res.retry_after_ms || 25000)
+        return null
+      }
 
       const finalUrl = res.audio_base64 || res.audio_url || null
       if (finalUrl) {
@@ -189,8 +205,7 @@ export async function obterAudioLumiUrl(params: GerarAudioLumiParams): Promise<s
         return finalUrl
       }
       return null
-    } catch (err) {
-      console.warn('[LUMI TTS SERVICE] Falha ao obter áudio do servidor:', err)
+    } catch {
       return null
     } finally {
       inFlightRequests.delete(key)
@@ -202,12 +217,12 @@ export async function obterAudioLumiUrl(params: GerarAudioLumiParams): Promise<s
 }
 
 /**
- * Inicia preload proativo de um texto (ou frases) sem tocar imediatamente
+ * Inicia preload controlado apenas de textos completos quando não estiver em cooldown
  */
 export function preloadAudioLumi(text: string, voice?: VozIaNome): void {
-  const lotes = dividirEmFrasesParaAudio(text)
+  if (Date.now() < ttsCooldownUntil) return
+  const limpo = limparTextoParaTTS(text)
+  if (!limpo || limpo.length < 10) return
   const vozAlvo = voice && voice !== 'nova' ? voice : getVozIaLumiPreferida()
-  lotes.forEach((lote) => {
-    obterAudioLumiUrl({ text: lote, voice: vozAlvo }).catch(() => {})
-  })
+  obterAudioLumiUrl({ text: limpo, voice: vozAlvo }).catch(() => {})
 }

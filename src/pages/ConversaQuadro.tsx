@@ -2,7 +2,15 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCrianca } from '@/contexts/CriancaContext'
-import { enviarMensagemLumiStream, enviarMensagemLumiSync } from '@/services/lumiAgent'
+import {
+  enviarMensagemLumiStream,
+  enviarMensagemLumiSync,
+  gerarOuEditarImagemLumi,
+  gerarMusicaLumi,
+  type ModeloGeminiAgente,
+  type ModoAgenteLumi,
+} from '@/services/lumiAgent'
+import { listarMemorias, ensinarMemoria, excluirMemoria } from '@/services/memorias'
 import { obterPromptAtivo } from '@/services/prompts'
 import { verificarCheckinHoje, registrarCheckinEmocional } from '@/services/checkinEmocional'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
@@ -17,6 +25,7 @@ import type {
   HumorEmocional,
   MissaoBnccRecord,
   MetaKanban,
+  MemoriaRecord,
 } from '@/types'
 import { TrilhaEtapasSocraticas } from '@/components/TrilhaEtapasSocraticas'
 import { CartaoAcaoLumi } from '@/components/CartaoAcaoLumi'
@@ -49,6 +58,15 @@ import {
   ChevronUp,
   ArrowRight,
   Mic,
+  Brain,
+  Image as ImageIcon,
+  Music,
+  ShieldCheck,
+  Plus,
+  Trash2,
+  Upload,
+  Wand2,
+  X,
 } from 'lucide-react'
 
 interface ChatMessage {
@@ -59,6 +77,10 @@ interface ChatMessage {
   visualHint?: string
   etapa?: EtapaSocratica
   acoes?: AcaoLumiExecutada[]
+  imageUrl?: string
+  audioUrl?: string
+  lyrics?: string
+  modelUsed?: string
 }
 
 interface RitmoPreset {
@@ -97,6 +119,8 @@ const PRESETS_RITMO: RitmoPreset[] = [
 
 const STORAGE_ETAPA_KEY = 'lumi_etapa_socratica_ativa'
 const STORAGE_MATERIA_KEY = 'lumi_materia_detectada_ativa'
+const STORAGE_MODO_AGENTE_KEY = 'lumi_modo_agente_preferido'
+const STORAGE_MODELO_GEMINI_KEY = 'lumi_modelo_gemini_preferido'
 
 export const ConversaQuadro: React.FC = () => {
   const location = useLocation()
@@ -106,7 +130,7 @@ export const ConversaQuadro: React.FC = () => {
   const { tipoConta, permissoes } = useAuth()
 
   // Determina qual espaço segregado está ativo pela rota:
-  // '/conversa' -> Foco 100% na conversa com a Lumi (Voz ou Texto)
+  // '/conversa' -> Foco 100% na conversa com a Lumi (Voz ou Texto + Agente Geral Seguro)
   // '/quadro'   -> Foco no Quadro Visual, Missões BNCC e Caderninho
   const isModoQuadro = location.pathname.startsWith('/quadro')
 
@@ -116,8 +140,52 @@ export const ConversaQuadro: React.FC = () => {
   // Gaveta recolhida por padrão para ferramentas de teste/telemetria do responsável
   const [mostrarPainelLaboratorioPais, setMostrarPainelLaboratorioPais] = useState(false)
 
-  // Modal leve de Respiração (Momento Calma) acessível por 1 botão na conversa
+  // Modal leve de Respiração (Momento Calma)
   const [modalCalmaAberto, setModalCalmaAberto] = useState(false)
+
+  // Modo Agente da Lumi: 'agente_geral' (IA Completa com filtro de idade + aprendizado contínuo) vs 'tutor_socratico'
+  const [modoAgente, setModoAgente] = useState<ModoAgenteLumi>(() => {
+    try {
+      const salvo = localStorage.getItem(STORAGE_MODO_AGENTE_KEY)
+      return salvo === 'tutor_socratico' ? 'tutor_socratico' : 'agente_geral'
+    } catch {
+      return 'agente_geral'
+    }
+  })
+
+  // Modelo Gemini selecionado: 'gemini-3.8-flash' | 'gemini-4-argon' | 'gemini-3.1-flash-lite'
+  const [modeloGemini, setModeloGemini] = useState<ModeloGeminiAgente>(() => {
+    try {
+      const salvo = localStorage.getItem(STORAGE_MODELO_GEMINI_KEY) as ModeloGeminiAgente
+      if (
+        salvo === 'gemini-3.8-flash' ||
+        salvo === 'gemini-4-argon' ||
+        salvo === 'gemini-3.1-flash-lite'
+      ) {
+        return salvo
+      }
+      return 'gemini-3.8-flash'
+    } catch {
+      return 'gemini-3.8-flash'
+    }
+  })
+
+  // Memórias aprendidas pela Lumi sobre a criança (aprendizado contínuo)
+  const [memoriasCrianca, setMemoriasCrianca] = useState<MemoriaRecord[]>([])
+  const [modalMemoriasAberto, setModalMemoriasAberto] = useState(false)
+  const [novoFatoTexto, setNovoFatoTexto] = useState('')
+  const [novoFatoTipo, setNovoFatoTipo] = useState<MemoriaRecord['tipo']>('preferencia')
+  const [salvandoMemoria, setSalvandoMemoria] = useState(false)
+
+  // Estúdio Criativo (Imagens com gemini-nano-banana-2.1 e Música com Lyria 3)
+  const [modalEstudioAberto, setModalEstudioAberto] = useState<'imagem' | 'musica' | null>(null)
+  const [promptCriativo, setPromptCriativo] = useState('')
+  const [imagemParaEditar, setImagemParaEditar] = useState<string | null>(null)
+  const [aspectRatioImagem, setAspectRatioImagem] = useState<'1:1' | '4:3' | '16:9'>('1:1')
+  const [duracaoMusica, setDuracaoMusica] = useState<'clip' | 'full'>('clip')
+  const [gerandoCriativo, setGerandoCriativo] = useState(false)
+  const [erroCriativo, setErroCriativo] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState('')
@@ -135,7 +203,7 @@ export const ConversaQuadro: React.FC = () => {
     }
   })
 
-  // Visão no chat: 'texto' (chat simples com bolhas) vs 'orbe' (Lumi Live Orbe de Voz Real)
+  // Visão no chat: 'texto' vs 'orbe'
   const [visaoChat, setVisaoChat] = useState<'texto' | 'orbe'>(() => {
     try {
       const salvo = localStorage.getItem('lumi_modo_conversacao_voz')
@@ -244,7 +312,7 @@ export const ConversaQuadro: React.FC = () => {
   const [salvandoCheckin, setSalvandoCheckin] = useState(false)
   const [humorHoje, setHumorHoje] = useState<HumorEmocional | null>(null)
 
-  // Etapa Socrática e Matéria Detectada (compartilhadas entre /conversa e /quadro)
+  // Etapa Socrática e Matéria Detectada
   const [etapaAtual, setEtapaAtualState] = useState<EtapaSocratica>(() => {
     try {
       return (localStorage.getItem(STORAGE_ETAPA_KEY) as EtapaSocratica) || 'entender'
@@ -280,6 +348,63 @@ export const ConversaQuadro: React.FC = () => {
   }, [])
 
   const [topicoQuadroCustom, setTopicoQuadroCustom] = useState<string>('')
+
+  // Carrega as memórias aprendidas da criança selecionada
+  const recarregarMemorias = useCallback(async () => {
+    if (!criancaSelecionada?.id) return
+    try {
+      const lista = await listarMemorias(criancaSelecionada.id)
+      setMemoriasCrianca(lista)
+    } catch {
+      // ignore
+    }
+  }, [criancaSelecionada?.id])
+
+  useEffect(() => {
+    recarregarMemorias()
+  }, [recarregarMemorias])
+
+  const handleEnsinarNovoFato = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!criancaSelecionada?.id || !novoFatoTexto.trim() || salvandoMemoria) return
+    try {
+      setSalvandoMemoria(true)
+      await ensinarMemoria(criancaSelecionada.id, novoFatoTexto.trim(), novoFatoTipo)
+      setNovoFatoTexto('')
+      await recarregarMemorias()
+    } catch {
+      // ignore
+    } finally {
+      setSalvandoMemoria(false)
+    }
+  }
+
+  const handleRemoverMemoria = async (id: string) => {
+    try {
+      await excluirMemoria(id)
+      setMemoriasCrianca((prev) => prev.filter((m) => m.id !== id))
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleTrocarModoAgente = (novo: ModoAgenteLumi) => {
+    setModoAgente(novo)
+    try {
+      localStorage.setItem(STORAGE_MODO_AGENTE_KEY, novo)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleTrocarModeloGemini = (novo: ModeloGeminiAgente) => {
+    setModeloGemini(novo)
+    try {
+      localStorage.setItem(STORAGE_MODELO_GEMINI_KEY, novo)
+    } catch {
+      // ignore
+    }
+  }
 
   // Rótulo amigável da etapa em curso para a Orbe Live
   const passoAtualAmigavel = useMemo(() => {
@@ -403,14 +528,16 @@ export const ConversaQuadro: React.FC = () => {
     volumeLevel,
     errorMessage: erroLiveVoice,
     permissionDenied: livePermDenied,
-    connect: connectLive,
-    disconnect: disconnectLive,
-    toggleMic: toggleLiveMic,
-    stopOutputPlayback: stopLivePlayback,
+    connectLive,
+    disconnectLive,
+    toggleLiveMic,
+    stopLivePlayback,
   } = useGeminiLiveVoice({
     criancaNome: criancaSelecionada?.nome,
     criancaIdade: criancaSelecionada?.idade,
     criancaSerie: criancaSelecionada?.serie,
+    criancaLocalidade: criancaSelecionada?.localidade,
+    criancaObservacoes: criancaSelecionada?.observacoes,
     criancaInteresses: criancaSelecionada?.interesses,
     criancaAcessibilidade: criancaSelecionada?.acessibilidade,
     materiaAtual: materiaDetectada,
@@ -546,6 +673,125 @@ export const ConversaQuadro: React.FC = () => {
     ],
   )
 
+  // Detecta se a criança pediu diretamente no chat para criar uma imagem ou música
+  const detectarIntencaoCriativaNoTexto = useCallback(
+    (texto: string): 'imagem' | 'musica' | null => {
+      const low = texto.toLowerCase()
+      if (
+        low.startsWith('desenhe ') ||
+        low.startsWith('desenha ') ||
+        low.startsWith('crie uma imagem') ||
+        low.startsWith('cria uma imagem') ||
+        low.startsWith('gere uma imagem') ||
+        low.startsWith('faça um desenho') ||
+        low.startsWith('faca um desenho')
+      ) {
+        return 'imagem'
+      }
+      if (
+        low.startsWith('crie uma música') ||
+        low.startsWith('crie uma musica') ||
+        low.startsWith('cria uma música') ||
+        low.startsWith('componha uma música') ||
+        low.startsWith('faça uma música') ||
+        low.startsWith('faca uma musica')
+      ) {
+        return 'musica'
+      }
+      return null
+    },
+    [],
+  )
+
+  const handleExecutarEstudioCriativo = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const promptLimpo = promptCriativo.trim()
+    if (!promptLimpo || gerandoCriativo) return
+
+    setGerandoCriativo(true)
+    setErroCriativo(null)
+    const horario = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+    try {
+      if (modalEstudioAberto === 'imagem') {
+        const res = await gerarOuEditarImagemLumi({
+          prompt: promptLimpo,
+          base64Image: imagemParaEditar,
+          aspectRatio: aspectRatioImagem,
+          criancaIdade: criancaSelecionada?.idade || 10,
+        })
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `user-img-${Date.now()}`,
+            sender: 'user',
+            text: imagemParaEditar
+              ? `✏️ Editar imagem: "${promptLimpo}"`
+              : `🎨 Criar imagem: "${promptLimpo}"`,
+            timestamp: horario,
+          },
+          {
+            id: `lumi-img-${Date.now() + 1}`,
+            sender: 'lumi',
+            text: res.caption,
+            imageUrl: res.imageUrl,
+            modelUsed: 'gemini-nano-banana-2.1',
+            timestamp: horario,
+          },
+        ])
+        setModalEstudioAberto(null)
+        setPromptCriativo('')
+        setImagemParaEditar(null)
+        if (isModoQuadro) navigate('/conversa')
+      } else if (modalEstudioAberto === 'musica') {
+        const res = await gerarMusicaLumi({
+          prompt: promptLimpo,
+          durationType: duracaoMusica,
+          criancaIdade: criancaSelecionada?.idade || 10,
+        })
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `user-mus-${Date.now()}`,
+            sender: 'user',
+            text: `🎵 Criar música (${duracaoMusica === 'full' ? 'Completa' : 'Clipe 30s'}): "${promptLimpo}"`,
+            timestamp: horario,
+          },
+          {
+            id: `lumi-mus-${Date.now() + 1}`,
+            sender: 'lumi',
+            text: `Compus esta música especial para você sobre "${promptLimpo}"! 🎶✨ Aperte o play abaixo para ouvir!`,
+            audioUrl: res.audioDataUri,
+            lyrics: res.lyrics,
+            modelUsed: res.model,
+            timestamp: horario,
+          },
+        ])
+        setModalEstudioAberto(null)
+        setPromptCriativo('')
+        if (isModoQuadro) navigate('/conversa')
+      }
+    } catch (err: any) {
+      setErroCriativo(err?.message || 'Não foi possível concluir a criação agora. Tente novamente!')
+    } finally {
+      setGerandoCriativo(false)
+    }
+  }
+
+  const handleUploadImagemEdicao = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setImagemParaEditar(reader.result)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
   const enviarTexto = useCallback(
     async (textoParaEnviar: string) => {
       const textoLimpo = textoParaEnviar.trim()
@@ -555,18 +801,122 @@ export const ConversaQuadro: React.FC = () => {
       setMensagemFalandoId(null)
       setLegendaFalando('')
 
+      const horario = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
       const userMsg: ChatMessage = {
         id: Date.now().toString(),
         sender: 'user',
         text: textoLimpo,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: horario,
       }
+
+      const historicoRecente = messages.slice(-12).map((m) => ({
+        role: (m.sender === 'lumi' ? 'model' : 'user') as 'user' | 'model',
+        text: m.text,
+      }))
 
       setMessages((prev) => [...prev, userMsg])
       setInputText('')
       setEnviando(true)
 
+      const intencaoCriativa = detectarIntencaoCriativaNoTexto(textoLimpo)
       const lumiMsgId = (Date.now() + 1).toString()
+
+      // Se pediu diretamente para desenhar/criar uma imagem ou música no chat!
+      if (intencaoCriativa === 'imagem') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: lumiMsgId,
+            sender: 'lumi',
+            text: '🎨 Lumi está desenhando sua imagem com filtro seguro para a sua idade...',
+            timestamp: horario,
+          },
+        ])
+        try {
+          const imgRes = await gerarOuEditarImagemLumi({
+            prompt: textoLimpo,
+            criancaIdade: criancaSelecionada?.idade || 10,
+          })
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === lumiMsgId
+                ? {
+                    ...m,
+                    text: imgRes.caption,
+                    imageUrl: imgRes.imageUrl,
+                    modelUsed: 'gemini-nano-banana-2.1',
+                  }
+                : m,
+            ),
+          )
+        } catch (err: any) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === lumiMsgId
+                ? {
+                    ...m,
+                    text:
+                      err?.message ||
+                      'Não consegui desenhar essa imagem agora, mas podemos tentar descrever de outro jeito! 🎨',
+                  }
+                : m,
+            ),
+          )
+        } finally {
+          setEnviando(false)
+        }
+        return
+      }
+
+      if (intencaoCriativa === 'musica') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: lumiMsgId,
+            sender: 'lumi',
+            text: '🎵 Lumi está compondo uma música original para você com o Lyria 3...',
+            timestamp: horario,
+          },
+        ])
+        try {
+          const musRes = await gerarMusicaLumi({
+            prompt: textoLimpo,
+            durationType: 'clip',
+            criancaIdade: criancaSelecionada?.idade || 10,
+          })
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === lumiMsgId
+                ? {
+                    ...m,
+                    text: `Compus esta música especial para você! 🎶✨ Aperte o play abaixo para escutar!`,
+                    audioUrl: musRes.audioDataUri,
+                    lyrics: musRes.lyrics,
+                    modelUsed: musRes.model,
+                  }
+                : m,
+            ),
+          )
+        } catch (err: any) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === lumiMsgId
+                ? {
+                    ...m,
+                    text:
+                      err?.message ||
+                      'Não consegui compor a música agora, mas posso escrever a letra para você! 🎵',
+                  }
+                : m,
+            ),
+          )
+        } finally {
+          setEnviando(false)
+        }
+        return
+      }
+
       let currentAssistantText = ''
 
       setMessages((prev) => [
@@ -575,7 +925,7 @@ export const ConversaQuadro: React.FC = () => {
           id: lumiMsgId,
           sender: 'lumi',
           text: 'Lumi está pensando com carinho...',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: horario,
         },
       ])
 
@@ -590,6 +940,9 @@ export const ConversaQuadro: React.FC = () => {
             criancaId: criancaSelecionada?.id,
             customPrompt: customPromptText,
             minutosRestantes: minutosRestantesParam,
+            model: modeloGemini,
+            modoAgente,
+            history: historicoRecente,
           },
           {
             onChunk: (_delta, full) => {
@@ -604,11 +957,6 @@ export const ConversaQuadro: React.FC = () => {
               if (visaoChat === 'orbe') {
                 setLegendaFalando(full)
               }
-              if (full.length > 30 && /[.!?]\s*$/.test(full)) {
-                import('@/services/lumiAudioService').then(({ preloadAudioLumi }) => {
-                  preloadAudioLumi(full, vozRealAtiva)
-                })
-              }
             },
           },
         )
@@ -622,7 +970,7 @@ export const ConversaQuadro: React.FC = () => {
           adicionarEventoTelemetria({
             tipo: 'socratica',
             titulo: `Etapa Socrática: ${res.etapa.toUpperCase()}`,
-            detalhe: `Transição pedagógica adaptada à resposta da criança.`,
+            detalhe: `Transição pedagógica adaptada à resposta da criança (${modeloGemini}).`,
             status: 'ativo',
           })
         }
@@ -638,6 +986,7 @@ export const ConversaQuadro: React.FC = () => {
 
         if (res.acoes && res.acoes.length > 0) {
           setAcoesRecentes(res.acoes)
+          recarregarMemorias()
           res.acoes.forEach((ac) => {
             adicionarEventoTelemetria({
               tipo: ac.tipo.includes('agenda') ? 'agenda' : 'subsunçor',
@@ -663,6 +1012,7 @@ export const ConversaQuadro: React.FC = () => {
                   text: textoFinalLumi,
                   etapa: etapaFinal,
                   acoes: res.acoes,
+                  modelUsed: modeloGemini,
                 }
               : m,
           ),
@@ -700,6 +1050,9 @@ export const ConversaQuadro: React.FC = () => {
             criancaId: criancaSelecionada?.id,
             customPrompt: customPromptText,
             minutosRestantes: minutosRestantesParamFallback,
+            model: modeloGemini,
+            modoAgente,
+            history: historicoRecente,
           })
 
           if (syncRes.conversation_id) {
@@ -713,6 +1066,7 @@ export const ConversaQuadro: React.FC = () => {
           }
           if (syncRes.acoes && syncRes.acoes.length > 0) {
             setAcoesRecentes(syncRes.acoes)
+            recarregarMemorias()
           }
 
           const etapaDaFalaSync = detectarEtapaDoTexto(syncRes.content)
@@ -729,6 +1083,7 @@ export const ConversaQuadro: React.FC = () => {
                     text: syncRes.content,
                     etapa: etapaFinalSync,
                     acoes: syncRes.acoes,
+                    modelUsed: modeloGemini,
                   }
                 : m,
             ),
@@ -757,19 +1112,24 @@ export const ConversaQuadro: React.FC = () => {
     },
     [
       enviando,
+      messages,
       conversationId,
       criancaSelecionada?.id,
+      criancaSelecionada?.idade,
       customPromptText,
+      modeloGemini,
+      modoAgente,
       visaoChat,
       modoConversacaoVoz,
       vozHabilitada,
-      vozRealAtiva,
       etapaAtual,
       faseAtual.ttsObrigatorio,
       minutosRestantesUso,
       detectarEtapaDoTexto,
+      detectarIntencaoCriativaNoTexto,
       setEtapaAtual,
       setMateriaDetectada,
+      recarregarMemorias,
       synthSpeak,
       synthStop,
       adicionarEventoTelemetria,
@@ -932,7 +1292,7 @@ export const ConversaQuadro: React.FC = () => {
                   {
                     id: 'welcome',
                     sender: 'lumi',
-                    text: `Oi, ${criancaSelecionada.nome.split(' ')[0]}! 🌟 Que alegria te ver aqui hoje! O que você gostaria de desvendar ou aprender comigo agora?`,
+                    text: `Oi, ${criancaSelecionada.nome.split(' ')[0]}! 🌟 Sou a Lumi, sua Agente de IA pessoal (com filtro seguro para ${criancaSelecionada.idade} anos)! Eu aprendo sobre os seus gostos a cada conversa e posso criar histórias, explicar curiosidades, desenhar imagens, compor músicas, ensinar programação ou ajudar nas tarefas! O que vamos fazer hoje?`,
                     timestamp: new Date().toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
@@ -962,9 +1322,9 @@ export const ConversaQuadro: React.FC = () => {
         setModoRespiracao(true)
         setModalCalmaAberto(true)
       } else if (humor === 'muito_feliz' || humor === 'feliz') {
-        textoBoasVindas += `Que felicidade ver essa sua animação hoje! O que vamos explorar juntos agora?`
+        textoBoasVindas += `Que felicidade ver essa sua animação hoje! O que vamos explorar, criar ou aprender juntos agora?`
       } else {
-        textoBoasVindas += `Estou aqui prontinha para aprender com você, passo a passo e sem pressa. Qual curiosidade vamos descobrir hoje?`
+        textoBoasVindas += `Estou aqui prontinha para aprender com você e responder qualquer curiosidade com filtro seguro para a sua idade. O que vamos descobrir hoje?`
       }
 
       setMessages([
@@ -1032,7 +1392,6 @@ export const ConversaQuadro: React.FC = () => {
     }
   }, [criancaSelecionada])
 
-  // Ao clicar em uma missão lá na aba Quadro & Missões, leva a criança para a conversa e inicia a missão!
   const handleIniciarMissao = (missao: MissaoBnccRecord) => {
     if (missao.materia) {
       const mLow = missao.materia.toLowerCase()
@@ -1061,19 +1420,48 @@ export const ConversaQuadro: React.FC = () => {
     setMetasKanban((prev) => prev.map((m) => (m.id === id ? { ...m, status: novoStatus } : m)))
   }
 
+  const [novaMetaKanbanTexto, setNovaMetaKanbanTexto] = useState('')
   const handleAdicionarMetaKanban = () => {
-    const titulo = prompt('Título da nova meta acadêmica:')
-    if (!titulo || !titulo.trim()) return
+    const titulo = novaMetaKanbanTexto.trim() || 'Nova meta de estudo personalizado'
     const nova: MetaKanban = {
       id: `meta-${Date.now()}`,
-      titulo: titulo.trim(),
+      titulo,
       materia: 'Geral',
       status: 'planejado',
     }
     setMetasKanban((prev) => [...prev, nova])
+    setNovaMetaKanbanTexto('')
   }
 
   const sugestoesRapidas = useMemo(() => {
+    if (modoAgente === 'agente_geral') {
+      if (faseAtual.id === 'fase_1') {
+        return [
+          'Invente uma história mágica com o meu nome!',
+          'Desenhe um gatinho astronauta no espaço 🎨',
+          'Crie uma música alegre sobre os animais 🎵',
+          'Eu adoro dinossauros e desenhar! Lembra disso?',
+          'Por que o céu é azul?',
+        ]
+      }
+      if (faseAtual.id === 'fase_2') {
+        return [
+          'Como funciona um buraco negro no espaço?',
+          'Me ensine a programar um jogo simples em Python 💻',
+          'Desenhe uma cidade futurista cheia de natureza 🎨',
+          'Crie uma música animada sobre os planetas 🎵',
+          'Eu adoro ciência e videogames! Guarde na memória 🧠',
+        ]
+      }
+      return [
+        'Explique computação quântica de forma intuitiva',
+        'Crie um roteiro de estudos para minha semana',
+        'Me desafie com charadas de lógica e programação',
+        'Desenhe uma arte conceitual cyberpunk educativa 🎨',
+        'Componha uma trilha sonora lo-fi para estudar 🎵',
+      ]
+    }
+
     if (faseAtual.id === 'fase_1') {
       return [
         'Qual o som da letra B?',
@@ -1096,7 +1484,7 @@ export const ConversaQuadro: React.FC = () => {
       'Identifique falácias lógicas neste argumento',
       'Como estruturar uma redação nota 1000?',
     ]
-  }, [faseAtual.id])
+  }, [faseAtual.id, modoAgente])
 
   const handleSelecionarMateriaQuadro = (materiaId: string, label: string) => {
     setMateriaDetectada(materiaId)
@@ -1112,7 +1500,7 @@ export const ConversaQuadro: React.FC = () => {
     setConversationId(null)
     setEtapaAtual('entender')
     const primeiroNome = criancaSelecionada?.nome?.split(' ')[0] || 'amigo(a)'
-    const msgNova = `Começando uma nova aventura! O que vamos descobrir hoje, ${primeiroNome}?`
+    const msgNova = `Começando uma nova aventura! O que você quer criar, perguntar ou aprender hoje, ${primeiroNome}?`
     setMessages([
       {
         id: 'nova',
@@ -1210,27 +1598,40 @@ export const ConversaQuadro: React.FC = () => {
           </button>
         </div>
 
-        {/* Botão Calma rápido sempre disponível sem ocupar espaço na tela */}
-        <button
-          type="button"
-          onClick={() => {
-            setModoRespiracao(true)
-            setModalCalmaAberto(true)
-          }}
-          className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-          title="Fazer uma pausa para respirar com calma"
-        >
-          <span>🧘</span>
-          <span>Pausa Calma</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Botão Memórias da Lumi (Aprendizado Contínuo) */}
+          <button
+            type="button"
+            onClick={() => setModalMemoriasAberto(true)}
+            className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+            title="Ver tudo o que a Lumi já aprendeu sobre você"
+          >
+            <Brain className="w-4 h-4 text-purple-600" />
+            <span>Memórias ({memoriasCrianca.length})</span>
+          </button>
+
+          {/* Botão Calma rápido */}
+          <button
+            type="button"
+            onClick={() => {
+              setModoRespiracao(true)
+              setModalCalmaAberto(true)
+            }}
+            className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+            title="Fazer uma pausa para respirar com calma"
+          >
+            <span>🧘</span>
+            <span className="hidden sm:inline">Pausa Calma</span>
+          </button>
+        </div>
       </div>
 
       {/* =====================================================================
-          ESPAÇO 1: CONVERSAR COM A LUMI (Foco 100% na conversa de voz ou texto)
+          ESPAÇO 1: CONVERSAR COM A LUMI (Agente IA Geral com Filtro de Idade)
          ===================================================================== */}
       {!isModoQuadro ? (
         <div className="space-y-4">
-          {/* Check-in Emocional Diário (aparece apenas quando ainda não fez hoje) */}
+          {/* Check-in Emocional Diário */}
           {precisaCheckinHoje && (
             <CheckinEmocionalCard
               nomeCrianca={criancaSelecionada?.nome?.split(' ')[0] || 'Amigo(a)'}
@@ -1239,11 +1640,91 @@ export const ConversaQuadro: React.FC = () => {
             />
           )}
 
-          {/* Trilha Socrática simples e visual */}
-          <TrilhaEtapasSocraticas
-            etapaAtiva={etapaAtual}
-            onSelecionarEtapa={(et) => setEtapaAtual(et)}
-          />
+          {/* Barra do Agente de IA: Modo (Agente Livre vs Tutor Socrático) + Modelo Gemini + Filtro de Idade */}
+          <div className="bg-white rounded-3xl p-3 shadow-xs border border-amber-200/70 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => handleTrocarModoAgente('agente_geral')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  modoAgente === 'agente_geral'
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
+                    : 'text-slate-700 hover:bg-white/70'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Agente IA Livre</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTrocarModoAgente('tutor_socratico')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  modoAgente === 'tutor_socratico'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs'
+                    : 'text-slate-700 hover:bg-white/70'
+                }`}
+              >
+                <span>🦉</span>
+                <span>Tutor Socrático</span>
+              </button>
+            </div>
+
+            {/* Seletor de Inteligência Gemini */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => handleTrocarModeloGemini('gemini-3.1-flash-lite')}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
+                    modeloGemini === 'gemini-3.1-flash-lite'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Respostas instantâneas (gemini-3.1-flash-lite)"
+                >
+                  ⚡ Rápida
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTrocarModeloGemini('gemini-3.8-flash')}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
+                    modeloGemini === 'gemini-3.8-flash'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Inteligência equilibrada para todas as tarefas (gemini-3.8-flash)"
+                >
+                  🌟 Geral
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTrocarModeloGemini('gemini-4-argon')}
+                  className={`px-2.5 py-1 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
+                    modeloGemini === 'gemini-4-argon'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Super Inteligente para raciocínio complexo, ciências, matemática e código (gemini-4-argon)"
+                >
+                  🧠 Profunda
+                </button>
+              </div>
+
+              <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-xl">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Filtro {criancaSelecionada?.idade || 10} anos ativo</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Trilha Socrática aparece quando está no modo Tutor Socrático */}
+          {modoAgente === 'tutor_socratico' && (
+            <TrilhaEtapasSocraticas
+              etapaAtiva={etapaAtual}
+              onSelecionarEtapa={(et) => setEtapaAtual(et)}
+            />
+          )}
 
           {/* Cartão Único e Limpo de Conversa com a Lumi */}
           <div className="flex flex-col bg-white rounded-3xl shadow-soft border border-amber-100 overflow-hidden">
@@ -1255,10 +1736,10 @@ export const ConversaQuadro: React.FC = () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-base sm:text-lg font-black text-slate-800">Lumi</h2>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      Pronta para ajudar
+                    <h2 className="text-base sm:text-lg font-black text-slate-800">Lumi IA</h2>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                      <Brain className="w-3 h-3 text-purple-600" />
+                      Aprende com você
                     </span>
                     {humorHoje && (
                       <span className="text-[11px] text-amber-900 bg-amber-100/80 border border-amber-300 px-2.5 py-0.5 rounded-full font-bold">
@@ -1271,10 +1752,9 @@ export const ConversaQuadro: React.FC = () => {
                     )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Conversando com{' '}
-                    <span className="font-bold text-slate-700">
-                      {criancaSelecionada?.nome?.split(' ')[0] || 'você'}
-                    </span>
+                    {modoAgente === 'agente_geral'
+                      ? `Peça histórias, curiosidades, códigos, desenhos ou músicas para ${criancaSelecionada?.nome?.split(' ')[0] || 'você'}!`
+                      : `Guiando ${criancaSelecionada?.nome?.split(' ')[0] || 'você'} passo a passo`}
                   </p>
                 </div>
               </div>
@@ -1437,6 +1917,50 @@ export const ConversaQuadro: React.FC = () => {
                           {msg.text.replace(/\[\[ETAPA:[^\]]+\]\]/gi, '').trim()}
                         </div>
 
+                        {/* Imagem gerada ou editada com gemini-nano-banana-2.1 */}
+                        {msg.imageUrl && (
+                          <div className="mt-3 space-y-2">
+                            <img
+                              src={msg.imageUrl}
+                              alt="Criação da Lumi IA"
+                              className="rounded-2xl max-h-80 w-auto object-contain border border-amber-200 shadow-sm"
+                            />
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setImagemParaEditar(msg.imageUrl || null)
+                                  setPromptCriativo('')
+                                  setErroCriativo(null)
+                                  setModalEstudioAberto('imagem')
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition-colors"
+                              >
+                                <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Editar esta imagem com IA</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Música gerada com Lyria 3 */}
+                        {msg.audioUrl && (
+                          <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
+                                <Music className="w-4 h-4 text-indigo-600" />
+                                <span>Música Original Lumi ({msg.modelUsed || 'Lyria 3'})</span>
+                              </span>
+                            </div>
+                            <audio controls src={msg.audioUrl} className="w-full h-10" />
+                            {msg.lyrics && (
+                              <div className="text-xs text-indigo-950 bg-white/80 p-2.5 rounded-xl border border-indigo-100 whitespace-pre-wrap">
+                                {msg.lyrics}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {msg.acoes && msg.acoes.length > 0 && (
                           <div className="space-y-2 mt-2.5">
                             {msg.acoes.map((acao, i) => (
@@ -1450,7 +1974,22 @@ export const ConversaQuadro: React.FC = () => {
                             msg.sender === 'user' ? 'text-amber-100' : 'text-slate-400'
                           }`}
                         >
-                          <span>{msg.timestamp}</span>
+                          <div className="flex items-center gap-2">
+                            <span>{msg.timestamp}</span>
+                            {msg.sender === 'lumi' && msg.modelUsed && (
+                              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold">
+                                {msg.modelUsed === 'gemini-4-argon'
+                                  ? '🧠 Gemini 4 Argon'
+                                  : msg.modelUsed === 'gemini-3.1-flash-lite'
+                                    ? '⚡ Flash Lite'
+                                    : msg.modelUsed === 'gemini-nano-banana-2.1'
+                                      ? '🎨 Nano Banana 2.1'
+                                      : msg.modelUsed.includes('lyria')
+                                        ? '🎵 Lyria 3'
+                                        : '🌟 Gemini 3.8 Flash'}
+                              </span>
+                            )}
+                          </div>
                           {msg.sender === 'lumi' && synthSuportado && (
                             <BotaoOuvirLumi
                               isSpeaking={mensagemFalandoId === msg.id && isSpeaking}
@@ -1503,11 +2042,35 @@ export const ConversaQuadro: React.FC = () => {
                   </div>
                 )}
 
-                {/* Sugestões Rápidas Simples */}
+                {/* Sugestões Rápidas + Atalhos do Estúdio Criativo (Imagem e Música) */}
                 <div className="px-4 py-2.5 bg-amber-50/50 border-t border-amber-100/70 flex items-center gap-2 overflow-x-auto custom-scroll">
-                  <span className="text-[11px] font-bold text-amber-800/80 uppercase tracking-wider shrink-0">
-                    Ideias:
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImagemParaEditar(null)
+                      setPromptCriativo('')
+                      setErroCriativo(null)
+                      setModalEstudioAberto('imagem')
+                    }}
+                    className="text-xs bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white px-3 py-1.5 rounded-full whitespace-nowrap font-extrabold flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>🎨 Criar/Editar Imagem</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromptCriativo('')
+                      setErroCriativo(null)
+                      setModalEstudioAberto('musica')
+                    }}
+                    className="text-xs bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white px-3 py-1.5 rounded-full whitespace-nowrap font-extrabold flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
+                  >
+                    <Music className="w-3.5 h-3.5" />
+                    <span>🎵 Criar Música</span>
+                  </button>
+
                   {sugestoesRapidas.map((sug, idx) => (
                     <button
                       key={idx}
@@ -1557,7 +2120,9 @@ export const ConversaQuadro: React.FC = () => {
                   placeholder={
                     isListening
                       ? 'Ouvindo sua voz com carinho... 🎤'
-                      : 'Escreva aqui ou toque no microfone para falar...'
+                      : modoAgente === 'agente_geral'
+                        ? 'Peça qualquer coisa à Lumi (histórias, dúvidas, desenhos, músicas, códigos)...'
+                        : 'Escreva aqui ou toque no microfone para falar...'
                   }
                   disabled={enviando}
                   className="flex-1 px-4 py-3.5 rounded-2xl border-2 border-amber-300 bg-white text-slate-900 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -1605,7 +2170,6 @@ export const ConversaQuadro: React.FC = () => {
             ESPAÇO 2: QUADRO VISUAL, MISSÕES DO DIA & CADERNINHO (Segregado!)
            ===================================================================== */
         <div className="space-y-4">
-          {/* Sub-navegação simples em 3 cartões grandes para a criança escolher 1 coisa por vez */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <button
               type="button"
@@ -1674,10 +2238,8 @@ export const ConversaQuadro: React.FC = () => {
             </button>
           </div>
 
-          {/* SUB-ABA 1: LOUSA ILUSTRADA */}
           {subAbaQuadro === 'lousa' && (
             <div className="space-y-4">
-              {/* Botões visuais de matérias para a criança trocar sem usar prompt() */}
               <div className="bg-white rounded-2xl p-3 border border-indigo-100 flex items-center gap-2 overflow-x-auto custom-scroll">
                 <span className="text-xs font-extrabold text-slate-500 shrink-0 px-1">
                   Escolha o tema do Quadro:
@@ -1718,7 +2280,6 @@ export const ConversaQuadro: React.FC = () => {
             </div>
           )}
 
-          {/* SUB-ABA 2: MISSÕES DO DIA (BNCC + KANBAN FASE 3) */}
           {subAbaQuadro === 'missoes' && (
             <div className="bg-white rounded-3xl p-4 sm:p-6 shadow-soft border border-amber-100 space-y-5">
               <MissoesBnccContainer
@@ -1738,7 +2299,6 @@ export const ConversaQuadro: React.FC = () => {
             </div>
           )}
 
-          {/* SUB-ABA 3: MEU CADERNINHO & MOMENTO CALMA */}
           {subAbaQuadro === 'caderno' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white rounded-3xl p-5 shadow-soft border border-emerald-200 flex flex-col justify-between">
@@ -1811,8 +2371,318 @@ export const ConversaQuadro: React.FC = () => {
       )}
 
       {/* =====================================================================
+          MODAL: MEMÓRIAS DA LUMI (O que a Lumi já aprendeu sobre você)
+         ===================================================================== */}
+      {modalMemoriasAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-2xl max-w-lg w-full border border-purple-200 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-purple-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                  <Brain className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800">
+                    Memórias da Lumi sobre {criancaSelecionada?.nome?.split(' ')[0] || 'você'} 🧠
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    A Lumi aprende seus gostos na conversa para personalizar tudo!
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalMemoriasAberto(false)}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Formulário para ensinar algo novo diretamente */}
+            <form onSubmit={handleEnsinarNovoFato} className="mt-4 space-y-2.5">
+              <label className="block text-xs font-extrabold text-purple-950">
+                ✨ Ensinar algo novo sobre você para a Lumi guardar:
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={novoFatoTipo}
+                  onChange={(e) => setNovoFatoTipo(e.target.value as MemoriaRecord['tipo'])}
+                  className="px-3 py-2.5 rounded-xl border border-purple-200 bg-purple-50/50 text-xs font-bold text-purple-900 focus:outline-none"
+                >
+                  <option value="preferencia">💛 Gosto / Hobby</option>
+                  <option value="estilo_aprendizagem">🎨 Jeito de aprender</option>
+                  <option value="conquista">🏆 Conquista</option>
+                  <option value="contexto">🐾 Amigos / Pets</option>
+                </select>
+                <input
+                  type="text"
+                  value={novoFatoTexto}
+                  onChange={(e) => setNovoFatoTexto(e.target.value)}
+                  placeholder="Ex: Adoro dinossauros, futebol e histórias de espaço..."
+                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-purple-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                />
+                <button
+                  type="submit"
+                  disabled={!novoFatoTexto.trim() || salvandoMemoria}
+                  className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-extrabold flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Guardar</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Lista de memórias aprendidas */}
+            <div className="mt-4 flex-1 overflow-y-auto space-y-2 pr-1 custom-scroll">
+              {memoriasCrianca.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-4">
+                  <p className="text-sm font-bold text-slate-600">
+                    Ainda não guardamos memórias específicas!
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Conte para a Lumi no chat o que você gosta de fazer, seus jogos ou bichinhos favoritos!
+                  </p>
+                </div>
+              ) : (
+                memoriasCrianca.map((mem) => (
+                  <div
+                    key={mem.id}
+                    className="p-3 rounded-2xl bg-purple-50/60 border border-purple-200/80 flex items-center justify-between gap-3"
+                  >
+                    <div className="space-y-0.5">
+                      <span className="inline-block text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                        {mem.tipo || 'preferencia'}
+                      </span>
+                      <p className="text-xs sm:text-sm font-semibold text-slate-800">
+                        {mem.conteudo}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoverMemoria(mem.id)}
+                      title="Esquecer esta memória"
+                      className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL: ESTÚDIO CRIATIVO DA LUMI (Criar/Editar Imagem & Criar Música)
+         ===================================================================== */}
+      {modalEstudioAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-2xl max-w-lg w-full border border-indigo-200 space-y-4">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white ${
+                    modalEstudioAberto === 'imagem'
+                      ? 'bg-gradient-to-br from-pink-500 to-rose-500'
+                      : 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                  }`}
+                >
+                  {modalEstudioAberto === 'imagem' ? (
+                    <ImageIcon className="w-5 h-5" />
+                  ) : (
+                    <Music className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800">
+                    {modalEstudioAberto === 'imagem'
+                      ? imagemParaEditar
+                        ? '✏️ Editar Imagem com Lumi IA'
+                        : '🎨 Criar Imagem com Lumi IA'
+                      : '🎵 Estúdio Musical Lumi (Lyria 3)'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Protegido com filtro seguro para {criancaSelecionada?.idade || 10} anos
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalEstudioAberto(null)}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecutarEstudioCriativo} className="space-y-4">
+              {modalEstudioAberto === 'imagem' && (
+                <div className="space-y-3">
+                  {imagemParaEditar ? (
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={imagemParaEditar}
+                          alt="Imagem base"
+                          className="w-16 h-16 rounded-xl object-cover border border-slate-300"
+                        />
+                        <div>
+                          <p className="text-xs font-extrabold text-slate-800">
+                            Imagem selecionada para edição
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            Descreva abaixo o que você quer adicionar ou mudar nela!
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setImagemParaEditar(null)}
+                        className="text-xs font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 bg-pink-50/60 p-3 rounded-2xl border border-pink-100">
+                      <span className="text-xs text-pink-950 font-semibold">
+                        Quer editar uma imagem do seu dispositivo?
+                      </span>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleUploadImagemEdicao}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-pink-100 text-pink-900 border border-pink-200 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Enviar foto</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-600">Formato:</span>
+                    {(['1:1', '4:3', '16:9'] as const).map((ratio) => (
+                      <button
+                        key={ratio}
+                        type="button"
+                        onClick={() => setAspectRatioImagem(ratio)}
+                        className={`px-3 py-1 rounded-xl text-xs font-extrabold cursor-pointer ${
+                          aspectRatioImagem === ratio
+                            ? 'bg-pink-600 text-white'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        {ratio === '1:1' ? 'Quadrado (1:1)' : ratio === '4:3' ? 'Tela (4:3)' : 'Horizontal (16:9)'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {modalEstudioAberto === 'musica' && (
+                <div className="flex items-center gap-2 bg-indigo-50/70 p-3 rounded-2xl border border-indigo-100">
+                  <span className="text-xs font-extrabold text-indigo-950">Duração:</span>
+                  <button
+                    type="button"
+                    onClick={() => setDuracaoMusica('clip')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer ${
+                      duracaoMusica === 'clip'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-white text-indigo-900 border border-indigo-200'
+                    }`}
+                  >
+                    ⚡ Clipe Rápido 30s (Lyria 3 Clip)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDuracaoMusica('full')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer ${
+                      duracaoMusica === 'full'
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-white text-purple-900 border border-purple-200'
+                    }`}
+                  >
+                    🎶 Música Completa (Lyria 3 Pro)
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1.5">
+                  {modalEstudioAberto === 'imagem'
+                    ? imagemParaEditar
+                      ? 'O que você quer transformar nesta imagem?'
+                      : 'Descreva a imagem que você quer que a Lumi desenhe:'
+                    : 'Sobre qual tema e ritmo você quer que a Lumi componha a música?'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={promptCriativo}
+                  onChange={(e) => setPromptCriativo(e.target.value)}
+                  placeholder={
+                    modalEstudioAberto === 'imagem'
+                      ? imagemParaEditar
+                        ? 'Ex: Adicione um chapéu de mago estrelado e um fundo de galáxia colorida...'
+                        : 'Ex: Um dinossauro simpático lendo um livro de astronomia em uma floresta iluminada...'
+                      : 'Ex: Uma música pop alegre sobre os planetas do Sistema Solar para cantar junto...'
+                  }
+                  className="w-full p-3.5 rounded-2xl border-2 border-slate-200 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                />
+              </div>
+
+              {erroCriativo && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-800">
+                  {erroCriativo}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalEstudioAberto(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!promptCriativo.trim() || gerandoCriativo}
+                  className={`px-5 py-2.5 rounded-xl text-white text-xs sm:text-sm font-black shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-40 ${
+                    modalEstudioAberto === 'imagem'
+                      ? 'bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600'
+                      : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
+                  }`}
+                >
+                  <Sparkles className={`w-4 h-4 ${gerandoCriativo ? 'animate-spin' : ''}`} />
+                  <span>
+                    {gerandoCriativo
+                      ? modalEstudioAberto === 'imagem'
+                        ? 'Desenhando com IA...'
+                        : 'Compondo Música...'
+                      : modalEstudioAberto === 'imagem'
+                        ? imagemParaEditar
+                          ? 'Aplicar Edição Mágica ✨'
+                          : 'Criar Imagem Agora 🎨'
+                        : 'Compor Música Agora 🎵'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
           GAVETA OPCIONAL DO RESPONSÁVEL (Cenários de Teste & Telemetria)
-          100% Oculta no Modo Criança e recolhida por padrão para não poluir!
          ===================================================================== */}
       {!modoCriancaAtivo && tipoConta === 'responsavel' && (
         <div className="pt-2">

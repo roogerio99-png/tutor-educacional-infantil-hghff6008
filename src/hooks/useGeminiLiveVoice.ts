@@ -48,11 +48,16 @@ export interface UseGeminiLiveVoiceOptions {
   criancaSerie?: string
   criancaLocalidade?: string
   criancaObservacoes?: string
+  criancaInteresses?: string
+  criancaAcessibilidade?: string
   materia?: string
+  materiaAtual?: string
   etapaSocratica?: string
+  etapaAtual?: string
   vozPreferida?: VozGeminiLive
   playbackRate?: number
   muted?: boolean
+  onStageDetected?: (etapa: any) => void
   onTurnComplete?: (userTranscript: string, lumiTranscript: string) => void
   onBargeIn?: () => void
   onError?: (msg: string) => void
@@ -112,8 +117,12 @@ export function useGeminiLiveVoice({
   criancaSerie = '5º Ano',
   criancaLocalidade = 'Brasil',
   criancaObservacoes = '',
-  materia = 'ciencias',
-  etapaSocratica = 'entender',
+  criancaInteresses = '',
+  criancaAcessibilidade = '',
+  materia,
+  materiaAtual,
+  etapaSocratica,
+  etapaAtual,
   vozPreferida = 'Kore',
   playbackRate = 1.0,
   muted = false,
@@ -121,6 +130,11 @@ export function useGeminiLiveVoice({
   onBargeIn,
   onError,
 }: UseGeminiLiveVoiceOptions = {}) {
+  const resolvedObservacoes =
+    [criancaObservacoes, criancaInteresses, criancaAcessibilidade].filter(Boolean).join(' | ') || ''
+  const resolvedMateria = materia || materiaAtual || 'ciencias'
+  const resolvedEtapa = etapaSocratica || etapaAtual || 'entender'
+
   const [isConnected, setIsConnected] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isMicActive, setIsMicActive] = useState(false)
@@ -379,9 +393,9 @@ export function useGeminiLiveVoice({
         idade: String(criancaIdade),
         serie: criancaSerie,
         localidade: criancaLocalidade,
-        observacoes: criancaObservacoes,
-        materia,
-        etapa: etapaSocratica,
+        observacoes: resolvedObservacoes,
+        materia: resolvedMateria,
+        etapa: resolvedEtapa,
       })
 
       const wsUrl = `${protocol}//${window.location.host}/api/lumi/live?${params.toString()}`
@@ -458,9 +472,9 @@ export function useGeminiLiveVoice({
       criancaIdade,
       criancaSerie,
       criancaLocalidade,
-      criancaObservacoes,
-      materia,
-      etapaSocratica,
+      resolvedObservacoes,
+      resolvedMateria,
+      resolvedEtapa,
       isMicActive,
       startMicCapture,
       scheduleAudioChunk,
@@ -525,15 +539,22 @@ export function useGeminiLiveVoice({
     isConnecting,
     isMicActive,
     isModelSpeaking,
+    isSpeaking: isModelSpeaking,
     isModelThinking,
+    isThinking: isModelThinking,
     liveInputTranscript,
     liveOutputTranscript,
     volumeLevel,
     permissionDenied,
     errorMessage,
     connectLive,
+    connect: connectLive,
     disconnectLive,
+    disconnect: disconnectLive,
     toggleLiveMic,
+    toggleMic: toggleLiveMic,
+    stopOutputPlayback,
+    stopLivePlayback: stopOutputPlayback,
     sendLiveTextPrompt,
     triggerManualBargeIn,
   }

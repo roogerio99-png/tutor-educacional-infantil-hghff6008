@@ -1133,25 +1133,43 @@ function processarMensagemLumi(
     })
   }
 
-  // 3. Extração orgânica de memória contínua (hobbies, bichinhos, gostos)
+  // 3. Extração orgânica de memória contínua (hobbies, bichinhos, gostos, amigos, estilo de aprender)
   if (
-    (msgLower.includes('eu gosto de') ||
+    (msgLower.includes('eu gosto') ||
       msgLower.includes('eu adoro') ||
       msgLower.includes('meu cachorro') ||
       msgLower.includes('meu gato') ||
-      msgLower.includes('meu jogo favorito') ||
-      msgLower.includes('minha comida favorita')) &&
+      msgLower.includes('meu bichinho') ||
+      msgLower.includes('meu jogo') ||
+      msgLower.includes('minha comida') ||
+      msgLower.includes('meu amigo') ||
+      msgLower.includes('minha amiga') ||
+      msgLower.includes('meu esporte') ||
+      msgLower.includes('prefiro aprender') ||
+      msgLower.includes('lembre que') ||
+      msgLower.includes('guarda que') ||
+      msgLower.includes('quero ser')) &&
     crianca
   ) {
+    const tipoMem =
+      msgLower.includes('cachorro') ||
+      msgLower.includes('gato') ||
+      msgLower.includes('amigo') ||
+      msgLower.includes('amiga') ||
+      msgLower.includes('irmã') ||
+      msgLower.includes('irmão')
+        ? 'contexto'
+        : msgLower.includes('prefiro') || msgLower.includes('aprender')
+          ? 'estilo_aprendizagem'
+          : 'preferencia'
+
     const novaMemoria: LocalRecord = {
       id: generateId('mem'),
       crianca: criancaId,
-      tipo:
-        msgLower.includes('cachorro') || msgLower.includes('gato') || msgLower.includes('irmã') || msgLower.includes('irmão')
-          ? 'pessoa_relacao'
-          : 'interesse',
-      conteudo: `Relatou na conversa: "${msgTrim}"`,
+      tipo: tipoMem,
+      conteudo: msgTrim,
       origem: 'conversa',
+      ativo: true,
       data: today,
       owner: effectiveOwner,
       created: now,
@@ -1160,8 +1178,8 @@ function processarMensagemLumi(
     db.memorias.unshift(novaMemoria)
     acoesExecutadas.push({
       tipo: 'memoria',
-      resumo: 'Novo interesse lembrado pela Lumi',
-      detalhe: msgTrim.slice(0, 60),
+      resumo: 'Lumi aprendeu algo novo sobre você! 🧠',
+      detalhe: msgTrim.slice(0, 80),
     })
   }
 
@@ -1176,11 +1194,36 @@ function processarMensagemLumi(
   }
   saveDatabase(db)
 
-  // 4. Construção de resposta Socrática personalizada, curta (1 a 3 frases), calorosa e sem dar resposta pronta
+  // Recupera memórias já aprendidas para personalizar respostas
+  const memoriasDaCrianca = db.memorias.filter((m) => m.crianca === criancaId && m.ativo !== false)
+  const dicaMemoria =
+    memoriasDaCrianca.length > 0
+      ? ` (Lembrei até que você me contou: "${memoriasDaCrianca[0].conteudo.slice(0, 60)}"!)`
+      : ''
+
   let replyText = ''
 
   if (acoesExecutadas.some((a) => a.tipo === 'agenda')) {
     replyText = `Já anotei esse compromisso lá na sua Agenda Escolar para a gente não esquecer, ${primeiroNome}! 📅 Para começarmos a nos preparar juntos: qual parte desse assunto você acha mais curiosa ou quer explorar primeiro?`
+  } else if (acoesExecutadas.some((a) => a.tipo === 'memoria')) {
+    replyText = `Que demais saber disso sobre você, ${primeiroNome}! 🧠✨ Já guardei com muito carinho na minha memória: "${msgTrim}". Vou usar isso sempre nas nossas conversas e histórias! O que você quer criar, descobrir ou perguntar agora?`
+  } else if (
+    msgLower.includes('história') ||
+    msgLower.includes('historia') ||
+    msgLower.includes('conte um conto') ||
+    msgLower.includes('invente uma')
+  ) {
+    replyText = `Era uma vez um(a) jovem explorador(a) chamado(a) ${primeiroNome}${dicaMemoria}! 🌟 Em uma manhã cheia de estrelas cadentes, ${primeiroNome} encontrou uma bússola dourada que apontava para a Biblioteca das Nuvens. Ao abrir a primeira porta mágica, havia dois caminhos: a Ponte dos Dragões Luminosos ou o Jardim dos Robôs Musicais. Qual caminho você escolhe seguir para continuarmos a história?`
+  } else if (msgLower.includes('piada') || msgLower.includes('charada') || msgLower.includes('adivinha')) {
+    replyText = `Hora de dar boas risadas, ${primeiroNome}! 😄 Lá vai um desafio rápido: O que é, o que é que cai em pé e corre deitado, e deixa todas as plantinhas felizes?`
+  } else if (
+    msgLower.includes('programar') ||
+    msgLower.includes('código') ||
+    msgLower.includes('codigo') ||
+    msgLower.includes('python') ||
+    msgLower.includes('jogo')
+  ) {
+    replyText = `Programar é como ensinar superpoderes para o computador, ${primeiroNome}! 💻🚀 Em Python, por exemplo, se você escrever \`print("Olá, mundo da ${primeiroNome}!")\`, o computador mostra essa frase na tela! Que tipo de jogo ou aplicativo você sonha em criar?`
   } else if (msgLower.includes('fotossíntese') || msgLower.includes('fotossintese') || msgLower.includes('planta')) {
     if (msgLower.includes('sol') || msgLower.includes('luz') || msgLower.includes('água') || msgLower.includes('agua')) {
       replyText = `Na mosca, ${primeiroNome}! ☀️🌱 A folha usa a luz do Sol como energia para misturar a água que subiu pela raiz com o gás carbônico do ar. Quando ela termina essa "receita", o que você acha que a plantinha libera no ar para nós respirarmos?`
@@ -1205,11 +1248,11 @@ function processarMensagemLumi(
     msgLower.includes('bom dia') ||
     msgLower.includes('boa tarde')
   ) {
-    replyText = `Oi, ${primeiroNome}! Que alegria conversar com você hoje! ✨ Vi que temos temas super legais de Ciências e Matemática por aqui: sobre qual curiosidade ou tarefa escolar você quer conversar agora?`
+    replyText = `Oi, ${primeiroNome}! Que alegria conversar com você hoje! ✨${dicaMemoria} Você pode me pedir qualquer coisa — histórias, curiosidades, ajuda na escola, ideias de jogos, desenhos ou músicas! O que vamos explorar agora?`
   } else if (msgLower.includes('não sei') || msgLower.includes('nao sei') || msgLower.includes('difícil') || msgLower.includes('dificil')) {
     replyText = `Fica tranquilo(a), ${primeiroNome}, toda grande descoberta começa com uma dúvida! 💛 Vamos dividir em um pedacinho bem fácil: se você pudesse chutar uma pista ou lembrar de algo parecido que viu no seu dia a dia, o que viria à sua cabeça primeiro?`
   } else {
-    replyText = `Que pensamento interessante, ${primeiroNome}! 🌟 Olhando para o que você acabou de me contar, por que você acha que isso acontece desse jeito? Me conta a sua hipótese!`
+    replyText = `Adorei a sua pergunta, ${primeiroNome}! 🌟${dicaMemoria} Pensando sobre "${msgTrim}", isso envolve muita curiosidade! Quer que eu te explique com uma aventura divertida, com um exemplo prático do dia a dia ou passo a passo?`
   }
 
   return {
@@ -1218,6 +1261,272 @@ function processarMensagemLumi(
     etapaSocratica,
     materia,
     acoesExecutadas,
+  }
+}
+
+async function executarChatLumiComGeminiOuFallback(
+  db: DatabaseSchema,
+  bodyObj: any,
+  currentUserId?: string,
+): Promise<LumiTurnResult & { acoesFormatadas: any[]; memoriasAprendidas: any[] }> {
+  const now = new Date().toISOString()
+  const today = getRelativeDate(0)
+  const criancaId = bodyObj.crianca_id || bodyObj.criancaId || 'crianca_ana_paula'
+  const userMessage = String(bodyObj.message || '').trim()
+  const incomingConvId = bodyObj.conversation_id || bodyObj.conversationId
+  const conversationId = incomingConvId || `conv_${criancaId}_${Date.now()}`
+  const crianca = db.criancas.find((c) => c.id === criancaId) || db.criancas[0]
+  const effectiveOwner = currentUserId || crianca?.owner || 'user_demo_rogerio'
+
+  // Primeiro verifica se há palavras de risco crítico de proteção à vida
+  const msgLower = userMessage.toLowerCase()
+  const padroesRisco = [
+    'quero morrer',
+    'me machucar',
+    'ninguém gosta de mim',
+    'ninguem gosta de mim',
+    'quero sumir',
+    'bater em mim',
+    'sofrendo bullying',
+    'me batendo',
+  ]
+  if (padroesRisco.some((p) => msgLower.includes(p))) {
+    const localRisk = processarMensagemLumi(db, criancaId, userMessage, conversationId, currentUserId)
+    return {
+      ...localRisk,
+      acoesFormatadas: [
+        {
+          tipo: 'alerta_seguranca',
+          titulo: 'Protocolo de Proteção e Acolhimento Ativado',
+          conteudo: 'O responsável recebeu um aviso prioritário para acolher você com carinho.',
+        },
+      ],
+      memoriasAprendidas: [],
+    }
+  }
+
+  // Tenta chamar o Agente Gemini real no servidor (/api/lumi/agent-chat)
+  try {
+    const nativeFetch =
+      typeof window !== 'undefined' && (window as any).__lumiNativeFetch
+        ? (window as any).__lumiNativeFetch
+        : fetch
+
+    const memoriasAtuais = db.memorias
+      .filter((m) => m.crianca === criancaId && m.ativo !== false)
+      .slice(0, 15)
+      .map((m) => ({ tipo: m.tipo, conteudo: m.conteudo }))
+
+    const agentRes = await nativeFetch('/api/lumi/agent-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: userMessage,
+        history: bodyObj.history || [],
+        model: bodyObj.model || 'gemini-3.8-flash',
+        modoAgente: bodyObj.modo_agente || bodyObj.modoAgente || 'agente_geral',
+        customPrompt: bodyObj.custom_prompt || bodyObj.customPrompt || '',
+        minutosRestantes: bodyObj.minutos_restantes,
+        crianca: crianca
+          ? {
+              id: crianca.id,
+              nome: crianca.nome,
+              idade: crianca.idade,
+              serie: crianca.serie,
+              localidade: crianca.localidade,
+              observacoes: crianca.observacoes,
+              interesses: crianca.interesses,
+              acessibilidade: crianca.acessibilidade,
+            }
+          : { nome: 'Ana Paula', idade: 10, serie: '5º Ano' },
+        memorias: memoriasAtuais,
+      }),
+    })
+
+    if (agentRes.ok) {
+      const data = await agentRes.json()
+      if (data && data.ok && data.reply) {
+        const acoesExecutadas: LumiTurnResult['acoesExecutadas'] = []
+        const acoesFormatadas: any[] = []
+        const memoriasSalvas: any[] = []
+
+        // 1. Salva novas memórias aprendidas com o usuário!
+        if (Array.isArray(data.memoriasAprendidas) && data.memoriasAprendidas.length > 0) {
+          for (const mem of data.memoriasAprendidas) {
+            const textoMem = String(mem?.conteudo || '').trim()
+            if (!textoMem) continue
+            const jaExiste = db.memorias.some(
+              (m) =>
+                m.crianca === criancaId &&
+                String(m.conteudo || '').toLowerCase() === textoMem.toLowerCase(),
+            )
+            if (!jaExiste) {
+              const novaMem: LocalRecord = {
+                id: generateId('mem'),
+                crianca: criancaId,
+                tipo: mem.tipo || 'preferencia',
+                conteudo: textoMem,
+                origem: 'aprendizado_continuo_ia',
+                ativo: true,
+                data: today,
+                owner: effectiveOwner,
+                created: now,
+                updated: now,
+              }
+              db.memorias.unshift(novaMem)
+              memoriasSalvas.push(novaMem)
+              acoesExecutadas.push({
+                tipo: 'memoria',
+                resumo: 'Lumi aprendeu sobre você 🧠',
+                detalhe: textoMem,
+              })
+              acoesFormatadas.push({
+                tipo: 'conhecimento_salvo',
+                titulo: '🧠 Lumi aprendeu algo novo sobre você!',
+                categoria: mem.tipo || 'Preferência Pessoal',
+                conteudo: textoMem,
+              })
+            }
+          }
+        }
+
+        // 2. Salva novos conhecimentos no Grafo de Conhecimento
+        if (Array.isArray(data.novosConhecimentos) && data.novosConhecimentos.length > 0) {
+          for (const con of data.novosConhecimentos) {
+            const tituloCon = String(con?.titulo || '').trim()
+            if (!tituloCon) continue
+            const jaTem = db.conhecimento.some(
+              (k) =>
+                k.crianca === criancaId &&
+                String(k.titulo || '').toLowerCase() === tituloCon.toLowerCase(),
+            )
+            if (!jaTem) {
+              const novoCon: LocalRecord = {
+                id: generateId('con'),
+                crianca: criancaId,
+                titulo: tituloCon,
+                categoria: con.categoria || data.materia || 'Geral',
+                conteudo: con.conteudo || tituloCon,
+                nivel_dominio: 75,
+                owner: effectiveOwner,
+                created: now,
+                updated: now,
+              }
+              db.conhecimento.unshift(novoCon)
+              acoesFormatadas.push({
+                tipo: 'conhecimento_salvo',
+                titulo: `🌟 Nova descoberta no Grafo: ${tituloCon}`,
+                categoria: novoCon.categoria,
+                conteudo: novoCon.conteudo,
+              })
+            }
+          }
+        }
+
+        // 3. Salva compromissos na Agenda Escolar
+        if (Array.isArray(data.agendamentos) && data.agendamentos.length > 0) {
+          for (const ag of data.agendamentos) {
+            const tituloAg = String(ag?.titulo || '').trim()
+            if (!tituloAg) continue
+            const dataEv = getRelativeDate(1)
+            const novoAg: LocalRecord = {
+              id: generateId('ag'),
+              crianca: criancaId,
+              titulo: tituloAg,
+              data: dataEv,
+              horario: '14:00',
+              materia: data.materia || 'Geral',
+              tipo: ag.tipo || 'tarefa',
+              descricao: ag.descricao || `Agendado pela Lumi: "${userMessage}"`,
+              concluido: false,
+              owner: effectiveOwner,
+              created: now,
+              updated: now,
+            }
+            db.agenda.push(novoAg)
+            acoesExecutadas.push({
+              tipo: 'agenda',
+              resumo: `${tituloAg} agendado para ${dataEv}`,
+              detalhe: novoAg.descricao,
+            })
+            acoesFormatadas.push({
+              tipo: 'agenda_criada',
+              titulo: tituloAg,
+              data: dataEv,
+              tipo_evento: novoAg.tipo,
+            })
+          }
+        }
+
+        // 4. Se bloqueou conteúdo inadequado para a idade, registra alerta informativo
+        if (data.bloqueadoPorIdade) {
+          const novoAlerta: LocalRecord = {
+            id: generateId('alerta'),
+            crianca: criancaId,
+            tipo: 'filtro_idade',
+            nivel: 'atencao',
+            mensagem: `Filtro de idade (${crianca?.idade || 10} anos) bloqueou ou redirecionou um pedido fora da faixa etária.`,
+            conteudo_detectado: userMessage,
+            lido: false,
+            owner: effectiveOwner,
+            created: now,
+            updated: now,
+          }
+          db.alertas.unshift(novoAlerta)
+          acoesFormatadas.push({
+            tipo: 'alerta_seguranca',
+            titulo: `🛡️ Filtro de Idade (${crianca?.idade || 10} anos) Ativo`,
+            conteudo: 'Tema redirecionado com segurança para a faixa etária da criança.',
+          })
+        }
+
+        const etapaFinal = data.etapaSocratica || crianca?.ultima_etapa_socratica || 'entender'
+        const materiaFinal = data.materia || crianca?.ultima_materia || 'ciencias'
+
+        if (crianca) {
+          crianca.ultima_etapa_socratica = etapaFinal
+          crianca.ultima_materia = materiaFinal
+          crianca.updated = now
+        }
+        saveDatabase(db)
+
+        return {
+          reply: data.reply,
+          conversationId,
+          etapaSocratica: etapaFinal,
+          materia: materiaFinal,
+          acoesExecutadas,
+          acoesFormatadas,
+          memoriasAprendidas: memoriasSalvas,
+        }
+      }
+    }
+  } catch {
+    // Fallback local transparente caso offline
+  }
+
+  const localResult = processarMensagemLumi(
+    db,
+    criancaId,
+    userMessage,
+    conversationId,
+    currentUserId,
+  )
+  const acoesFormatadasLocal = localResult.acoesExecutadas.map((a) => ({
+    tipo:
+      a.tipo === 'agenda'
+        ? 'agenda_criada'
+        : a.tipo === 'alerta'
+          ? 'alerta_seguranca'
+          : 'conhecimento_salvo',
+    titulo: a.resumo,
+    conteudo: a.detalhe,
+  }))
+
+  return {
+    ...localResult,
+    acoesFormatadas: acoesFormatadasLocal,
+    memoriasAprendidas: [],
   }
 }
 
@@ -1251,13 +1560,7 @@ async function handleBackendRoute(
 
   // 1. POST /backend/v1/lumi/chat
   if (pathname === '/backend/v1/lumi/chat' && method === 'POST') {
-    const result = processarMensagemLumi(
-      db,
-      bodyObj.crianca_id || bodyObj.criancaId || 'crianca_ana_paula',
-      bodyObj.message || '',
-      bodyObj.conversation_id || bodyObj.conversationId,
-      currentUserId,
-    )
+    const result = await executarChatLumiComGeminiOuFallback(db, bodyObj, currentUserId)
     return {
       status: 200,
       data: {
@@ -1266,30 +1569,30 @@ async function handleBackendRoute(
         conversation_id: result.conversationId,
         etapa: result.etapaSocratica,
         materia: result.materia,
+        acoes: result.acoesFormatadas,
+        memorias_aprendidas: result.memoriasAprendidas,
       },
     }
   }
 
   // 2. POST /backend/v1/lumi/chat-stream
   if (pathname === '/backend/v1/lumi/chat-stream' && method === 'POST') {
-    const result = processarMensagemLumi(
-      db,
-      bodyObj.crianca_id || bodyObj.criancaId || 'crianca_ana_paula',
-      bodyObj.message || '',
-      bodyObj.conversation_id || bodyObj.conversationId,
-      currentUserId,
-    )
+    const result = await executarChatLumiComGeminiOuFallback(db, bodyObj, currentUserId)
     return {
       status: 200,
       isStream: true,
       streamText: result.reply,
-      data: result,
+      data: {
+        ...result,
+        acoes: result.acoesFormatadas,
+        memorias_aprendidas: result.memoriasAprendidas,
+      },
       headers: {
         'Content-Type': 'text/event-stream',
         'X-Conversation-Id': result.conversationId,
         'X-Etapa-Socratica': result.etapaSocratica,
         'X-Materia': result.materia,
-        'X-Acoes-Executadas': encodeURIComponent(JSON.stringify(result.acoesExecutadas)),
+        'X-Acoes-Executadas': encodeURIComponent(JSON.stringify(result.acoesFormatadas)),
       },
     }
   }
