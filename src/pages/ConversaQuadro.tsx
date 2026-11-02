@@ -2559,8 +2559,8 @@ export const ConversaQuadro: React.FC = () => {
           MODAL: MEMÓRIAS DA LUMI (O que a Lumi já aprendeu sobre você)
          ===================================================================== */}
       {modalMemoriasAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-2xl max-w-lg w-full border border-purple-200 max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-modal bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-2xl max-w-lg w-full border border-purple-200 max-h-[85dvh] flex flex-col">
             <div className="flex items-center justify-between gap-3 pb-3 border-b border-purple-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center">
@@ -2663,8 +2663,8 @@ export const ConversaQuadro: React.FC = () => {
           MODAL: ESTÚDIO CRIATIVO DA LUMI (Criar/Editar Imagem & Criar Música)
          ===================================================================== */}
       {modalEstudioAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-2xl max-w-lg w-full border border-indigo-200 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-modal bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-2xl max-w-lg w-full border border-indigo-200 space-y-4 max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div
@@ -2907,7 +2907,7 @@ export const ConversaQuadro: React.FC = () => {
 
       {/* Modal Leve de Pausa Calma (Respiração da Flor e da Vela) */}
       {modalCalmaAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-modal bg-slate-950/60 backdrop-blur-xs">
           <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-3xl p-6 text-white shadow-2xl max-w-md w-full border border-indigo-500/30">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">

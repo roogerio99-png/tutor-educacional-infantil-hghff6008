@@ -15,6 +15,7 @@ import ResetPassword from '@/pages/ResetPassword'
 import VerifyEmail from '@/pages/VerifyEmail'
 import ConfirmarEmail from '@/pages/ConfirmarEmail'
 import RedefinirPinPage from '@/pages/RedefinirPin'
+import EmbedLumiApp from '@/pages/EmbedLumiApp'
 
 // 4 Abas do Protótipo Lumi IA
 import ConversaQuadro from '@/pages/ConversaQuadro'
@@ -31,6 +32,9 @@ const App = () => (
         <ModoCriancaProvider>
           <Toaster />
           <Routes>
+            {/* Rota Pública do Mini-App Instalável / Incorporável em Outros Aplicativos (SDK / Iframe / LMS / Share Target) */}
+            <Route path="/embed" element={<EmbedLumiApp />} />
+
             {/* Rotas Públicas de Autenticação */}
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<Login />} />

@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "FamilyWorkspace": {
+      "title": "FamilyWorkspace",
+      "description": "Cloud workspace storing a family's educational records, children profiles, agenda, memories, and parental governance state.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID or canonical user ID of the parent who owns this family workspace."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address of the primary parent."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the primary parent."
+        },
+        "payloadJson": {
+          "type": "string",
+          "description": "Serialized JSON snapshot of the family collections (criancas, agenda, memorias, dificuldades, conhecimento, checkins_emocionais, alertas, registro_uso)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when the workspace was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when the workspace was last synchronized."
+        }
+      },
+      "required": [
+        "ownerId",
+        "email",
+        "name",
+        "payloadJson",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/families/{userId}": {
+      "schema": {
+        "$ref": "#/entities/FamilyWorkspace"
+      },
+      "description": "Stores the synchronized family educational workspace isolated strictly by the authenticated parent's UID."
+    }
+  }
+}

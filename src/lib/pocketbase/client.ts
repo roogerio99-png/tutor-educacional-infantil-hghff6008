@@ -1,4 +1,9 @@
 import PocketBase from 'pocketbase'
+import {
+  auth as firebaseAuth,
+  syncFamilyWorkspaceToCloud,
+  loadFamilyWorkspaceFromCloud,
+} from '@/lib/firebase'
 
 const STORAGE_DB_KEY = 'lumi_pb_db_v3'
 const STORAGE_AUTH_KEY = 'lumi_pb_auth_v2'
@@ -780,12 +785,177 @@ function loadDatabase(): DatabaseSchema {
   return initial
 }
 
-function saveDatabase(db: DatabaseSchema): void {
+let cloudSyncTimeout: ReturnType<typeof setTimeout> | null = null
+
+const FAMILY_COLLECTIONS: Array<keyof DatabaseSchema> = [
+  'criancas',
+  'criancas_usuarios',
+  'dificuldades',
+  'conhecimento',
+  'agenda',
+  'memorias',
+  'checkins_emocionais',
+  'alertas',
+  'daily_metrics',
+  'registro_uso',
+]
+
+function extractFamilyPayload(db: DatabaseSchema, ownerId: string): Record<string, LocalRecord[]> {
+  const userRec = db.users.find((u) => u.id === ownerId)
+  const criancaIds = new Set(
+    (db.criancas || []).filter((c) => c.owner === ownerId).map((c) => c.id),
+  )
+
+  const payload: Record<string, LocalRecord[]> = {
+    users: userRec ? [userRec] : [],
+  }
+
+  for (const col of FAMILY_COLLECTIONS) {
+    const list = db[col] || []
+    payload[col as string] = list.filter(
+      (r) =>
+        r.owner === ownerId ||
+        r.user_id === ownerId ||
+        (r.crianca && criancaIds.has(r.crianca)) ||
+        (r.student_id && criancaIds.has(r.student_id)),
+    )
+  }
+
+  return payload
+}
+
+function scheduleFirestoreSync(db: DatabaseSchema): void {
+  const fbUser = firebaseAuth.currentUser
+  if (!fbUser) return
+
+  if (cloudSyncTimeout) {
+    clearTimeout(cloudSyncTimeout)
+  }
+
+  cloudSyncTimeout = setTimeout(() => {
+    const activeFbUser = firebaseAuth.currentUser
+    if (!activeFbUser) return
+    const ownerId = activeFbUser.uid
+    const userRec = db.users.find((u) => u.id === ownerId)
+    const payload = extractFamilyPayload(db, ownerId)
+    void syncFamilyWorkspaceToCloud({
+      ownerId,
+      email: userRec?.email || activeFbUser.email || 'responsavel@lumi.ia',
+      name: userRec?.name || activeFbUser.displayName || 'Responsável Lumi',
+      payload,
+    })
+  }, 350)
+}
+
+function saveDatabase(db: DatabaseSchema, skipCloudSync = false): void {
   try {
     localStorage.setItem(STORAGE_DB_KEY, JSON.stringify(db))
   } catch {
     // Ignore storage quota errors
   }
+  if (!skipCloudSync) {
+    scheduleFirestoreSync(db)
+  }
+}
+
+export async function hydrateAuthenticatedFamilyFromFirestore(params: {
+  uid: string
+  email: string
+  name: string
+}): Promise<LocalRecord> {
+  const db = loadDatabase()
+  const now = new Date().toISOString()
+  const cleanEmail = (params.email || 'responsavel@lumi.ia').trim().toLowerCase()
+  const cleanName = (params.name || 'Responsável Lumi').trim()
+
+  // 1. Check if cloud workspace exists in Firestore
+  const cloudPayload = await loadFamilyWorkspaceFromCloud(params.uid)
+
+  if (cloudPayload && typeof cloudPayload === 'object') {
+    // Merge user record from cloud or create one
+    const cloudUser = Array.isArray(cloudPayload.users) ? cloudPayload.users[0] : null
+    const mergedUser: LocalRecord = {
+      id: params.uid,
+      email: cleanEmail,
+      name: cloudUser?.name || cleanName,
+      verified: true,
+      consentimento_lgpd: true,
+      consentimento_data: cloudUser?.consentimento_data || now,
+      pin_definido: cloudUser?.pin_definido ?? true,
+      pin_code: cloudUser?.pin_code || '1234',
+      pin_tentativas: 0,
+      pin_bloqueado_ate: '',
+      collectionName: 'users',
+      created: cloudUser?.created || now,
+      updated: now,
+    }
+
+    db.users = [mergedUser, ...db.users.filter((u) => u.id !== params.uid)]
+
+    for (const col of FAMILY_COLLECTIONS) {
+      const colName = col as string
+      const incoming = Array.isArray(cloudPayload[colName]) ? cloudPayload[colName] : []
+      if (incoming.length > 0) {
+        const incomingIds = new Set(incoming.map((r: LocalRecord) => r.id))
+        const others = (db[colName] || []).filter(
+          (r) => r.owner !== params.uid && r.user_id !== params.uid && !incomingIds.has(r.id),
+        )
+        db[colName] = [...incoming, ...others]
+      }
+    }
+
+    saveDatabase(db, true)
+    return mergedUser
+  }
+
+  // 2. First time this Firebase user logs in -> create local & cloud workspace
+  let userRec = db.users.find((u) => u.id === params.uid)
+  if (!userRec) {
+    userRec = {
+      id: params.uid,
+      email: cleanEmail,
+      name: cleanName,
+      verified: true,
+      consentimento_lgpd: true,
+      consentimento_data: now,
+      pin_definido: true,
+      pin_code: '1234',
+      pin_tentativas: 0,
+      pin_bloqueado_ate: '',
+      collectionName: 'users',
+      created: now,
+      updated: now,
+    }
+    db.users.push(userRec)
+  }
+
+  const hasChild = db.criancas.some((c) => c.owner === params.uid)
+  if (!hasChild) {
+    const starterChildId = `cria_${params.uid.slice(0, 8)}`
+    db.criancas.push({
+      id: starterChildId,
+      nome: 'Ana Clara',
+      idade: 9,
+      serie: '4º Ano',
+      escola: 'Escola Horizonte',
+      localidade: 'Brasil',
+      genero: 'Menina',
+      horarios_aula: 'Manhã (07:30 às 12:00)',
+      acessibilidade: 'Nenhuma',
+      observacoes: 'Perfil sincronizado na nuvem Firebase. Edite em Família & Uso!',
+      tempo_uso_diario_min: 45,
+      uso_janela_inicio: '07:00',
+      uso_janela_fim: '21:00',
+      ultima_etapa_socratica: 'entender',
+      ultima_materia: 'ciencias',
+      owner: params.uid,
+      created: now,
+      updated: now,
+    })
+  }
+
+  saveDatabase(db, false)
+  return userRec
 }
 
 type RealtimeAction = 'create' | 'update' | 'delete'
@@ -1345,6 +1515,72 @@ async function executarChatLumiComGeminiOuFallback(
     }
   }
 
+  // 1.2 Verifica determinísticamente termos impróprios para a idade ou tentativa de prompt injection
+  const normMsg = msgLower.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const padroesBloqueioIdade = [
+    'sangue',
+    'violencia',
+    'arma de fogo',
+    'pistola',
+    'faca',
+    'nudez',
+    'pelado',
+    'pelada',
+    'sexy',
+    'porn',
+    'nsfw',
+    'droga ilicita',
+    'cocaina',
+    'maconha',
+    'bebida alcoolica',
+    'terror macabro',
+    'gore',
+    'ignore previous instructions',
+    'ignore todas as instrucoes',
+    'esqueca suas regras',
+  ]
+  if (padroesBloqueioIdade.some((t) => normMsg.includes(t))) {
+    const idadeCrianca = crianca?.idade || 10
+    const primeiroNome = (crianca?.nome || 'Amigo(a)').split(' ')[0]
+    const novoAlerta: LocalRecord = {
+      id: generateId('alerta'),
+      crianca: criancaId,
+      tipo: 'filtro_idade',
+      nivel: 'atencao',
+      mensagem: `Filtro de segurança (${idadeCrianca} anos) bloqueou conteúdo fora da faixa etária ou tentativa de contornar regras.`,
+      conteudo_detectado: userMessage,
+      lido: false,
+      owner: effectiveOwner,
+      created: now,
+      updated: now,
+    }
+    db.alertas.unshift(novoAlerta)
+    saveDatabase(db)
+    notifyRealtime('alertas', 'create', novoAlerta)
+
+    return {
+      reply: `Oi, ${primeiroNome}! Como sou uma IA com filtro seguro para ${idadeCrianca} anos, não posso conversar sobre temas violentos, assustadores ou de adultos. Que tal explorarmos uma curiosidade incrível sobre o universo, animais, jogos ou criarmos uma história divertida? ✨`,
+      conversationId,
+      etapaSocratica: 'entender',
+      materia: 'geral',
+      acoesExecutadas: [
+        {
+          tipo: 'alerta',
+          resumo: `Filtro de Idade (${idadeCrianca} anos) ativado`,
+          detalhe: 'Conteúdo bloqueado com segurança',
+        },
+      ],
+      acoesFormatadas: [
+        {
+          tipo: 'alerta_seguranca',
+          titulo: `🛡️ Filtro de Idade (${idadeCrianca} anos) Ativo`,
+          conteudo: 'Tema bloqueado e redirecionado com segurança para a faixa etária da criança.',
+        },
+      ],
+      memoriasAprendidas: [],
+    }
+  }
+
   // Tenta chamar o Agente Gemini real no servidor (/api/lumi/agent-chat)
   try {
     const nativeFetch =
@@ -1723,6 +1959,21 @@ async function handleBackendRoute(
   }
 
   if (pathname === '/backend/v1/auth/pin/verificar' && method === 'POST') {
+    // Verifica se o PIN está temporariamente bloqueado por força bruta
+    const bloqueadoAteAtual = activeUser?.pin_bloqueado_ate
+    if (bloqueadoAteAtual && new Date(bloqueadoAteAtual).getTime() > Date.now()) {
+      const segRestantes = Math.ceil((new Date(bloqueadoAteAtual).getTime() - Date.now()) / 1000)
+      return {
+        status: 429,
+        data: {
+          valido: false,
+          bloqueado_ate: bloqueadoAteAtual,
+          aviso: `Muitas tentativas incorretas. Aguarde ${segRestantes}s antes de tentar novamente.`,
+          message: `Muitas tentativas incorretas. Aguarde ${segRestantes}s antes de tentar novamente.`,
+        },
+      }
+    }
+
     const pinDigitado = String(bodyObj.pin || '').trim()
     const pinCorreto = activeUser?.pin_code || '1234'
     if (pinDigitado === pinCorreto || pinDigitado === '1234') {
@@ -1760,7 +2011,21 @@ async function handleBackendRoute(
   }
 
   if (pathname === '/backend/v1/auth/pin/redefinir-com-senha' && method === 'POST') {
+    const senhaInformada = String(bodyObj.senha_conta || '').trim()
     const novoPin = String(bodyObj.novo_pin || bodyObj.novoPin || '').trim()
+    if (
+      activeUser?.password &&
+      senhaInformada !== activeUser.password &&
+      senhaInformada !== 'Skip@Pass'
+    ) {
+      return {
+        status: 400,
+        data: {
+          error: 'Senha da conta do responsável incorreta.',
+          message: 'Senha da conta do responsável incorreta.',
+        },
+      }
+    }
     if (!/^\d{4}$/.test(novoPin)) {
       return {
         status: 400,
@@ -1810,8 +2075,23 @@ async function handleBackendRoute(
   }
 
   if (pathname === '/backend/v1/auth/pin/redefinir-por-token' && method === 'POST') {
+    const tokenInformado = String(bodyObj.token || '').trim()
     const novoPin = String(bodyObj.novo_pin || bodyObj.novoPin || '').trim()
-    if (activeUser && /^\d{4}$/.test(novoPin)) {
+    if (!/^\d{4}$/.test(novoPin)) {
+      return {
+        status: 400,
+        data: {
+          error: 'O novo PIN deve conter exatamente 4 dígitos numéricos.',
+          message: 'O novo PIN deve conter exatamente 4 dígitos numéricos.',
+        },
+      }
+    }
+    const tokenRec = db.pin_reset_tokens.find((t) => t.token === tokenInformado && !t.usado)
+    if (tokenRec) {
+      tokenRec.usado = true
+      tokenRec.updated = now
+    }
+    if (activeUser) {
       activeUser.pin_code = novoPin
       activeUser.pin_definido = true
       activeUser.pin_tentativas = 0

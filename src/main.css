@@ -57,6 +57,12 @@
     --sidebar-accent-foreground: 23 20% 20%;
     --sidebar-border: 30 25% 86%;
     --sidebar-ring: 29 89% 55%;
+
+    /* Variáveis dinâmicas de Safe Area (iOS Notch / Dynamic Island / Barra de Gestos Android) */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
   }
 
   * {
@@ -76,6 +82,7 @@
       sans-serif;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
   }
 
   /* NEVER REMOVE THIS */
@@ -86,6 +93,65 @@
 }
 
 @layer utilities {
+  /* Utilitários de Safe Area para Notch Superior e Barra de Navegação Inferior */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .py-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Espaçamento inferior dinâmico para o container principal (barra mobile 3.5rem + folga + safe-area-inset-bottom) */
+  .pb-safe-main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Posicionamento de banners flutuantes acima da barra inferior + safe-area-inset-bottom */
+  .bottom-safe-banner {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Deslocamento de gaveta/menu móvel abaixo do cabeçalho de 3.5rem + safe-area-inset-top */
+  .top-safe-drawer {
+    top: calc(3.5rem + env(safe-area-inset-top, 0px));
+  }
+
+  /* Layout completo de Safe Area para páginas públicas/autônomas (Login, Cadastro, Recuperação, 404) */
+  .safe-area-page {
+    min-height: 100dvh;
+    padding-top: max(1rem, calc(0.75rem + env(safe-area-inset-top, 0px)));
+    padding-bottom: max(1.5rem, calc(1rem + env(safe-area-inset-bottom, 0px)));
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+
+  /* Layout de Safe Area para modais em tela cheia ou centralizados no celular */
+  .safe-area-modal {
+    padding-top: max(0.75rem, calc(0.5rem + env(safe-area-inset-top, 0px)));
+    padding-bottom: max(0.75rem, calc(0.5rem + env(safe-area-inset-bottom, 0px)));
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
   .shadow-soft {
     box-shadow: 0 2px 12px rgba(74, 59, 50, 0.08);
   }

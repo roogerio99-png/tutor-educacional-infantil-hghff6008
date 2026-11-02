@@ -11,7 +11,7 @@ const NotFound = () => {
   }, [location.pathname])
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-between bg-[#FFF8F0] p-6 text-[#4A3B32]">
+    <div className="safe-area-page flex flex-col items-center justify-between bg-[#FFF8F0] sm:p-6 text-[#4A3B32]">
       <div className="w-full max-w-[1200px] flex justify-start">
         <Link to="/">
           <Logo size="md" />

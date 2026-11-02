@@ -15,6 +15,7 @@ import {
   type PassoTour,
 } from '@/components/TourGuiadoModal'
 import { ModalInstalarCelular } from '@/components/ModalInstalarCelular'
+import { usePWAInstall } from '@/lib/pwa'
 
 const TABS = [
   {
@@ -121,12 +122,24 @@ export const Header: React.FC = () => {
     modalConfigurarPinAberto,
     fecharModalConfigurarPin,
   } = useModoCrianca()
+  const { isInstallable, isInstalled, install } = usePWAInstall()
   const location = useLocation()
   const navigate = useNavigate()
 
   const [modalAtivarModoCrianca, setModalAtivarModoCrianca] = useState(false)
   const [modalNovaCrianca, setModalNovaCrianca] = useState(false)
   const [modalInstalarCelular, setModalInstalarCelular] = useState(false)
+
+  const handleCliqueInstalarApp = async () => {
+    if (isInstallable) {
+      const ok = await install()
+      if (ok) {
+        toast.success('Aprendiz instalado com sucesso no seu dispositivo!')
+        return
+      }
+    }
+    setModalInstalarCelular(true)
+  }
   const [tourGuiadoAberto, setTourGuiadoAberto] = useState<boolean>(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_TOUR_VISTO) !== 'true'
@@ -175,10 +188,10 @@ export const Header: React.FC = () => {
   return (
     <>
       {/* =========================================================================
-          CABEÇALHO MOBILE (< 768px): Compacto (apenas 56px), sem travar meia tela!
+          CABEÇALHO MOBILE (< 768px): Compacto (56px úteis) + Safe Area Top (Notch)
          ========================================================================= */}
-      <header className="md:hidden bg-slate-900 text-white shadow-md sticky top-0 z-30 border-b border-slate-800 h-14">
-        <div className="h-full px-3 flex items-center justify-between gap-2">
+      <header className="md:hidden bg-slate-900 text-white shadow-md sticky top-0 z-30 border-b border-slate-800 pt-safe px-safe">
+        <div className="h-14 px-3 flex items-center justify-between gap-2">
           {/* Logo compacta */}
           <Link
             to="/conversa"
@@ -234,10 +247,10 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Drawer / Menu deslizante para celular */}
+        {/* Drawer / Menu deslizante para celular respeitando Safe Area Top e Bottom */}
         {menuMobileAberto && (
-          <div className="fixed inset-0 top-14 z-40 bg-slate-950/70 backdrop-blur-xs flex flex-col justify-start p-3 animate-in fade-in duration-150">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 text-white shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+          <div className="fixed inset-x-0 bottom-0 top-safe-drawer z-40 bg-slate-950/70 backdrop-blur-xs flex flex-col justify-start p-3 pb-safe px-safe animate-in fade-in duration-150">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 text-white shadow-2xl space-y-4 max-h-[80dvh] overflow-y-auto">
               {/* Seletor de Criança */}
               <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80 space-y-2">
                 <div className="flex items-center justify-between">
@@ -307,12 +320,12 @@ export const Header: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setMenuMobileAberto(false)
-                    setModalInstalarCelular(true)
+                    void handleCliqueInstalarApp()
                   }}
                   className="p-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-200 text-xs font-extrabold flex flex-col items-center justify-center gap-1.5 transition-colors"
                 >
                   <span className="text-xl">📲</span>
-                  <span>App no Celular</span>
+                  <span>{isInstallable ? 'Instalar Aprendiz' : 'Instalar App'}</span>
                 </button>
 
                 {tipoConta === 'responsavel' && (
@@ -357,59 +370,61 @@ export const Header: React.FC = () => {
       </header>
 
       {/* =========================================================================
-          BARRA DE NAVEGAÇÃO INFERIOR PARA CELULAR (< 768px): Thumb Zone Ergonomic
+          BARRA DE NAVEGAÇÃO INFERIOR PARA CELULAR (< 768px): Thumb Zone + Safe Area Bottom
          ========================================================================= */}
       <nav
         aria-label="Navegação móvel"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 h-14 px-1 flex items-center justify-around"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 pb-safe px-safe"
       >
-        {TABS.filter((tab) => {
-          if (
-            (tab.id === 'prompts' || tab.id === 'grafo' || tab.id === 'configuracoes') &&
-            tipoConta === 'crianca'
-          ) {
-            return false
-          }
-          return true
-        }).map((tab) => {
-          const isActive = location.pathname === tab.path
-          return (
-            <Link
-              key={tab.id}
-              to={tab.path}
-              className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
-                isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <div
-                className={`p-1 rounded-xl transition-all ${
-                  isActive ? 'bg-amber-400/20 scale-105' : ''
+        <div className="h-14 px-1 flex items-center justify-around">
+          {TABS.filter((tab) => {
+            if (
+              (tab.id === 'prompts' || tab.id === 'grafo' || tab.id === 'configuracoes') &&
+              tipoConta === 'crianca'
+            ) {
+              return false
+            }
+            return true
+          }).map((tab) => {
+            const isActive = location.pathname === tab.path
+            return (
+              <Link
+                key={tab.id}
+                to={tab.path}
+                className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+                  isActive ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {tab.icon}
-              </div>
-              <span className="text-[10px] tracking-tight leading-none truncate max-w-[64px]">
-                {tab.id === 'conversa'
-                  ? 'Conversa'
-                  : tab.id === 'quadro'
-                    ? 'Quadro'
-                    : tab.id === 'agenda'
-                      ? 'Agenda'
-                      : tab.id === 'grafo'
-                        ? 'Grafo'
-                        : tab.id === 'prompts'
-                          ? 'Prompts'
-                          : 'Família'}
-              </span>
-            </Link>
-          )
-        })}
+                <div
+                  className={`p-1 rounded-xl transition-all ${
+                    isActive ? 'bg-amber-400/20 scale-105' : ''
+                  }`}
+                >
+                  {tab.icon}
+                </div>
+                <span className="text-[10px] tracking-tight leading-none truncate max-w-[64px]">
+                  {tab.id === 'conversa'
+                    ? 'Conversa'
+                    : tab.id === 'quadro'
+                      ? 'Quadro'
+                      : tab.id === 'agenda'
+                        ? 'Agenda'
+                        : tab.id === 'grafo'
+                          ? 'Grafo'
+                          : tab.id === 'prompts'
+                            ? 'Prompts'
+                            : 'Família'}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
       </nav>
 
       {/* =========================================================================
-          CABEÇALHO DESKTOP (>= 768px): Completo, espaçoso e com todas as ferramentas
+          CABEÇALHO DESKTOP (>= 768px): Completo, espaçoso e com Safe Area Top/Horizontal
          ========================================================================= */}
-      <header className="hidden md:block bg-slate-900 text-white shadow-lg sticky top-0 z-30 border-b border-slate-800">
+      <header className="hidden md:block bg-slate-900 text-white shadow-lg sticky top-0 z-30 border-b border-slate-800 pt-safe px-safe">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
           {/* Logo e Nome */}
           <div className="flex items-center gap-3">
@@ -478,15 +493,17 @@ export const Header: React.FC = () => {
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={() => setModalInstalarCelular(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 transition-colors cursor-pointer"
-              title="Como criar e instalar o aplicativo direto no celular (Android e iPhone)"
-            >
-              <span>📲</span>
-              <span>App no Celular</span>
-            </button>
+            {!isInstalled && (
+              <button
+                type="button"
+                onClick={handleCliqueInstalarApp}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 transition-colors cursor-pointer"
+                title="Instalar o Aprendiz como aplicativo nativo no computador ou celular"
+              >
+                <span>📲</span>
+                <span>{isInstallable ? 'Instalar Aprendiz' : 'Instalar App'}</span>
+              </button>
+            )}
           </div>
 
           {/* Governança Comercial: Alternador Rápido "Acessar como Responsável" vs "Acessar como Criança" */}

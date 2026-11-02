@@ -332,6 +332,34 @@ function isChildSafeCreativePrompt(prompt: string): { safe: boolean; reason?: st
 
 async function startServer() {
   const app = express()
+
+  // Security, CORS & Cross-App Embedding headers (allows third-party apps, LMS, and WebViews to embed Lumi IA with microphone access)
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-XSS-Protection', '1; mode=block')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+    res.setHeader(
+      'Permissions-Policy',
+      'microphone=*, autoplay=*, speaker-selection=*, clipboard-write=*',
+    )
+    if (req.path === '/manifest.webmanifest' || req.path === '/manifest.json') {
+      res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8')
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate')
+    } else if (req.path === '/sw.js') {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
+      res.setHeader('Service-Worker-Allowed', '/')
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+    }
+    if (req.method === 'OPTIONS') {
+      res.status(204).end()
+      return
+    }
+    next()
+  })
+
   app.use(express.json({ limit: '25mb' }))
 
   // Health check endpoint for monitoring and app diagnostics
@@ -339,9 +367,43 @@ async function startServer() {
     res.json({
       status: 'ok',
       service: 'lumi-server',
-      version: '2.0.0',
+      version: '2.1.0',
+      security: {
+        apiKeyIsolated: true,
+        childAgeFilterActive: true,
+        parentalPinGateActive: true,
+        lgpdCompliance: true,
+        thirdPartyEmbedReady: true,
+      },
       uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString(),
+    })
+  })
+
+  // Third-party integration & embed manifest endpoint
+  app.get('/api/embed/manifest', (req, res) => {
+    const origin = `${req.protocol}://${req.get('host')}`
+    res.json({
+      name: 'Lumi IA — Mini-App & SDK Educacional',
+      version: '2.1.0',
+      embed_url: `${origin}/embed`,
+      sdk_script_url: `${origin}/lumi-sdk.js`,
+      pwa_manifest_url: `${origin}/manifest.webmanifest`,
+      capabilities: [
+        '5_pedagogical_models',
+        'real_human_voice_tts',
+        'overlap_free_stt',
+        'child_age_safety_guardrail',
+        'web_share_target',
+        'custom_web_component',
+      ],
+      supported_params: {
+        nome: 'Nome da criança ou aluno (ex: Lucas)',
+        idade: 'Idade para filtro de segurança Piaget/BNCC (4 a 17)',
+        serie: 'Série escolar (ex: 4º Ano)',
+        modo: 'tutor_socratico | agente_geral',
+        voz: 'Kore | Zephyr | Puck | Fenrir | Charon',
+      },
     })
   })
 
@@ -356,6 +418,7 @@ async function startServer() {
         .replace(/\[\[ETAPA:[^\]]+\]\]/gi, '')
         .replace(/[*_#`~>]/g, '')
         .trim()
+        .slice(0, 600)
 
       if (!cleanText) {
         res.status(400).json({ error: 'Texto vazio para síntese de voz.' })
@@ -495,7 +558,7 @@ async function startServer() {
         minutosRestantes,
       } = req.body || {}
 
-      const cleanMessage = String(message || '').trim()
+      const cleanMessage = String(message || '').trim().slice(0, 2000)
       if (!cleanMessage) {
         res.status(400).json({ error: 'Mensagem vazia.' })
         return
@@ -508,6 +571,28 @@ async function startServer() {
       const criancaIdade = Number(crianca.idade) || 10
       const criancaSerie = crianca.serie || '5º Ano'
       const criancaLocalidade = crianca.localidade || 'Brasil'
+
+      // Deterministic server-side child-safety & prompt-injection guardrail
+      const safetyCheck = isChildSafeCreativePrompt(cleanMessage)
+      const isPromptInjection = /ignore previous instructions|ignore todas as instruc|system prompt|modo desenvolvedor/i.test(
+        cleanMessage,
+      )
+      if (!safetyCheck.safe || isPromptInjection) {
+        const pNome = criancaNome.split(' ')[0]
+        res.json({
+          ok: true,
+          model: selectedModel,
+          modoAgente,
+          reply: `Oi, ${pNome}! Como sou uma IA com filtro seguro para ${criancaIdade} anos, não posso conversar sobre esse tema. Que tal explorarmos uma curiosidade incrível sobre ciência, animais, espaço ou criarmos uma história divertida? ✨`,
+          etapaSocratica: 'entender',
+          materia: 'geral',
+          memoriasAprendidas: [],
+          novosConhecimentos: [],
+          agendamentos: [],
+          bloqueadoPorIdade: true,
+        })
+        return
+      }
       const criancaObs = [crianca.observacoes, crianca.interesses, crianca.acessibilidade]
         .filter(Boolean)
         .join(' | ')

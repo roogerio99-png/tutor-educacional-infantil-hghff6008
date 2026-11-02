@@ -8,7 +8,7 @@ export const ProtectedRoute: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FFF8F0]">
+      <div className="safe-area-page flex items-center justify-center bg-[#FFF8F0]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-[#F28C28] border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-[#9C8B7D] font-medium">Carregando Aprende+ Tutor...</p>

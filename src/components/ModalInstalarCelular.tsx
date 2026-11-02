@@ -1,5 +1,16 @@
 import React, { useState } from 'react'
-import { Check, Copy, Download, Rocket, Share2, Smartphone, Sparkles, X } from 'lucide-react'
+import {
+  Check,
+  Code2,
+  Copy,
+  Download,
+  ExternalLink,
+  Rocket,
+  Share2,
+  Smartphone,
+  Sparkles,
+  X,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { usePWAInstall } from '@/lib/pwa'
 
@@ -10,8 +21,10 @@ interface ModalInstalarCelularProps {
 
 export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aberto, onFechar }) => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall()
-  const [aba, setAba] = useState<'publicar' | 'android' | 'iphone'>(isIOS ? 'iphone' : 'publicar')
-  const [copiado, setCopiado] = useState(false)
+  const [aba, setAba] = useState<'publicar' | 'android' | 'iphone' | 'integrar'>(
+    isIOS ? 'iphone' : 'integrar',
+  )
+  const [copiado, setCopiado] = useState<string | null>(null)
 
   if (!aberto) return null
 
@@ -20,14 +33,21 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
       ? window.location.origin
       : 'https://ais-pre-d2xq5edyzyfzqra4x4nps2-567753823186.us-east1.run.app'
 
+  const embedUrl = `${urlAtual}/embed?nome=Explorador&idade=9&modo=tutor_socratico`
+  const sdkUrl = `${urlAtual}/lumi-sdk.js`
+
+  const codigoSdkFlutuante = `<script src="${sdkUrl}" data-mode="floating" data-child-name="Aluno" data-child-age="9" defer></script>`
+  const codigoWebComponent = `<script src="${sdkUrl}" defer></script>\n<lumi-ia-app child-name="Aluno" child-age="9" mode="tutor_socratico" height="640px"></lumi-ia-app>`
+  const codigoIframeUniversal = `<iframe src="${embedUrl}" width="100%" height="640" style="border:0;border-radius:24px;" allow="microphone *; autoplay *; clipboard-write *; fullscreen *"></iframe>`
+
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(urlAtual)}`
 
-  const handleCopiarLink = async () => {
+  const copiarTexto = async (chave: string, texto: string, mensagem: string) => {
     try {
-      await navigator.clipboard.writeText(urlAtual)
-      setCopiado(true)
-      toast.success('Link copiado! Envie pelo WhatsApp ou abra no navegador do celular.')
-      setTimeout(() => setCopiado(false), 3000)
+      await navigator.clipboard.writeText(texto)
+      setCopiado(chave)
+      toast.success(mensagem)
+      setTimeout(() => setCopiado(null), 3000)
     } catch {
       toast.error('Não foi possível copiar automaticamente.')
     }
@@ -42,8 +62,8 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-lg w-full border border-[#EADBCE] shadow-2xl overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-xs flex items-center justify-center safe-area-modal overflow-y-auto">
+      <div className="bg-white rounded-3xl max-w-xl w-full border border-[#EADBCE] shadow-2xl overflow-hidden my-auto">
         {/* Cabeçalho */}
         <div className="bg-gradient-to-r from-[#FF9E43] via-[#F28C28] to-[#D95C08] px-5 py-4 text-white flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -52,11 +72,11 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-extrabold leading-tight flex items-center gap-1.5">
-                <span>Aplicativo no Celular</span>
+                <span>Central de Instalação & Terceiros</span>
                 <Sparkles className="w-4 h-4 text-amber-100" />
               </h2>
               <p className="text-xs text-amber-50 font-medium">
-                Instale a Lumi IA na tela inicial (Android & iPhone)
+                App Instalável (PWA) + Mini-App & SDK para Outros Aplicativos
               </p>
             </div>
           </div>
@@ -70,7 +90,7 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
+        <div className="p-5 space-y-4 max-h-[80dvh] overflow-y-auto">
           {/* Botão de instalação em 1 clique caso o navegador atual suporte beforeinstallprompt */}
           {isInstallable && !isInstalled && (
             <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -100,8 +120,20 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
             </div>
           )}
 
-          {/* Seletor de Abas */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#F6EDE3] rounded-2xl">
+          {/* Seletor de 4 Abas */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#F6EDE3] rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setAba('integrar')}
+              className={`py-2 px-2 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${
+                aba === 'integrar'
+                  ? 'bg-white text-[#4A3B32] shadow-xs'
+                  : 'text-[#8A796C] hover:text-[#4A3B32]'
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5 text-[#F28C28]" />
+              <span>1. Outros Apps</span>
+            </button>
             <button
               type="button"
               onClick={() => setAba('publicar')}
@@ -112,7 +144,7 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
               }`}
             >
               <Rocket className="w-3.5 h-3.5 text-[#F28C28]" />
-              <span>1. Link Público</span>
+              <span>2. Terceiros</span>
             </button>
             <button
               type="button"
@@ -124,7 +156,7 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
               }`}
             >
               <span>🤖</span>
-              <span>2. Android</span>
+              <span>3. Android</span>
             </button>
             <button
               type="button"
@@ -136,22 +168,151 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
               }`}
             >
               <span>🍎</span>
-              <span>3. iPhone</span>
+              <span>4. iPhone</span>
             </button>
           </div>
 
-          {/* Conteúdo de cada aba */}
+          {/* ABA 1: INSTALAR DENTRO DE OUTROS APLICATIVOS (SDK / WEB COMPONENT / MINI-APP / SHARE TARGET) */}
+          {aba === 'integrar' && (
+            <div className="space-y-3.5">
+              <div className="p-3.5 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-xs text-indigo-950 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="font-extrabold text-sm flex items-center gap-1.5 text-indigo-950">
+                    <Code2 className="w-4 h-4 text-indigo-600" />
+                    <span>Instalar a Lumi IA dentro de Outros Aplicativos</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleTestarMiniAppInterno}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] inline-flex items-center gap-1 shadow-xs cursor-pointer"
+                  >
+                    <span>Abrir Mini-App (/embed) Aqui</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                </div>
+                <p className="leading-relaxed text-indigo-900">
+                  A Lumi IA agora possui um <strong>Mini-App Autônomo (`/embed`)</strong> e um{' '}
+                  <strong>SDK Universal (`/lumi-sdk.js`)</strong> prontos para instalar dentro de
+                  qualquer outro aplicativo (Moodle, Google Classroom, portais escolares, sites ou
+                  WebViews React Native / Flutter):
+                </p>
+              </div>
+
+              {/* Opção A: Botão Flutuante em 1 Linha */}
+              <div className="p-3.5 rounded-2xl bg-[#FFF8F0] border border-[#EADBCE] space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold text-[#4A3B32]">
+                    A) Botão Flutuante (1 linha de código em qualquer App/Site):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copiarTexto(
+                        'sdk',
+                        codigoSdkFlutuante,
+                        'Script do Botão Flutuante copiado!',
+                      )
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-[#F28C28] hover:bg-[#D97A1A] text-white font-extrabold text-[11px] flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    {copiado === 'sdk' ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copiar SDK</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="p-2.5 rounded-xl bg-slate-900 text-amber-300 text-[11px] overflow-x-auto font-mono">
+                  {codigoSdkFlutuante}
+                </pre>
+              </div>
+
+              {/* Opção B: Web Component Nativo <lumi-ia-app> */}
+              <div className="p-3.5 rounded-2xl bg-[#FFF8F0] border border-[#EADBCE] space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold text-[#4A3B32]">
+                    B) Web Component Nativo (&lt;lumi-ia-app&gt;):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copiarTexto(
+                        'webcomponent',
+                        codigoWebComponent,
+                        'Código do Web Component copiado!',
+                      )
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-[#F28C28] hover:bg-[#D97A1A] text-white font-extrabold text-[11px] flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    {copiado === 'webcomponent' ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copiar Tag</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="p-2.5 rounded-xl bg-slate-900 text-emerald-300 text-[11px] overflow-x-auto font-mono">
+                  {codigoWebComponent}
+                </pre>
+              </div>
+
+              {/* Opção C: Iframe / WebView Mobile (React Native, Flutter, Android, iOS, LMS) */}
+              <div className="p-3.5 rounded-2xl bg-[#FFF8F0] border border-[#EADBCE] space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold text-[#4A3B32]">
+                    C) Iframe / WebView com Microfone e Voz liberados:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      copiarTexto('iframe', codigoIframeUniversal, 'Código Iframe copiado!')
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-[#F28C28] hover:bg-[#D97A1A] text-white font-extrabold text-[11px] flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    {copiado === 'iframe' ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copiar Iframe</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="p-2.5 rounded-xl bg-slate-900 text-sky-300 text-[11px] overflow-x-auto font-mono">
+                  {codigoIframeUniversal}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* ABA 2: O QUE PRECISA PARA ABRIR A TERCEIROS (DEPLOY PÚBLICO) */}
           {aba === 'publicar' && (
             <div className="space-y-3.5">
               <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 space-y-2">
                 <p className="font-extrabold text-sm flex items-center gap-1.5 text-[#4A3B32]">
                   <Rocket className="w-4 h-4 text-[#F28C28]" />
-                  <span>Como liberar acesso direto no celular (Sem o Editor):</span>
+                  <span>Checklist para liberar acesso a Terceiros (24h no ar):</span>
                 </p>
                 <p className="leading-relaxed">
-                  Enquanto você está editando aqui no <strong>Google AI Studio</strong>, o link de
-                  teste fica protegido pela sua conta Google. Para criar o{' '}
-                  <strong>link público definitivo</strong> que abre direto em qualquer celular:
+                  O código do aplicativo já está <strong>100% preparado para terceiros</strong> (com
+                  CORS aberto, cadastro próprio de famílias, proteção de chave Gemini no backend e
+                  rota `/embed`). Para qualquer pessoa acessar sem login do AI Studio:
                 </p>
                 <ol className="space-y-2 pt-1">
                   <li className="flex items-start gap-2">
@@ -159,8 +320,9 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
                       1
                     </span>
                     <span>
-                      Olhe para o <strong>canto superior direito</strong> da tela do Google AI
-                      Studio (acima do painel Preview).
+                      No topo direito do Google AI Studio, clique em{' '}
+                      <strong>&quot;Deploy&quot; (Cloud Run)</strong> ou{' '}
+                      <strong>&quot;Share&quot; ➔ Public</strong>.
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
@@ -168,9 +330,8 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
                       2
                     </span>
                     <span>
-                      Clique no botão <strong>&quot;Deploy&quot;</strong> (ícone de foguete/nuvem{' '}
-                      <strong>Cloud Run</strong>) ou em <strong>&quot;Share&quot;</strong>{' '}
-                      (Compartilhar) e marque <em>Public</em>.
+                      Cada família ou escola pode criar sua própria conta em{' '}
+                      <strong>/cadastro</strong> (com Cadeia LGPD + PIN Parental + Senha Infantil).
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
@@ -178,9 +339,9 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
                       3
                     </span>
                     <span>
-                      Pronto! O Google gera um endereço público 24h no ar. Abra esse endereço no
-                      celular e instale o ícone seguindo a aba <strong>Android</strong> ou{' '}
-                      <strong>iPhone</strong> acima.
+                      Para empacotar na <strong>Google Play Store / App Store</strong>, basta usar a
+                      URL pública no <strong>PWABuilder.com</strong> (o manifesto já possui{' '}
+                      <code>share_target</code> e <code>maskable icons</code>).
                     </span>
                   </li>
                 </ol>
@@ -197,29 +358,56 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
                 </div>
                 <div className="space-y-2 text-center sm:text-left flex-1 min-w-0">
                   <p className="text-xs font-extrabold text-[#4A3B32]">
-                    Já está logado na mesma conta Google no celular?
+                    Compartilhar Aplicativo ou Mini-App com Terceiros:
                   </p>
-                  <p className="text-[11px] text-[#8A796C] leading-relaxed">
-                    Aponte a câmera do celular para o QR Code ao lado ou copie o link abaixo para
-                    abrir no navegador do celular:
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleCopiarLink}
-                    className="w-full py-2 px-3 rounded-xl bg-[#F28C28] hover:bg-[#D97A1A] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
-                  >
-                    {copiado ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Link Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>Copiar Link do Aplicativo</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        copiarTexto(
+                          'link-app',
+                          urlAtual,
+                          'Link principal copiado! Envie pelo WhatsApp.',
+                        )
+                      }
+                      className="w-full py-2 px-3 rounded-xl bg-[#F28C28] hover:bg-[#D97A1A] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                    >
+                      {copiado === 'link-app' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Link Principal Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copiar Link do App Completo</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        copiarTexto(
+                          'link-embed',
+                          embedUrl,
+                          'Link do Mini-App (/embed) copiado! Pronto para uso direto sem login.',
+                        )
+                      }
+                      className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                    >
+                      {copiado === 'link-embed' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Link Mini-App Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copiar Link Direto (/embed sem login)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -232,8 +420,8 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
                 <span>Como transformar em Aplicativo no Android (Chrome)</span>
               </h3>
               <p className="text-xs text-[#8A796C]">
-                A Lumi IA já possui tecnologia <strong>PWA (Progressive Web App)</strong>. Não
-                precisa baixar na Play Store:
+                A Lumi IA possui tecnologia <strong>PWA + Web Share Target</strong> (também aparece
+                no menu &quot;Compartilhar&quot; de outros apps no Android):
               </p>
               <ol className="space-y-2.5 text-xs text-[#4A3B32]">
                 <li className="flex items-start gap-2.5">
@@ -258,15 +446,15 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
                     3
                   </span>
                   <span>
-                    Toque em <strong>&quot;Instalar aplicativo&quot;</strong> (ou{' '}
-                    <strong>&quot;Adicionar à tela inicial&quot;</strong>) e confirme em{' '}
+                    Toque em <strong>&quot;Instalar aplicativo&quot;</strong> e confirme em{' '}
                     <strong>Instalar</strong>.
                   </span>
                 </li>
               </ol>
               <div className="p-2.5 rounded-xl bg-white border border-amber-200 text-[11px] text-amber-950 font-semibold">
-                ✨ O ícone laranja da <strong>Lumi IA</strong> ficará salvo junto com seus outros
-                aplicativos e abrirá em <strong>tela cheia</strong> (sem barra de navegador)!
+                ✨ Após instalado, quando você selecionar um texto em <strong>outro app</strong> do
+                celular e tocar em <strong>Compartilhar</strong>, a <strong>Lumi IA</strong>{' '}
+                aparecerá na lista para explicar aquela tarefa na hora!
               </div>
             </div>
           )}
@@ -278,7 +466,8 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
                 <span>Como transformar em Aplicativo no iPhone / iPad (Safari)</span>
               </h3>
               <p className="text-xs text-[#8A796C]">
-                No iOS, o Safari instala a Lumi IA direto na tela de início com ícone exclusivo:
+                No iOS, o Safari instala a Lumi IA direto na tela de início com ícone exclusivo e
+                Safe Area completa para a Dynamic Island:
               </p>
               <ol className="space-y-2.5 text-xs text-[#4A3B32]">
                 <li className="flex items-start gap-2.5">
@@ -331,3 +520,4 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
     </div>
   )
 }
+

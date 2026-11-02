@@ -27,7 +27,7 @@ export const SimpleModal: React.FC<SimpleModalProps> = ({
   }[maxWidth]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-modal">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-fade-in-up"
@@ -36,7 +36,7 @@ export const SimpleModal: React.FC<SimpleModalProps> = ({
 
       {/* Modal Content */}
       <div
-        className={`relative z-10 w-full ${maxWidthClass} rounded-2xl bg-white p-6 shadow-2xl border border-amber-100 transition-all max-h-[90vh] overflow-y-auto`}
+        className={`relative z-10 w-full ${maxWidthClass} rounded-2xl bg-white p-6 shadow-2xl border border-amber-100 transition-all max-h-[85dvh] overflow-y-auto`}
       >
         <div className="flex items-start justify-between pb-3 border-b border-amber-100 mb-4">
           <div>

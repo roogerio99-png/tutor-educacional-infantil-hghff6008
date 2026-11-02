@@ -252,12 +252,12 @@ export const TourGuiadoModal: React.FC<TourGuiadoModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/65 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center safe-area-modal bg-slate-950/65 backdrop-blur-xs animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-labelledby="tour-guiado-titulo"
     >
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden flex flex-col max-h-[88dvh]">
         {/* Cabeçalho com gradiente dinâmico da aba */}
         <div
           className={`bg-gradient-to-r ${passoAtual.corGradiente} p-4 sm:p-6 text-white relative transition-all duration-300`}

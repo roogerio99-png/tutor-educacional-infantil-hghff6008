@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import pb from '@/lib/pocketbase/client'
+import pb, { hydrateAuthenticatedFamilyFromFirestore } from '@/lib/pocketbase/client'
+import {
+  auth as firebaseAuth,
+  signInParentWithGoogle,
+  onAuthStateChanged,
+  signOut as firebaseSignOut,
+} from '@/lib/firebase'
 import type { UserRecord, CriancaUsuarioRecord, TipoConta, PermissoesCrianca } from '@/types'
 
 interface AuthContextType {
@@ -8,11 +14,13 @@ interface AuthContextType {
   tipoConta: TipoConta
   token: string | null
   isAuthenticated: boolean
+  isCloudSynced: boolean
   isLoading: boolean
   permissoes: PermissoesCrianca
   temSessaoSalvaResponsavel: boolean
   temSessaoSalvaCrianca: boolean
   login: (email: string, password: string) => Promise<UserRecord>
+  loginComGoogle: () => Promise<UserRecord>
   loginCrianca: (username: string, password: string) => Promise<CriancaUsuarioRecord>
   alternarAcessoRapido: (destino: 'responsavel' | 'crianca') => Promise<boolean>
   register: (
@@ -96,6 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   })
 
   const [token, setToken] = useState<string | null>(pb.authStore.token || null)
+  const [isCloudSynced, setIsCloudSynced] = useState<boolean>(Boolean(firebaseAuth.currentUser))
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
   const syncState = useCallback(() => {
@@ -144,12 +153,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     syncState()
     setIsLoading(false)
 
-    const unsubscribe = pb.authStore.onChange(() => {
+    const unsubscribePb = pb.authStore.onChange(() => {
       syncState()
     })
 
+    const unsubscribeFirebase = onAuthStateChanged(firebaseAuth, async (fbUser) => {
+      setIsCloudSynced(Boolean(fbUser))
+      if (fbUser && localStorage.getItem(STORAGE_TIPO_CONTA) !== 'crianca') {
+        try {
+          const cloudRecord = await hydrateAuthenticatedFamilyFromFirestore({
+            uid: fbUser.uid,
+            email: fbUser.email || 'responsavel@lumi.ia',
+            name: fbUser.displayName || 'Responsável Lumi',
+          })
+          const cloudToken = `firebase_jwt_${fbUser.uid}`
+          pb.authStore.save(cloudToken, cloudRecord)
+          syncState()
+        } catch {
+          // fallback to current local state
+        }
+      }
+    })
+
     return () => {
-      unsubscribe()
+      unsubscribePb()
+      unsubscribeFirebase()
     }
   }, [syncState])
 
@@ -162,6 +190,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(STORAGE_TIPO_CONTA, 'responsavel')
     salvarSessaoLocal(STORAGE_SESSAO_RESPONSAVEL, authData.token, authData.record)
     setToken(authData.token)
+    return userRec
+  }
+
+  const loginComGoogle = async (): Promise<UserRecord> => {
+    const fbUser = await signInParentWithGoogle()
+    const cloudRecord = await hydrateAuthenticatedFamilyFromFirestore({
+      uid: fbUser.uid,
+      email: fbUser.email || 'responsavel@lumi.ia',
+      name: fbUser.displayName || 'Responsável Lumi',
+    })
+    const cloudToken = `firebase_jwt_${fbUser.uid}`
+    pb.authStore.save(cloudToken, cloudRecord)
+    const userRec = cloudRecord as unknown as UserRecord
+    setUser(userRec)
+    setCriancaUsuario(null)
+    setTipoConta('responsavel')
+    setIsCloudSynced(true)
+    localStorage.setItem(STORAGE_TIPO_CONTA, 'responsavel')
+    salvarSessaoLocal(STORAGE_SESSAO_RESPONSAVEL, cloudToken, cloudRecord)
+    setToken(cloudToken)
     return userRec
   }
 
@@ -250,9 +298,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const logout = () => {
+    void firebaseSignOut(firebaseAuth).catch(() => {})
     pb.authStore.clear()
     setUser(null)
     setCriancaUsuario(null)
+    setIsCloudSynced(false)
     setTipoConta('responsavel')
     localStorage.removeItem(STORAGE_TIPO_CONTA)
     setToken(null)
@@ -370,11 +420,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tipoConta,
         token,
         isAuthenticated,
+        isCloudSynced,
         isLoading,
         permissoes,
         temSessaoSalvaResponsavel,
         temSessaoSalvaCrianca,
         login,
+        loginComGoogle,
         loginCrianca,
         alternarAcessoRapido,
         register,

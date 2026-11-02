@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast'
 import { Eye, EyeOff, UserPlus, ShieldCheck, Lock, Sparkles } from 'lucide-react'
 
 export default function Cadastro() {
-  const { register, login } = useAuth()
+  const { register, login, loginComGoogle } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
 
@@ -41,6 +41,25 @@ export default function Cadastro() {
 
   const cadeiaAutorizacoesCompleta =
     consentimentoLgpdDados && consentimentoVozIa && consentimentoGovernancaPin
+
+  const handleGoogleOnboarding = async () => {
+    setLoading(true)
+    setGeneralError(null)
+    try {
+      await loginComGoogle()
+      toast({
+        title: 'Conta na Nuvem Firebase ativada!',
+        description: 'Seu espaço familiar multiusuário já está sincronizado na nuvem.',
+      })
+      navigate('/conversa')
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setGeneralError('Não foi possível conectar com o Google agora. Você também pode preencher o cadastro abaixo.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,12 +160,42 @@ export default function Cadastro() {
       subtitle="Governança Parental Completa: Cadastro do Responsável + Cadeia LGPD/ECA + Cadastro da Criança com Senha Infantil."
     >
       {/* Selo de Governança Comercial */}
-      <div className="mb-4 p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-xs font-bold text-amber-950">
+      <div className="mb-3 p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-xs font-bold text-amber-950">
         <Lock className="w-4 h-4 text-amber-600 shrink-0" />
         <span>
           Por segurança jurídica (LGPD Art. 14 e ECA Digital), o 1º acesso é exclusivo do adulto
           responsável.
         </span>
+      </div>
+
+      {/* Cadastro Rápido na Nuvem Real com Google */}
+      <div className="mb-4">
+        <button
+          type="button"
+          disabled={loading}
+          onClick={handleGoogleOnboarding}
+          className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-emerald-50/50 border-2 border-emerald-500 text-slate-900 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-sm transition-all cursor-pointer"
+        >
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.67c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.58-5.17 3.58-8.97z"
+            />
+            <path
+              fill="#34A853"
+              d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96h-4.01v3.14C3.515 21.3 7.615 24 12.255 24z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.535 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62h-4.01C.705 8.24.255 10.06.255 12s.45 3.76 1.27 5.38l4.01-3.14z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0 7.615 0 3.515 2.7 1.525 6.62l4.01 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
+            />
+          </svg>
+          <span>Criar Espaço da Família com Google (Nuvem Real)</span>
+        </button>
       </div>
 
       {generalError && (

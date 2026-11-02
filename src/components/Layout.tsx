@@ -15,7 +15,7 @@ export const Layout: React.FC = () => {
 
   // Se o Modo Criança estiver ativo e o usuário tentar acessar páginas de adulto,
   // redireciona silenciosamente para o chat /conversa (agenda é permitida no modo criança se tiver permissão)
-  const rotasAdulto = ['/grafo-painel', '/prompts']
+  const rotasAdulto = ['/grafo-painel', '/prompts', '/configuracoes']
   const tentandoAcessarAdulto = rotasAdulto.some((r) => location.pathname.startsWith(r))
 
   if ((modoCriancaAtivo || tipoConta === 'crianca') && tentandoAcessarAdulto) {
@@ -25,15 +25,15 @@ export const Layout: React.FC = () => {
   const exibirModoCriancaHeader = modoCriancaAtivo || tipoConta === 'crianca'
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F7FB] text-slate-800">
+    <div className="min-h-[100dvh] flex flex-col bg-[#F4F7FB] text-slate-800">
       <AlertaOfflineBanner />
       {exibirModoCriancaHeader ? <HeaderModoCrianca /> : <Header />}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 pb-20 md:pb-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto pt-3 sm:pt-6 lg:pt-8 pb-safe-main md:pb-8 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))] lg:pl-[max(2rem,env(safe-area-inset-left,0px))] lg:pr-[max(2rem,env(safe-area-inset-right,0px))]">
         <Outlet />
       </main>
       <BannerInstalacaoPwa />
       {!exibirModoCriancaHeader && (
-        <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-4 text-center text-xs">
+        <footer className="hidden md:block bg-slate-900 border-t border-slate-800 text-slate-400 py-4 pb-safe px-safe text-center text-xs">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="flex items-center gap-1.5">
               <span className="text-amber-400">✨ Lumi IA</span> — Tutoria Socrática Guiada & Apoio

@@ -10,7 +10,7 @@ interface AuthLayoutProps {
 
 export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitle }) => {
   return (
-    <div className="min-h-screen bg-[#FFF8F0] flex flex-col justify-between p-4 sm:p-6 lg:p-8">
+    <div className="safe-area-page bg-[#FFF8F0] flex flex-col justify-between sm:p-6 lg:p-8">
       {/* Top Header com Logo */}
       <div className="max-w-[1200px] mx-auto w-full flex items-center justify-between">
         <Link to="/" className="inline-flex items-center gap-2 hover:opacity-90 transition-opacity">

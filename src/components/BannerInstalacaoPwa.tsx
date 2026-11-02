@@ -1,93 +1,54 @@
 import React, { useState, useEffect } from 'react'
 import { Download, RefreshCw, X, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
-}
+import { usePWAInstall } from '@/lib/pwa'
 
 export const BannerInstalacaoPwa: React.FC<{
   updateAvailable?: boolean
   onReloadUpdate?: () => void
 }> = ({ updateAvailable = false, onReloadUpdate }) => {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
-  const [showBanner, setShowBanner] = useState(false)
-  const [isStandalone, setIsStandalone] = useState(false)
-  const [isIos, setIsIos] = useState(false)
+  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall()
+  const [dismissed, setDismissed] = useState(false)
+  const [showIosBanner, setShowIosBanner] = useState(false)
   const [showIosGuide, setShowIosGuide] = useState(false)
 
   useEffect(() => {
-    // Detecta se já está instalado/standalone
-    const standaloneMatch =
-      window.matchMedia('(display-mode: standalone)').matches ||
-      ('standalone' in window.navigator &&
-        Boolean((window.navigator as unknown as { standalone?: boolean }).standalone))
-    setIsStandalone(standaloneMatch)
-
-    // Detecta iOS (iPhone/iPad)
-    const userAgent = window.navigator.userAgent.toLowerCase()
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent)
-    setIsIos(isIosDevice)
-
-    // Se já estiver standalone, não precisa de prompt de instalação
-    if (standaloneMatch) return
-
-    // Verifica se usuário dispensou nos últimos 3 dias
     const dismissedUntil = localStorage.getItem('pwa_banner_dismissed_until')
     if (dismissedUntil && Number(dismissedUntil) > Date.now()) {
+      setDismissed(true)
       return
     }
 
-    // Android/Chrome/Edge beforeinstallprompt
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
-      setShowBanner(true)
-    }
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-
-    // Em iOS Safari sem standalone, exibe o aviso sutil após alguns segundos se não dispensado
-    if (isIosDevice && !standaloneMatch) {
+    if (isIOS && !isInstalled) {
       const timer = setTimeout(() => {
-        setShowBanner(true)
-      }, 4000)
-      return () => {
-        clearTimeout(timer)
-        window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-      }
+        setShowIosBanner(true)
+      }, 3000)
+      return () => clearTimeout(timer)
     }
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
-    }
-  }, [])
+  }, [isIOS, isInstalled])
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      await deferredPrompt.prompt()
-      const { outcome } = await deferredPrompt.userChoice
-      if (outcome === 'accepted') {
-        setShowBanner(false)
-      }
-      setDeferredPrompt(null)
-    } else if (isIos) {
+    if (isInstallable) {
+      await install()
+    } else if (isIOS) {
       setShowIosGuide(true)
     }
   }
 
   const handleDismiss = () => {
-    setShowBanner(false)
+    setDismissed(true)
+    setShowIosBanner(false)
     setShowIosGuide(false)
     // Silencia por 3 dias
     localStorage.setItem('pwa_banner_dismissed_until', String(Date.now() + 3 * 24 * 60 * 60 * 1000))
   }
 
+  const showBanner = !dismissed && !isInstalled && (isInstallable || showIosBanner)
+
   // Notificação de atualização disponível (quando o SW acha versão mais nova)
   if (updateAvailable && onReloadUpdate) {
     return (
-      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-50 animate-fade-in-up">
+      <div className="fixed bottom-safe-banner md:bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-50 px-safe animate-fade-in-up">
         <div className="bg-white/95 backdrop-blur-md border border-[#EADBCE] shadow-2xl rounded-2xl p-4 flex items-center justify-between gap-3 text-[#4A3B32]">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-[#F28C28]/15 text-[#F28C28] flex items-center justify-center flex-shrink-0">
@@ -111,13 +72,13 @@ export const BannerInstalacaoPwa: React.FC<{
   }
 
   // Se já está standalone ou não há banner a mostrar, oculta
-  if (isStandalone || !showBanner) {
+  if (isInstalled || !showBanner) {
     return null
   }
 
   return (
     <>
-      <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-40 animate-fade-in-up">
+      <div className="fixed bottom-safe-banner md:bottom-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-40 px-safe animate-fade-in-up">
         <div className="bg-white/95 backdrop-blur-md border border-[#EADBCE] shadow-2xl rounded-2xl p-3.5 flex items-center justify-between gap-3 text-[#4A3B32]">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF9E43] to-[#F28C28] p-1.5 flex items-center justify-center flex-shrink-0 shadow-md">
@@ -156,7 +117,7 @@ export const BannerInstalacaoPwa: React.FC<{
 
       {/* Modal / Guia de instrução para iPhone/Safari */}
       {showIosGuide && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center safe-area-modal">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center border border-[#EADBCE] shadow-2xl animate-scale-in">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF9E43] to-[#F28C28] p-2 mx-auto mb-3 shadow-md flex items-center justify-center">
               <img src="/favicon.svg" alt="Aprendiz" className="w-full h-full object-contain" />

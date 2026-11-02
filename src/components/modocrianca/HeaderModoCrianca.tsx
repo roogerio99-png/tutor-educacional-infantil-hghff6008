@@ -58,10 +58,10 @@ export const HeaderModoCrianca: React.FC = () => {
   return (
     <>
       {/* =========================================================================
-          CABEÇALHO MODO CRIANÇA MOBILE (< 768px): Compacto 56px, sem ocupar a tela!
+          CABEÇALHO MODO CRIANÇA MOBILE (< 768px): Compacto 56px + Safe Area Top (Notch)
          ========================================================================= */}
-      <header className="md:hidden bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none h-14">
-        <div className="h-full px-3 flex items-center justify-between gap-2">
+      <header className="md:hidden bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none pt-safe px-safe">
+        <div className="h-14 px-3 flex items-center justify-between gap-2">
           {/* Logo compacta */}
           <Link
             to="/conversa"
@@ -131,69 +131,71 @@ export const HeaderModoCrianca: React.FC = () => {
       </header>
 
       {/* =========================================================================
-          BARRA DE NAVEGAÇÃO INFERIOR PARA CRIANÇA NO CELULAR (< 768px)
+          BARRA DE NAVEGAÇÃO INFERIOR PARA CRIANÇA NO CELULAR (< 768px) + Safe Area Bottom
          ========================================================================= */}
       <nav
         aria-label="Navegação da Criança"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-amber-200 h-14 px-2 flex items-center justify-around shadow-lg"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-amber-200 pb-safe px-safe shadow-lg"
       >
-        {permissoes.conversa !== false && (
+        <div className="h-14 px-2 flex items-center justify-around">
+          {permissoes.conversa !== false && (
+            <Link
+              to="/conversa"
+              className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+                isConversa ? 'text-amber-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <div
+                className={`p-1 rounded-xl transition-all ${
+                  isConversa ? 'bg-amber-100 text-amber-600 scale-105' : ''
+                }`}
+              >
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] tracking-tight leading-none mt-0.5">Conversar</span>
+            </Link>
+          )}
+
+          {permissoes.conversa !== false && (
+            <Link
+              to="/quadro"
+              className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+                isQuadro ? 'text-indigo-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <div
+                className={`p-1 rounded-xl transition-all ${
+                  isQuadro ? 'bg-indigo-100 text-indigo-600 scale-105' : ''
+                }`}
+              >
+                <span className="text-base leading-none">🎨</span>
+              </div>
+              <span className="text-[10px] tracking-tight leading-none mt-0.5">Quadro</span>
+            </Link>
+          )}
+
           <Link
-            to="/conversa"
+            to="/agenda"
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
-              isConversa ? 'text-amber-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
+              isAgenda ? 'text-orange-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <div
               className={`p-1 rounded-xl transition-all ${
-                isConversa ? 'bg-amber-100 text-amber-600 scale-105' : ''
+                isAgenda ? 'bg-orange-100 text-orange-600 scale-105' : ''
               }`}
             >
-              <MessageSquare className="w-5 h-5" />
+              {!permissoes.agenda ? <Lock className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
             </div>
-            <span className="text-[10px] tracking-tight leading-none mt-0.5">Conversar</span>
+            <span className="text-[10px] tracking-tight leading-none mt-0.5">Agenda</span>
           </Link>
-        )}
-
-        {permissoes.conversa !== false && (
-          <Link
-            to="/quadro"
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
-              isQuadro ? 'text-indigo-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <div
-              className={`p-1 rounded-xl transition-all ${
-                isQuadro ? 'bg-indigo-100 text-indigo-600 scale-105' : ''
-              }`}
-            >
-              <span className="text-base leading-none">🎨</span>
-            </div>
-            <span className="text-[10px] tracking-tight leading-none mt-0.5">Quadro</span>
-          </Link>
-        )}
-
-        <Link
-          to="/agenda"
-          className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
-            isAgenda ? 'text-orange-600 font-extrabold' : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <div
-            className={`p-1 rounded-xl transition-all ${
-              isAgenda ? 'bg-orange-100 text-orange-600 scale-105' : ''
-            }`}
-          >
-            {!permissoes.agenda ? <Lock className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
-          </div>
-          <span className="text-[10px] tracking-tight leading-none mt-0.5">Agenda</span>
-        </Link>
+        </div>
       </nav>
 
       {/* =========================================================================
-          CABEÇALHO DESKTOP (>= 768px): Amplo e completo
+          CABEÇALHO DESKTOP (>= 768px): Amplo e completo + Safe Area Top/Horizontal
          ========================================================================= */}
-      <header className="hidden md:block bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none">
+      <header className="hidden md:block bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400 text-white shadow-md sticky top-0 z-30 select-none pt-safe px-safe">
         <div className="max-w-6xl mx-auto px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 flex-wrap">
           {/* Logo infantil fofo com Lumi */}
           <div className="flex items-center gap-2.5">
@@ -368,7 +370,7 @@ export const HeaderModoCrianca: React.FC = () => {
 
       {/* Modal Parental Gate para conta direta de criança tentando acessar painel do responsável ou configurações de segurança */}
       {parentalGateAberto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center safe-area-modal bg-slate-950/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 shadow-2xl max-w-sm w-full border border-amber-200 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
