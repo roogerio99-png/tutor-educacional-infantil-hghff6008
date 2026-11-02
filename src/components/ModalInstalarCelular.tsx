@@ -1,10 +1,12 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Check,
   Code2,
   Copy,
   Download,
   ExternalLink,
+  Monitor,
   Rocket,
   Share2,
   Smartphone,
@@ -20,6 +22,7 @@ interface ModalInstalarCelularProps {
 }
 
 export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aberto, onFechar }) => {
+  const navigate = useNavigate()
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall()
   const [aba, setAba] = useState<'publicar' | 'android' | 'iphone' | 'integrar'>(
     isIOS ? 'iphone' : 'integrar',
@@ -28,10 +31,12 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
 
   if (!aberto) return null
 
-  const urlAtual =
+  const rawOrigin =
     typeof window !== 'undefined'
       ? window.location.origin
       : 'https://ais-pre-d2xq5edyzyfzqra4x4nps2-567753823186.us-east1.run.app'
+
+  const urlAtual = rawOrigin.replace('https://ais-dev-', 'https://ais-pre-')
 
   const embedUrl = `${urlAtual}/embed?nome=Explorador&idade=9&modo=tutor_socratico`
   const sdkUrl = `${urlAtual}/lumi-sdk.js`
@@ -56,9 +61,14 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
   const handleInstalarDireto = async () => {
     const ok = await install()
     if (ok) {
-      toast.success('Aplicativo Lumi IA instalado na tela inicial do seu aparelho!')
+      toast.success('Aplicativo Aprendiz instalado na tela inicial do seu aparelho!')
       onFechar()
     }
+  }
+
+  const handleTestarMiniAppInterno = () => {
+    onFechar()
+    navigate('/embed?nome=Explorador&idade=9&modo=tutor_socratico')
   }
 
   return (
@@ -414,47 +424,62 @@ export const ModalInstalarCelular: React.FC<ModalInstalarCelularProps> = ({ aber
           )}
 
           {aba === 'android' && (
-            <div className="p-4 rounded-2xl bg-[#FFF8F0] border border-[#EADBCE] space-y-3">
-              <h3 className="text-sm font-extrabold text-[#4A3B32] flex items-center gap-2">
-                <span>🤖</span>
-                <span>Como transformar em Aplicativo no Android (Chrome)</span>
-              </h3>
-              <p className="text-xs text-[#8A796C]">
-                A Lumi IA possui tecnologia <strong>PWA + Web Share Target</strong> (também aparece
-                no menu &quot;Compartilhar&quot; de outros apps no Android):
-              </p>
-              <ol className="space-y-2.5 text-xs text-[#4A3B32]">
-                <li className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-[#F28C28] text-white font-extrabold flex items-center justify-center text-[11px] shrink-0 mt-0.5">
-                    1
-                  </span>
-                  <span>
-                    Abra o link do aplicativo no navegador <strong>Google Chrome</strong> do seu
-                    celular Android.
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-[#F28C28] text-white font-extrabold flex items-center justify-center text-[11px] shrink-0 mt-0.5">
-                    2
-                  </span>
-                  <span>
-                    Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior direito do Chrome.
-                  </span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-[#F28C28] text-white font-extrabold flex items-center justify-center text-[11px] shrink-0 mt-0.5">
-                    3
-                  </span>
-                  <span>
-                    Toque em <strong>&quot;Instalar aplicativo&quot;</strong> e confirme em{' '}
-                    <strong>Instalar</strong>.
-                  </span>
-                </li>
-              </ol>
-              <div className="p-2.5 rounded-xl bg-white border border-amber-200 text-[11px] text-amber-950 font-semibold">
-                ✨ Após instalado, quando você selecionar um texto em <strong>outro app</strong> do
-                celular e tocar em <strong>Compartilhar</strong>, a <strong>Lumi IA</strong>{' '}
-                aparecerá na lista para explicar aquela tarefa na hora!
+            <div className="space-y-3">
+              <div className="p-4 rounded-2xl bg-[#FFF8F0] border border-[#EADBCE] space-y-3">
+                <h3 className="text-sm font-extrabold text-[#4A3B32] flex items-center gap-2">
+                  <span>🤖</span>
+                  <span>Como instalar o Aprendiz no Android (Chrome)</span>
+                </h3>
+                <p className="text-xs text-[#8A796C]">
+                  O Aprendiz possui tecnologia <strong>PWA + Web Share Target</strong> (também aparece
+                  no menu &quot;Compartilhar&quot; de outros apps no Android):
+                </p>
+                <ol className="space-y-2.5 text-xs text-[#4A3B32]">
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#F28C28] text-white font-extrabold flex items-center justify-center text-[11px] shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>
+                      Abra o link do aplicativo no navegador <strong>Google Chrome</strong> do seu
+                      celular Android.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#F28C28] text-white font-extrabold flex items-center justify-center text-[11px] shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>
+                      Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior direito do Chrome.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#F28C28] text-white font-extrabold flex items-center justify-center text-[11px] shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>
+                      Toque em <strong>&quot;Instalar aplicativo&quot;</strong> e confirme em{' '}
+                      <strong>Instalar</strong>.
+                    </span>
+                  </li>
+                </ol>
+                <div className="p-2.5 rounded-xl bg-white border border-amber-200 text-[11px] text-amber-950 font-semibold">
+                  ✨ Após instalado, quando você selecionar um texto em <strong>outro app</strong> do
+                  celular e tocar em <strong>Compartilhar</strong>, o <strong>Aprendiz</strong>{' '}
+                  aparecerá na lista para explicar aquela tarefa na hora!
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-indigo-50/80 border border-indigo-200 space-y-2">
+                <h4 className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
+                  <Monitor className="w-4 h-4 text-indigo-600" />
+                  <span>No Computador / Notebook (Windows, Mac ou Chromebook):</span>
+                </h4>
+                <p className="text-xs text-indigo-900 leading-relaxed">
+                  Abra o link no <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong> e
+                  clique no ícone <strong>&quot;Instalar Aprendiz&quot; (computador com seta)</strong>{' '}
+                  no canto direito da barra de endereços para criar um atalho nativo na Área de
+                  Trabalho.
+                </p>
               </div>
             </div>
           )}
